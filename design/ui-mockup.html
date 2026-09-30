@@ -1,0 +1,405 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>随译 SuiYi · UI 设计稿 v0.2</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:#E7ECF4; font-family:"Segoe UI","Microsoft YaHei","PingFang SC",sans-serif; color:#0F172A; }
+.board { max-width:1360px; margin:0 auto; padding:38px 40px 64px; }
+
+/* ===== header ===== */
+.top { display:flex; justify-content:space-between; align-items:flex-start; }
+.top h1 { font-size:23px; display:flex; align-items:center; gap:11px; letter-spacing:.5px; }
+.logo { width:32px;height:32px;border-radius:9px;background:linear-gradient(135deg,#4C6FFF,#8A5CFF);color:#fff;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;flex:none; }
+.ver { font-size:11px; color:#3B5BFF; background:#E8EDFF; border:1px solid #D3DDFF; padding:2px 9px; border-radius:999px; margin-left:2px; }
+.sub { margin-top:9px; font-size:12.5px; color:#64748B; }
+.stack { display:flex; gap:6px; margin-top:10px; flex-wrap:wrap; }
+.stack span { font-size:11px; color:#475569; background:#fff; border:1px solid #E2E8F0; padding:2px 9px; border-radius:6px; }
+.palette { display:flex; gap:8px; }
+.sw { width:92px; }
+.sw i { display:block; height:34px; border-radius:8px; border:1px solid rgba(15,23,42,.08); }
+.sw em { font-style:normal; display:block; text-align:center; font-size:10.5px; color:#64748B; margin-top:4px; }
+
+/* ===== section frame ===== */
+.sec-head { display:flex; align-items:center; gap:10px; margin:38px 0 12px; }
+.idx { width:22px;height:22px;border-radius:50%;background:#4C6FFF;color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;flex:none; }
+.sec-head h2 { font-size:16.5px; }
+.sec-head .sub { font-size:12px; color:#64748B; margin:0; padding-top:2px; }
+.stage { background:linear-gradient(180deg,#F7F9FC,#F0F4FA); border:1px dashed #C7D2E3; border-radius:16px; padding:24px; }
+.note { margin-top:10px; font-size:12px; color:#64748B; line-height:1.8; }
+.note b { color:#334155; }
+
+/* ===== generic atoms ===== */
+.chip { display:inline-flex; align-items:center; gap:5px; padding:3px 10px; border-radius:999px; font-size:11.5px; border:1px solid #E2E8F0; background:#fff; color:#475569; white-space:nowrap; }
+.chip.acc { background:#EEF2FF; border-color:#D6DEFF; color:#3B5BFF; }
+.chip.ok { background:#ECFDF3; border-color:#C6F1D6; color:#15803D; }
+.dot { width:6px;height:6px;border-radius:50%;background:#22C55E;flex:none; }
+.tgl { width:34px;height:20px;border-radius:999px;background:#4C6FFF;position:relative;flex:none; }
+.tgl::after { content:''; position:absolute; width:16px;height:16px;border-radius:50%;background:#fff;top:2px;right:2px; box-shadow:0 1px 2px rgba(0,0,0,.25); }
+.tgl.off { background:#CBD5E1; } .tgl.off::after { right:auto; left:2px; }
+.btn { display:inline-flex; align-items:center; gap:6px; padding:6px 13px; border-radius:8px; border:1px solid #D9E0EC; background:#fff; font-size:12.5px; color:#334155; white-space:nowrap; }
+.btn.primary { background:#4C6FFF; border-color:#4C6FFF; color:#fff; box-shadow:0 3px 8px rgba(76,111,255,.35); }
+.btn.danger { color:#DC2626; border-color:#F3C7C7; background:#FFF7F7; }
+.mini { font-size:11.5px; padding:3px 10px; border-radius:6px; }
+.kbd { font-family:Consolas,monospace; font-size:11.5px; background:#F1F5F9; border:1px solid #D6DEE9; border-bottom-width:2px; border-radius:6px; padding:2px 7px; color:#334155; white-space:nowrap; }
+
+/* ===== window frame ===== */
+.win { background:#fff; border:1px solid #E3E8F0; border-radius:14px; box-shadow:0 12px 32px rgba(15,23,42,.10); overflow:hidden; }
+.titlebar { height:38px; display:flex; align-items:center; gap:8px; padding:0 14px; background:#FBFCFE; border-bottom:1px solid #EDF1F7; }
+.dotr { width:11px;height:11px;border-radius:50%; }
+.tname { flex:1; text-align:center; font-size:12px; color:#8A97AB; margin:0 -40px 0 0; }
+
+/* ===== 1 selection popup ===== */
+.stageA { display:flex; gap:26px; align-items:flex-start; }
+.fakepage { flex:1; background:#fff; border:1px solid #E3E8F0; border-radius:12px; padding:26px 30px; box-shadow:0 6px 18px rgba(15,23,42,.06); min-width:0; }
+.fakepage h3 { font-size:17px; margin-bottom:6px; }
+.fakepage .meta { font-size:11.5px; color:#94A3B8; margin-bottom:16px; }
+.fakepage p { font-size:13px; line-height:1.9; color:#334155; margin-bottom:12px; }
+.figbox { margin:6px 0 14px; border:1px solid #E3E8F0; border-radius:10px; padding:12px 14px; background:#FBFCFE; }
+.figbox .flab { font-size:11px; color:#94A3B8; margin-bottom:10px; }
+.bars { display:flex; align-items:flex-end; gap:12px; height:72px; }
+.bars i { flex:1; border-radius:4px 4px 0 0; }
+.bars-x { display:flex; gap:12px; margin-top:6px; }
+.bars-x span { flex:1; text-align:center; font-size:10px; color:#94A3B8; font-family:Consolas,monospace; }
+.selwrap { position:relative; background:#FFF3B0; border-radius:3px; box-decoration-break:clone; padding:2px 0; }
+.bubble { position:absolute; top:-42px; left:-2px; display:flex; gap:3px; background:#111827; border-radius:10px; padding:5px 6px; box-shadow:0 6px 16px rgba(15,23,42,.35); }
+.bubble::after { content:''; position:absolute; left:16px; bottom:-5px; width:10px; height:10px; background:#111827; transform:rotate(45deg); border-radius:2px; }
+.bicon { width:27px;height:27px;border-radius:7px; display:flex; align-items:center; justify-content:center; font-size:12px; color:#E5E7EB; }
+.bicon.main { background:#4C6FFF; color:#fff; font-weight:700; }
+.bubble .more { width:27px;height:27px;border-radius:7px; display:flex; align-items:center; justify-content:center; color:#9CA3AF; font-size:13px; }
+.pop { width:404px; flex:none; background:#fff; border:1px solid #E3E8F0; border-radius:14px; box-shadow:0 16px 40px rgba(15,23,42,.16); overflow:hidden; }
+.pop-head { display:flex; align-items:center; gap:7px; padding:10px 12px; border-bottom:1px solid #EEF2F7; }
+.arrow { color:#94A3B8; font-size:13px; }
+.pop-src { padding:11px 13px 8px; }
+.lab { font-size:10.5px; color:#94A3B8; letter-spacing:1px; margin-bottom:5px; }
+.src-text { font-size:12.5px; line-height:1.75; color:#475569; border-left:2px solid #E2E8F0; padding-left:10px; }
+.rescard { margin:8px 12px; border:1px solid #E5EAF2; border-radius:10px; padding:9px 11px; background:#FDFEFF; }
+.rh { display:flex; align-items:center; gap:7px; font-size:11px; color:#64748B; margin-bottom:6px; }
+.rh b { font-size:12px; color:#0F172A; }
+.rt { font-size:13.5px; line-height:1.8; color:#0F172A; }
+.caret { display:inline-block; width:2px; height:14px; background:#4C6FFF; vertical-align:-2px; margin-left:1px; }
+.pop-actions { display:flex; flex-wrap:wrap; gap:6px; padding:4px 12px 12px; }
+.pop-actions .btn { padding:4px 10px; font-size:11.5px; border-radius:7px; }
+.stream { display:flex; align-items:center; gap:6px; font-size:11px; color:#15803D; padding:0 13px 10px; }
+
+/* ===== 2 input replace ===== */
+.stageB { display:flex; align-items:center; gap:18px; }
+.chat { flex:1; background:#fff; border:1px solid #E3E8F0; border-radius:12px; padding:14px 16px; box-shadow:0 6px 18px rgba(15,23,42,.06); position:relative; }
+.chat-head { display:flex; align-items:center; gap:8px; margin-bottom:10px; font-size:12px; color:#475569; }
+.avatar { width:22px;height:22px;border-radius:50%;background:#DBE4FF;color:#3B5BFF;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700; }
+.inputbox { border:1.5px solid #C9D6EF; border-radius:10px; padding:10px 12px; font-size:13px; line-height:1.7; color:#0F172A; background:#FBFCFE; }
+.inputbox.en { border-color:#B7E2C4; background:#F6FEF9; }
+.badge-replaced { position:absolute; top:-11px; right:12px; }
+.bigarrow { text-align:center; color:#7C8DB0; font-size:12px; display:flex; flex-direction:column; align-items:center; gap:4px; flex:none; }
+.bigarrow .a { font-size:24px; line-height:1; }
+.hintrow { display:flex; align-items:center; gap:8px; margin-top:9px; font-size:11.5px; color:#64748B; }
+
+/* ===== 3 screenshot ocr ===== */
+.stageC { background:#0F1626; border:1px solid #232E45; padding:20px; border-radius:16px; }
+.shot { position:relative; height:446px; background:#18213A; border-radius:10px; overflow:hidden; background-image:radial-gradient(circle at 20% 15%, #1F2B4D 0%, #18213A 45%); }
+.fakeapp { position:absolute; left:38px; top:44px; width:296px; background:#F3F5F9; border-radius:8px; box-shadow:0 10px 24px rgba(0,0,0,.45); overflow:hidden; }
+.fakeapp .fbar { height:26px; background:#E4E8F0; display:flex; align-items:center; gap:5px; padding:0 9px; }
+.fakeapp .fbar i { width:8px;height:8px;border-radius:50%;background:#C3CBD9; }
+.fakeapp .fbody { padding:14px 16px; }
+.fakeapp .fbody h4 { font-size:13.5px; color:#0F172A; margin-bottom:8px; }
+.fakeapp .fbody p { font-size:11.5px; color:#475569; line-height:2.0; }
+.region { position:absolute; left:26px; top:32px; width:320px; height:238px; border:2px solid #5B8CFF; border-radius:8px; box-shadow:0 0 0 4000px rgba(6,10,22,.62); }
+.hnd { position:absolute; width:9px; height:9px; background:#fff; border:1.5px solid #5B8CFF; border-radius:2px; }
+.hnd.tl { left:-5px; top:-5px; } .hnd.tr { right:-5px; top:-5px; } .hnd.bl { left:-5px; bottom:-5px; } .hnd.br { right:-5px; bottom:-5px; }
+.sizechip { position:absolute; left:50%; transform:translateX(-50%); bottom:-30px; background:#111827; color:#CBD5E1; font-size:10.5px; padding:2px 9px; border-radius:5px; font-family:Consolas,monospace; }
+.otrans { position:absolute; background:rgba(255,222,89,.94); color:#4A3B00; font-size:11px; font-weight:600; padding:2px 7px; border-radius:4px; box-shadow:0 2px 6px rgba(0,0,0,.35); white-space:nowrap; }
+.ocrpanel { position:absolute; right:14px; top:14px; width:330px; background:#fff; border-radius:12px; box-shadow:0 18px 44px rgba(0,0,0,.5); overflow:hidden; }
+.ocr-head { display:flex; align-items:center; justify-content:space-between; padding:10px 13px 0; }
+.ocr-head b { font-size:13px; }
+.ocr-head .x { color:#94A3B8; font-size:13px; }
+.tabs { display:flex; gap:18px; padding:8px 13px 0; border-bottom:1px solid #EEF2F7; }
+.tab { font-size:12.5px; color:#64748B; padding:4px 1px 9px; border-bottom:2px solid transparent; }
+.tab.on { color:#3B5BFF; font-weight:600; border-color:#4C6FFF; }
+.ocr-body { padding:10px 13px; }
+.ocr-line { font-size:12.5px; color:#0F172A; line-height:1.85; font-family:Consolas,"Microsoft YaHei",monospace; }
+.conf { display:flex; gap:6px; margin:6px 0 8px; }
+.ocr-trans { background:#F5F8FF; border:1px solid #DDE6FF; border-radius:9px; padding:8px 11px; }
+.ocr-trans .tt { font-size:12.5px; line-height:1.8; color:#0F172A; }
+.ocr-actions { display:flex; gap:6px; padding:4px 13px 12px; }
+.ocr-actions .btn { padding:4px 10px; font-size:11.5px; border-radius:7px; }
+.engine { display:flex; align-items:center; gap:6px; border-top:1px solid #EEF2F7; padding:8px 13px; font-size:11px; color:#64748B; background:#FBFCFE; }
+
+/* ===== 4 settings ===== */
+.set-body { display:flex; min-height:560px; }
+.side { width:186px; border-right:1px solid #EDF1F7; padding:12px 10px; background:#FAFBFD; display:flex; flex-direction:column; }
+.side-item { display:flex; align-items:center; gap:8px; padding:9px 11px; border-radius:8px; font-size:13px; color:#475569; margin-bottom:2px; }
+.side-item .ic { width:17px; text-align:center; font-size:12.5px; opacity:.85; }
+.side-item.on { background:#EEF2FF; color:#3B5BFF; font-weight:600; }
+.side-foot { margin-top:auto; padding:10px 11px; font-size:10.5px; color:#94A3B8; line-height:1.7; }
+.main { flex:1; background:#F6F8FB; padding:16px; display:flex; gap:14px; min-width:0; }
+.card { background:#fff; border:1px solid #E7ECF3; border-radius:11px; padding:14px; }
+.list-col { width:47%; flex:none; display:flex; flex-direction:column; }
+.card-head { display:flex; align-items:center; gap:8px; margin-bottom:12px; }
+.card-head b { font-size:13.5px; }
+.card-head .m { font-size:11px; color:#94A3B8; }
+.svc { display:flex; align-items:center; gap:10px; padding:10px 11px; border:1.5px solid transparent; border-radius:9px; margin-bottom:4px; }
+.svc.on { border-color:#C9D6FF; background:#F4F7FF; }
+.drag { color:#B6C2D6; font-size:14px; cursor:grab; }
+.svc-name { flex:1; min-width:0; }
+.svc-name b { font-size:13px; display:block; }
+.svc-name span { font-size:11px; color:#94A3B8; }
+.ok-t { font-size:11px; color:#15803D; white-space:nowrap; }
+.fallback { margin-top:auto; background:#FBFCFE; border:1px dashed #D6DEE9; border-radius:9px; padding:9px 11px; font-size:11.5px; color:#64748B; line-height:1.8; }
+.form-col { flex:1; min-width:0; }
+.f { margin-bottom:11px; }
+.f label { display:block; font-size:11.5px; color:#64748B; margin-bottom:5px; }
+.inp { width:100%; border:1px solid #D9E0EC; border-radius:8px; padding:7px 10px; font-size:12.5px; color:#0F172A; background:#fff; box-shadow:inset 0 1px 2px rgba(15,23,42,.04); }
+.inp.mono { font-family:Consolas,monospace; font-size:12px; }
+.row2 { display:flex; gap:10px; } .row2 .f { flex:1; }
+.selwrap2 { position:relative; }
+.selwrap2 .cv { position:absolute; right:10px; top:50%; transform:translateY(-50%); color:#94A3B8; font-size:11px; pointer-events:none; }
+.keyrow { display:flex; gap:8px; }
+.keyrow .inp { flex:1; }
+.codebox { border:1px solid #D9E0EC; border-radius:8px; background:#F8FAFC; padding:9px 11px; font-family:Consolas,"Microsoft YaHei",monospace; font-size:11.5px; line-height:1.9; color:#334155; white-space:pre-wrap; }
+.hl { color:#3B5BFF; background:#E8EDFF; border-radius:4px; padding:0 3px; }
+.slider { display:flex; align-items:center; gap:10px; }
+.track { flex:1; height:6px; border-radius:999px; background:linear-gradient(90deg,#C9D6FF,#4C6FFF); position:relative; }
+.knob { position:absolute; left:28%; top:-4px; width:14px; height:14px; background:#fff; border:2px solid #4C6FFF; border-radius:50%; box-shadow:0 1px 3px rgba(0,0,0,.2); }
+.sval { font-family:Consolas,monospace; font-size:12px; color:#334155; width:38px; text-align:right; }
+.seg { display:flex; border:1px solid #D9E0EC; border-radius:8px; overflow:hidden; }
+.seg span { flex:1; text-align:center; font-size:12px; padding:6px 0; color:#64748B; background:#fff; }
+.seg span.on { background:#4C6FFF; color:#fff; font-weight:600; }
+.form-foot { display:flex; align-items:center; gap:8px; margin-top:14px; padding-top:12px; border-top:1px solid #EEF2F7; }
+.form-foot .sec-note { margin-left:auto; font-size:10.5px; color:#94A3B8; }
+
+/* ===== 5 hotkeys ===== */
+.stageE { display:flex; gap:14px; align-items:stretch; }
+.hk { flex:1; display:flex; align-items:center; gap:10px; padding:11px 14px; border-bottom:1px solid #F1F5F9; }
+.hk:last-child { border-bottom:none; }
+.hk .nm { flex:1; }
+.hk .nm b { font-size:12.5px; display:block; }
+.hk .nm span { font-size:11px; color:#94A3B8; }
+
+/* ===== footer ===== */
+.board-foot { margin-top:38px; background:#0F172A; border-radius:14px; padding:22px 26px; color:#CBD5E1; }
+.board-foot h3 { font-size:14px; color:#fff; margin-bottom:12px; }
+.board-foot ul { list-style:none; display:grid; grid-template-columns:1fr 1fr; gap:8px 26px; }
+.board-foot li { font-size:12px; line-height:1.8; color:#B6C2D6; padding-left:16px; position:relative; }
+.board-foot li::before { content:''; position:absolute; left:2px; top:9px; width:5px; height:5px; border-radius:50%; background:#4C6FFF; }
+.next { margin-top:16px; padding-top:14px; border-top:1px solid #1E293B; font-size:12.5px; color:#E2E8F0; display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+</style>
+</head>
+<body>
+<div class="board">
+
+  <!-- ================= header ================= -->
+  <div class="top">
+    <div>
+      <h1><span class="logo">译</span>随译 SuiYi <span class="ver">UI 设计稿 v0.2 · 工作名占位，可改</span></h1>
+      <div class="sub">桌面 AI 翻译助手 · 划词翻译 / 截图 OCR / 输入框转译 / 多 AI 服务灵活配置</div>
+      <div class="stack"><span>Tauri 2</span><span>Rust 后端</span><span>WebView (WebView2 / WKWebView) 前端</span><span>SQLite + 系统钥匙串</span><span>OpenAI 兼容协议优先</span></div>
+    </div>
+    <div class="palette">
+      <div class="sw"><i style="background:#4C6FFF"></i><em>主色 #4C6FFF</em></div>
+      <div class="sw"><i style="background:#0F172A"></i><em>文字 #0F172A</em></div>
+      <div class="sw"><i style="background:#F6F8FB"></i><em>背景 #F6F8FB</em></div>
+      <div class="sw"><i style="background:#E2E8F0"></i><em>边框 #E2E8F0</em></div>
+      <div class="sw"><i style="background:#FFDE59"></i><em>强调 #FFDE59</em></div>
+    </div>
+  </div>
+
+  <!-- ================= 1 划词翻译 ================= -->
+  <div class="sec-head"><span class="idx">1</span><h2>划词翻译弹窗</h2><p class="sub">热键 / 选中即出气泡 → 光标附近弹出，多服务并发流式出稿</p></div>
+  <div class="stage stageA">
+    <div class="fakepage">
+      <h3>Transformer Architectures Revisited</h3>
+      <div class="meta">arxiv-sample.com · 2026 · Reading list</div>
+      <p>Transformer models have become the default backbone for most language and vision tasks. Scaling laws predict steady gains, yet efficiency at inference time remains the dominant cost factor for production deployments.</p>
+      <p style="padding-top:26px;"><span class="selwrap">Despite their success, transformers still struggle with long-context reasoning and efficient retrieval.<span class="bubble"><span class="bicon main">文A</span><span class="bicon">⧉</span><span class="bicon">Aa</span><span class="bicon">%</span><span class="more">⋯</span></span></span></p>
+      <div class="figbox">
+        <div class="flab">Fig. 1 · Downstream accuracy vs. context length (ablation)</div>
+        <div class="bars"><i style="height:36%;background:#DCE4F5"></i><i style="height:54%;background:#C9D6FF"></i><i style="height:71%;background:#A9BCFF"></i><i style="height:92%;background:#4C6FFF"></i></div>
+        <div class="bars-x"><span>2K</span><span>8K</span><span>32K</span><span>128K</span></div>
+      </div>
+      <p>To probe this, we conduct controlled ablations over context length, retrieval granularity, and cache policies, isolating their effects on downstream accuracy.</p>
+      <p>Our results suggest that architectural choices alone explain less than half of the variance, motivating a joint view of modeling and serving.</p>
+    </div>
+    <div class="pop">
+      <div class="pop-head">
+        <span class="chip acc">EN · 自动检测</span><span class="arrow">→</span><span class="chip">简体中文 <b style="color:#B6C2D6;font-weight:400">▾</b></span>
+        <span style="flex:1"></span>
+        <span class="chip ok"><span class="dot"></span>2 个服务并发</span>
+        <span style="font-size:13px;color:#94A3B8">⚙</span>
+      </div>
+      <div class="pop-src">
+        <div class="lab">原文 · 96 字符</div>
+        <div class="src-text">Despite their success, transformers still struggle with long-context reasoning and efficient retrieval.</div>
+      </div>
+      <div class="rescard">
+        <div class="rh"><span class="dot"></span><b>DeepSeek</b><span>deepseek-chat · 流式 · 1.2s</span><span style="flex:1"></span><span class="chip acc mini" style="padding:1px 8px;font-size:10.5px">默认</span></div>
+        <div class="rt">尽管取得了成功，Transformer 在长上下文推理和高效检索方面仍然存在困难。<span class="caret"></span></div>
+      </div>
+      <div class="rescard">
+        <div class="rh"><span class="dot" style="background:#F59E0B"></span><b>Gemini</b><span>gemini-2.5-flash · 流式 · 1.4s</span></div>
+        <div class="rt" style="color:#475569">虽然成果显著，Transformer 依然难以进行长上下文推理与高效检索。</div>
+      </div>
+      <div class="pop-actions">
+        <span class="btn primary mini">⧉ 复制</span><span class="btn mini">⇄ 替换原文</span><span class="btn mini">🔊 朗读</span><span class="btn mini">＋ 生词本</span><span class="btn mini">↻ 重译</span><span class="btn mini">📌 固定</span>
+      </div>
+      <div class="stream"><span class="dot"></span>SSE 流式输出中 · Esc 关闭 · Tab 切换服务结果</div>
+    </div>
+  </div>
+  <div class="note"><b>①</b> 选中文字后先浮现黑色<b>划词助手气泡</b>（动作可自定义排序）；按 <span class="kbd">Alt+D</span> 或点气泡首图标，在鼠标附近弹出翻译窗。上方卡片为<b>多服务并发对比</b>，带流式光标的是正在生成中的默认服务。</div>
+
+  <!-- ================= 2 输入框转译 ================= -->
+  <div class="sec-head"><span class="idx">2</span><h2>输入框转译（写回替换）</h2><p class="sub">在任意输入框写中文 → 热键一键替换为目标语言</p></div>
+  <div class="stage stageB">
+    <div class="chat">
+      <div class="chat-head"><span class="avatar">友</span>微信 · 文件传输助手</div>
+      <div class="inputbox">这份报告我明天上午发给你，先看第三部分的结论，有问题随时找我。▏</div>
+      <div class="hintrow">正在输入 · 光标在输入框内 <span class="kbd">Alt</span>+<span class="kbd">T</span> 触发转译</div>
+    </div>
+    <div class="bigarrow"><span class="a">⟶</span><span>EN → 简中<br>反向亦可选</span></div>
+    <div class="chat">
+      <span class="badge-replaced chip ok">✓ 已替换原文</span>
+      <div class="chat-head"><span class="avatar">友</span>微信 · 文件传输助手</div>
+      <div class="inputbox en">I'll send you the report tomorrow morning — please read the conclusions in Section 3 first, and feel free to ping me with any questions.</div>
+      <div class="hintrow">替换前对选区做快照校验 · 焦点丢失时自动回退为「复制 + 通知」</div>
+    </div>
+  </div>
+  <div class="note"><b>②</b> 与划词「替换原文」的区别：这里处理的是<b>整个输入框内容</b>，无需先选中；目标语言方向、Prompt 风格（正式/口语/邮件体）均可在设置中预设。</div>
+
+  <!-- ================= 3 截图 OCR ================= -->
+  <div class="sec-head"><span class="idx">3</span><h2>截图识别 · 原图翻译</h2><p class="sub">框选屏幕区域 → OCR → 翻译，译文可直接覆盖回图片原位</p></div>
+  <div class="stage stageC">
+    <div class="shot">
+      <div class="fakeapp">
+        <div class="fbar"><i></i><i></i><i></i></div>
+        <div class="fbody">
+          <h4>Order Confirmation</h4>
+          <p>Thank you for your purchase!<br>Total: $129.00<br>Shipping: 2–3 business days<br>Questions? support@example.com</p>
+        </div>
+      </div>
+      <div class="region">
+        <span class="hnd tl"></span><span class="hnd tr"></span><span class="hnd bl"></span><span class="hnd br"></span>
+        <span class="sizechip">320 × 238</span>
+        <span class="otrans" style="left:22px;top:52px">订单确认</span>
+        <span class="otrans" style="left:22px;top:96px">感谢您的购买！</span>
+        <span class="otrans" style="left:22px;top:134px">总计：$129.00</span>
+        <span class="otrans" style="left:22px;top:172px">配送：2–3 个工作日</span>
+      </div>
+      <div class="ocrpanel">
+        <div class="ocr-head"><b>截图识别</b><span style="font-size:11px;color:#94A3B8">2.4s</span><span class="x">✕</span></div>
+        <div class="tabs"><span class="tab on">识别文字</span><span class="tab">翻译</span><span class="tab">标注</span></div>
+        <div class="ocr-body">
+          <div class="ocr-line">Order Confirmation<br>Thank you for your purchase!<br>Total: $129.00<br>Shipping: 2–3 business days</div>
+          <div class="conf"><span class="chip acc">英文</span><span class="chip ok">✓ 平均置信度 98%</span><span class="chip">可编辑</span></div>
+          <div class="ocr-trans">
+            <div class="lab">译文 → 简体中文</div>
+            <div class="tt">订单确认<br>感谢您的购买！<br>总计：$129.00<br>配送：2–3 个工作日</div>
+          </div>
+        </div>
+        <div class="ocr-actions"><span class="btn primary mini">⧉ 复制</span><span class="btn mini">🖼 原图翻译 开</span><span class="btn mini">💾 保存</span><span class="btn mini">↻ 重新识别</span></div>
+        <div class="engine">引擎：<b style="color:#334155">Windows.Media.OCR</b> ▾ · 失败自动切 AI 视觉</div>
+      </div>
+    </div>
+  </div>
+  <div class="note"><b>③</b> 黄色标签即「<b>原图翻译</b>」：译文按 OCR 坐标覆盖显示在原文位置，可整体开关、可拖动微调；识别引擎支持 系统 OCR / Paddle 本地 / LLM 视觉 三级切换。</div>
+
+  <!-- ================= 4 服务配置 ================= -->
+  <div class="sec-head"><span class="idx">4</span><h2>设置 · 服务配置（核心页）</h2><p class="sub">一切服务皆配置：添加 / 排序 / 并发 / 回退，API Key 走系统凭据管理器</p></div>
+  <div class="win">
+    <div class="titlebar"><span class="dotr" style="background:#FF5F57"></span><span class="dotr" style="background:#FEBC2E"></span><span class="dotr" style="background:#28C840"></span><span class="tname">随译 · 设置 — 服务配置</span></div>
+    <div class="set-body">
+      <div class="side">
+        <div class="side-item"><span class="ic">⚙</span>通用</div>
+        <div class="side-item"><span class="ic">⌨</span>热键</div>
+        <div class="side-item on"><span class="ic">🛠</span>服务配置</div>
+        <div class="side-item"><span class="ic">📗</span>生词本</div>
+        <div class="side-item"><span class="ic">🔊</span>语音合成</div>
+        <div class="side-item"><span class="ic">🧩</span>插件</div>
+        <div class="side-item"><span class="ic">🕘</span>历史记录</div>
+        <div class="side-item"><span class="ic">ⓘ</span>关于</div>
+        <div class="side-foot">随译 v0.1.0 (dev)<br>Tauri 2 · Rust + WebView</div>
+      </div>
+      <div class="main">
+        <div class="card list-col">
+          <div class="card-head"><b>翻译服务</b><span class="m">拖拽排序</span><span style="flex:1"></span><span class="btn primary mini">＋ 添加服务</span></div>
+          <div class="svc on">
+            <span class="drag">⠿</span><span class="tgl"></span>
+            <span class="svc-name"><b>DeepSeek</b><span>OpenAI 兼容 · deepseek-chat</span></span>
+            <span class="ok-t">✓ 342ms</span><span class="btn mini">编辑</span>
+          </div>
+          <div class="svc">
+            <span class="drag">⠿</span><span class="tgl"></span>
+            <span class="svc-name"><b>Gemini</b><span>Google · gemini-2.5-flash</span></span>
+            <span class="ok-t">✓ 510ms</span><span class="btn mini">编辑</span>
+          </div>
+          <div class="svc">
+            <span class="drag">⠿</span><span class="tgl off"></span>
+            <span class="svc-name"><b>Bing 词典</b><span>词典 · 单词查询用</span></span>
+            <span class="btn mini">测试</span><span class="btn mini">编辑</span>
+          </div>
+          <div class="svc">
+            <span class="drag">⠿</span><span class="tgl"></span>
+            <span class="svc-name"><b>Ollama 本地</b><span>localhost:11434 · qwen2.5:7b</span></span>
+            <span class="ok-t">✓ 局域网</span><span class="btn mini">编辑</span>
+          </div>
+          <div class="fallback">↳ <b>回退链</b>：DeepSeek → Gemini → Ollama 本地　·　并发数 2　·　单服超时 15s<br>↳ OCR 服务、语音服务在本页顶部 Tab 切换管理</div>
+        </div>
+        <div class="card form-col">
+          <div class="card-head"><b>编辑服务 · DeepSeek</b><span class="chip acc">OpenAI 兼容</span><span style="flex:1"></span><span class="btn danger mini">删除</span></div>
+          <div class="row2">
+            <div class="f"><label>名称</label><div class="inp">DeepSeek</div></div>
+            <div class="f"><label>协议</label><div class="selwrap2"><div class="inp">OpenAI 兼容 (/v1/chat/completions)</div><span class="cv">▾</span></div></div>
+          </div>
+          <div class="f"><label>Base URL</label><div class="inp mono">https://api.deepseek.com/v1</div></div>
+          <div class="f"><label>API Key（仅存于系统凭据管理器，不入配置文件）</label>
+            <div class="keyrow"><div class="inp mono">••••••••••••••••••sk-9f3a</div><span class="btn mini" style="color:#15803D;border-color:#C6F1D6;background:#F6FEF9">✓ 测试连接 342ms</span></div>
+          </div>
+          <div class="row2">
+            <div class="f"><label>模型（可手填）</label><div class="selwrap2"><div class="inp mono">deepseek-chat</div><span class="cv">▾</span></div></div>
+            <div class="f" style="flex:0 0 44%"><label>结果类型</label><div class="seg"><span class="on">纯文本</span><span>词典结构</span></div></div>
+          </div>
+          <div class="f"><label>Prompt 模板 · 变量自动注入</label>
+            <div class="codebox">你是专业翻译引擎。将<span class="hl">{{from}}</span>翻译为<span class="hl">{{to}}</span>，只输出译文：
+<span class="hl">{{text}}</span></div>
+          </div>
+          <div class="row2">
+            <div class="f"><label>Temperature</label><div class="slider"><div class="track"><span class="knob"></span></div><span class="sval">0.3</span></div></div>
+            <div class="f"><label>流式输出 (SSE)</label><span class="tgl" style="margin-top:4px"></span></div>
+          </div>
+          <div class="form-foot"><span class="btn primary">保存修改</span><span class="btn">恢复默认 Prompt</span><span class="sec-note">🔒 密钥读取：Windows 凭据管理器 ✓</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="note"><b>④</b> 「添加服务」时协议选 <b>OpenAI 兼容</b> 即可接入 DeepSeek / Kimi / 智谱 / OneAPI 中转 / LM Studio / Ollama 等几乎全部 AI 服务；Anthropic 与 Gemini 走各自专有适配器。表单由服务配置 Schema 自动生成，插件注册的服务也长这样。</div>
+
+  <!-- ================= 5 热键 ================= -->
+  <div class="sec-head"><span class="idx">5</span><h2>热键设置</h2><p class="sub">全局热键 + 每个动作可留空停用</p></div>
+  <div class="stage stageE">
+    <div class="win" style="flex:1">
+      <div class="hk"><span class="nm"><b>划词翻译</b><span>取选中文字 → 弹窗</span></span><span class="kbd">Alt</span>+<span class="kbd">D</span><span class="btn mini">录制</span></div>
+      <div class="hk"><span class="nm"><b>输入翻译</b><span>呼出主窗口手动输入</span></span><span class="kbd">Alt</span>+<span class="kbd">E</span><span class="btn mini">录制</span></div>
+    </div>
+    <div class="win" style="flex:1">
+      <div class="hk"><span class="nm"><b>截图 OCR / 翻译</b><span>框选识别，或识别并翻译</span></span><span class="kbd">Alt</span>+<span class="kbd">S</span><span class="btn mini">录制</span></div>
+      <div class="hk"><span class="nm"><b>输入框转译</b><span>当前输入框整体替换</span></span><span class="kbd">Alt</span>+<span class="kbd">T</span><span class="btn mini">录制</span></div>
+    </div>
+  </div>
+
+  <!-- ================= footer ================= -->
+  <div class="board-foot">
+    <h3>实现要点（对应 M0–M3 里程碑）</h3>
+    <ul>
+      <li>流式输出：SSE 增量渲染，多个结果卡独立推进，完成态显示耗时</li>
+      <li>多服务编排：拖拽排序、并发对比、失败自动沿回退链切换</li>
+      <li>写回安全：替换前对选区/输入框做快照校验，焦点变化即回退为复制+通知</li>
+      <li>密钥安全：API Key 只存 Windows 凭据管理器 / macOS 钥匙串，配置文件零明文</li>
+      <li>原图翻译：OCR 返回行级坐标，译文按坐标覆盖渲染，支持整体开关</li>
+      <li>配置即服务：所有翻译/OCR/语音服务统一 Schema，插件注册的服务与内置同权</li>
+    </ul>
+    <div class="next">下一步 → <b>M0</b>：Tauri 2 脚手架 + 服务配置层 + OpenAI 兼容适配器（含流式）<span class="chip" style="background:#1E293B;border-color:#334155;color:#CBD5E1">设计已确认 · 准备开工</span></div>
+  </div>
+
+</div>
+<script>document.documentElement.setAttribute('data-h', Math.ceil(document.documentElement.getBoundingClientRect().height));</script>
+</body>
+</html>
