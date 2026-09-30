@@ -12,9 +12,11 @@
   "app": {
     "windows": [
       {
-        "title": "随译 SuiYi",
-        "width": 800,
-        "height": 600
+        "title": "随译 SuiYi · 设置",
+        "width": 1024,
+        "height": 700,
+        "minWidth": 900,
+        "minHeight": 620
       }
     ],
     "security": {
