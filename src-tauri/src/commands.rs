@@ -6,10 +6,12 @@
 //! - API Key 相关命令只与系统凭据管理器交互。
 
 use crate::config::{
-    load_services, new_service_id, save_services, ServiceConfig, ServicesFile,
+    load_services, new_service_id, save_services, ServiceConfig, ServiceKind, ServicesFile,
 };
 use crate::keyring;
+use crate::translator::{self, DonePayload, TranslateParams};
 use std::path::PathBuf;
+use std::time::Duration;
 use tauri::Manager;
 
 /// 全局设置（并发数 / 超时）也保存在 services.json，单独读写根结构
@@ -126,4 +128,46 @@ pub fn save_settings(app: tauri::AppHandle, settings: GlobalSettings) -> Result<
     file.concurrency = settings.concurrency.clamp(1, 8);
     file.timeout_secs = settings.timeout_secs.clamp(3, 120);
     save_services(&dir, &file)
+}
+
+/// 用指定（已启用）服务翻译文本；流式增量通过 translate-delta / translate-done 事件推送
+#[tauri::command]
+pub async fn translate_text(
+    app: tauri::AppHandle,
+    service_id: String,
+    text: String,
+    from: String,
+    to: String,
+) -> Result<DonePayload, String> {
+    let file = load_services(&config_dir(&app)?)?;
+    let svc = file
+        .services
+        .iter()
+        .find(|s| s.id == service_id)
+        .ok_or_else(|| format!("服务不存在: {service_id}"))?;
+    if !svc.enabled {
+        return Err("该服务未启用".into());
+    }
+    if svc.kind != ServiceKind::Translation {
+        return Err("该服务不是翻译服务".into());
+    }
+    let key = keyring::get_api_key(&service_id)?
+        .ok_or("该服务尚未设置 API Key，请到设置页填写")?;
+    let prompt = translator::build_prompt(svc.prompt_template.as_deref(), &from, &to, &text);
+    let params = TranslateParams {
+        service_id: &service_id,
+        base_url: &svc.base_url,
+        api_key: &key,
+        model: &svc.model,
+        prompt: &prompt,
+        temperature: svc.temperature,
+        stream: svc.stream,
+        timeout: Duration::from_secs(file.timeout_secs.max(3)),
+    };
+    let (text, elapsed_ms) = translator::translate(&app, params).await?;
+    Ok(DonePayload {
+        service_id,
+        text,
+        elapsed_ms,
+    })
 }
