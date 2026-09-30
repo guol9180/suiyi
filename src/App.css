@@ -19,7 +19,7 @@
   border: none;
   background: none;
   padding: 8px 16px;
-  font-size: 13px;
+  font-size: var(--fs-body);
   font-family: inherit;
   color: var(--c-text-3);
   cursor: pointer;

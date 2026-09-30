@@ -588,13 +588,17 @@ export default function SettingsPage() {
                     onClick={() => setHistId(h.id)}
                   >
                     <div className="hl1">
-                      <span className={`dot${h.ok ? "" : " err"}`} />
                       <span className="t">{h.source}</span>
-                      <span className="chip mile mini">{HISTORY_KIND_LABELS[h.kind] ?? h.kind}</span>
                       {h.serviceName && <span className="chip acc mini">{h.serviceName}</span>}
                     </div>
-                    <div className="hl2">
-                      {h.translated || h.error || "—"} · {formatTime(h.createdAt)}
+                {/* 第二行拆两段：摘要可截断，时间与耗时固定不截断 */}
+                <div className={`hl2${h.ok ? "" : " err"}`}>
+                  <span className="sum">{h.translated || h.error || "—"}</span>
+                  <span className="meta">
+                    <span>{HISTORY_KIND_LABELS[h.kind] ?? h.kind}</span>
+                    <span>{formatTime(h.createdAt)}</span>
+                    {h.ok && h.elapsedMs > 0 && <span>{(h.elapsedMs / 1000).toFixed(1)}s</span>}
+                  </span>
                     </div>
                   </div>
                 ))}
@@ -734,7 +738,7 @@ export default function SettingsPage() {
               <Toggle on={s.enabled} onClick={() => void toggleEnabled(s)} />
               <span className="svc-name">
                 <b>{s.name || "未命名服务"}</b>
-                <span>{serviceMeta(s)}</span>
+                  <span title={serviceMeta(s)}>{serviceMeta(s)}</span>
               </span>
               {s.pluginId ? (
                 <span className="chip acc mini">插件</span>

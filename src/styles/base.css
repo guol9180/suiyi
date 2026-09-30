@@ -51,7 +51,7 @@ body {
   background: var(--c-surface);
   color: var(--c-text-2);
   font-family: inherit;
-  font-size: 12.5px;
+  font-size: var(--fs-sec);
   cursor: pointer;
   white-space: nowrap;
   transition: background 0.14s, border-color 0.14s, color 0.14s;
@@ -67,7 +67,7 @@ body {
 .btn.primary:active { background: var(--c-primary-press); border-color: var(--c-primary-press); }
 .btn.danger { color: var(--c-danger); border-color: var(--c-danger-border); background: var(--c-danger-bg); }
 .btn.danger:hover { background: var(--c-danger-hover-bg); border-color: var(--c-danger-border); color: var(--c-danger-ink); }
-.btn.mini { height: var(--h-btn-mini); padding: 0 9px; font-size: 11.5px; border-radius: var(--radius-sm); }
+.btn.mini { height: var(--h-btn-mini); padding: 0 9px; font-size: var(--fs-sec); border-radius: var(--radius-sm); }
 .btn:disabled,
 .btn.is-disabled {
   background: var(--c-muted-bg);
@@ -91,7 +91,7 @@ body {
   gap: 5px;
   padding: 2px 8px;
   border-radius: var(--radius-sm);
-  font-size: 11.5px;
+  font-size: var(--fs-cap);
   border: 1px solid var(--c-border);
   background: var(--c-surface);
   color: var(--c-text-2);
@@ -104,7 +104,7 @@ body {
 /* 里程碑与文档状态：中性色，不抢运行时状态 */
 .chip.mile { background: var(--c-mile-bg); border-color: var(--c-mile-border); color: var(--c-mile); }
 .chip.acc { background: var(--c-primary-soft); border-color: var(--c-primary-border); color: var(--c-primary-strong); }
-.chip.mini { font-size: 10.5px; padding: 1px 6px; }
+.chip.mini { font-size: var(--fs-cap); padding: 1px 6px; }
 
 .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--c-success); flex: none; }
 .dot.warn { background: var(--c-warn); }
@@ -145,7 +145,7 @@ body {
   border-radius: var(--radius-md);
   padding: 0 10px;
   font-family: inherit;
-  font-size: 12.5px;
+  font-size: var(--fs-sec);
   color: var(--c-text);
   background: var(--c-surface);
   transition: border-color 0.14s;
@@ -153,7 +153,7 @@ body {
 }
 .inp:hover { border-color: var(--c-border-hover); }
 .inp:focus { border-color: var(--c-primary-strong); }
-.inp.mono { font-family: var(--font-mono); font-size: 12px; }
+.inp.mono { font-family: var(--font-mono); font-size: var(--fs-sec); }
 .inp::placeholder { color: var(--c-caption); }
 select.inp { cursor: pointer; }
 textarea.inp { height: auto; min-height: 86px; padding: 9px 11px; line-height: 1.75; resize: vertical; }
@@ -167,7 +167,7 @@ textarea.inp { height: auto; min-height: 86px; padding: 9px 11px; line-height: 1
   justify-content: center;
   height: 28px;
   padding: 0 12px;
-  font-size: 12px;
+  font-size: var(--fs-sec);
   white-space: nowrap;
   color: var(--c-text-3);
   background: var(--c-surface);
@@ -181,13 +181,13 @@ textarea.inp { height: auto; min-height: 86px; padding: 9px 11px; line-height: 1
 /* ---------- 卡片 ---------- */
 .card { background: var(--c-surface); border: 1px solid var(--c-border); border-radius: var(--radius-lg); padding: 14px; }
 .card-head { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
-.card-head .hname { font-size: 13.5px; font-weight: 600; }
-.card-head .m { font-size: 11px; color: var(--c-caption); }
+.card-head .hname { font-size: var(--fs-sub); font-weight: 600; }
+.card-head .m { font-size: var(--fs-cap); color: var(--c-caption); }
 
 /* ---------- 键位标签 ---------- */
 .kbd {
   font-family: var(--font-mono);
-  font-size: 11.5px;
+  font-size: var(--fs-sec);
   background: var(--c-subtle-bg);
   border: 1px solid var(--c-border-strong);
   border-bottom-width: 2px;
@@ -202,12 +202,12 @@ textarea.inp { height: auto; min-height: 86px; padding: 9px 11px; line-height: 1
 
 /* ---------- 词典结果卡 ---------- */
 .dict-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 6px; }
-.dict-head .w { font-size: 19px; font-weight: 600; }
-.dict-head .ph { font-family: var(--font-mono); font-size: 12px; color: var(--c-caption); }
+.dict-head .w { font-size: var(--fs-display); font-weight: 600; }
+.dict-head .ph { font-family: var(--font-mono); font-size: var(--fs-sec); color: var(--c-caption); }
 .dict .sense { padding: 7px 0; border-top: 1px dashed var(--c-border); }
 .dict .sense .pos {
   display: inline-flex;
-  font-size: 11px;
+  font-size: var(--fs-cap);
   color: var(--c-info);
   background: var(--c-info-bg);
   border: 1px solid var(--c-info-border);
@@ -216,8 +216,8 @@ textarea.inp { height: auto; min-height: 86px; padding: 9px 11px; line-height: 1
   font-family: var(--font-mono);
   margin-bottom: 3px;
 }
-.dict .sense .def { font-size: 13px; color: var(--c-text); }
-.dict .sense .eg { font-size: 12px; color: var(--c-text-3); margin-top: 3px; }
+.dict .sense .def { font-size: var(--fs-body); color: var(--c-text); }
+.dict .sense .eg { font-size: var(--fs-sec); color: var(--c-text-3); margin-top: 3px; }
 
 .toast {
   display: flex;
@@ -225,7 +225,7 @@ textarea.inp { height: auto; min-height: 86px; padding: 9px 11px; line-height: 1
   gap: 9px;
   border-radius: var(--radius-md);
   padding: 9px 12px;
-  font-size: 12px;
+  font-size: var(--fs-sec);
   border: 1px solid;
 }
 .toast.float { box-shadow: var(--shadow-float); }

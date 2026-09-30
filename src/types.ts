@@ -124,10 +124,15 @@ export const PROTOCOL_LABELS: Record<Protocol, string> = {
   gemini: "Gemini",
 };
 
-/** 列表行的第二行摘要：协议 · 模型 */
+/**
+ * 列表行的第二行摘要。
+ * OpenAI 兼容是默认协议，每行都重复一遍会把模型名挤到截断，
+ * 所以只有非默认协议才带前缀。完整信息仍在右侧表单里。
+ */
 export function serviceMeta(s: ServiceConfig): string {
   if (s.pluginId) return `插件 · ${s.model || "本地脚本"}`;
   const proto = PROTOCOL_LABELS[s.protocol];
+  if (s.protocol === "open_ai_compatible") return s.model || proto;
   return s.model ? `${proto} · ${s.model}` : proto;
 }
 
