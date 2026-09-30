@@ -1,10 +1,37 @@
 // S0.8 最小翻译界面：输入 → 各启用服务并发流式出稿（对应设计稿①的卡片形态）
 import { useEffect, useState } from "react";
-import { listen } from "@tauri-apps/api/event";
+import { emit, listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
+import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { listServices } from "../api";
 import type { ServiceConfig } from "../types";
 import "./Translate.css";
+
+/** 打开划词弹窗并投递文本（M1 将由取词服务自动调用） */
+export async function openTranslatePopup(sample: string) {
+  let win = await WebviewWindow.getByLabel("popup");
+  if (!win) {
+    win = new WebviewWindow("popup", {
+      url: "popup.html",
+      title: "随译 · 划词翻译",
+      width: 430,
+      height: 540,
+      minWidth: 360,
+      minHeight: 400,
+      decorations: false,
+      transparent: true,
+      shadow: true,
+      center: true,
+      resizable: true,
+    });
+    // 新窗口挂载需要一点时间，再投递文本
+    await new Promise((r) => setTimeout(r, 600));
+  } else {
+    await win.show();
+    await win.setFocus();
+  }
+  await emit("popup-set-source", { text: sample, autoTranslate: true });
+}
 
 interface CardState {
   id: string;
@@ -137,7 +164,13 @@ export default function TranslatePage() {
         <button className="btn primary" disabled={busy || !text.trim()} onClick={() => void doTranslate()}>
           {busy ? "翻译中…" : "翻 译"}
         </button>
-        <span className="muted">流式输出 · 多服务并发对比 · 目标语言与方向可在设置中扩展</span>
+        <button
+          className="btn"
+          onClick={() => void openTranslatePopup(text.trim() || "The quick brown fox jumps over the lazy dog.")}
+        >
+          弹窗预览
+        </button>
+        <span className="muted">流式输出 · 多服务并发对比 · Ctrl+Enter 翻译</span>
       </div>
 
       <div className="cards">
