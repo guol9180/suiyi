@@ -1,0 +1,185 @@
+/*
+ * 随译 SuiYi · 基础组件样式（对应设计稿中的通用元件）
+ * 按钮 / 徽章 / 开关 / 输入框 / 卡片 / 键位标签 / 分段控件
+ */
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body, #root { height: 100%; }
+
+body {
+  font-family: var(--font-ui);
+  color: var(--c-text);
+  background: var(--c-bg);
+  font-size: 13px;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ---------- 按钮 ---------- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 13px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--c-border-strong);
+  background: var(--c-surface);
+  font-size: 12.5px;
+  font-family: inherit;
+  color: var(--c-text-2);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.btn:hover { background: var(--c-bg); }
+.btn.primary {
+  background: var(--c-primary);
+  border-color: var(--c-primary);
+  color: #fff;
+  box-shadow: var(--shadow-primary);
+}
+.btn.primary:hover { background: var(--c-primary-strong); }
+.btn.danger {
+  color: var(--c-danger);
+  border-color: var(--c-danger-border);
+  background: var(--c-danger-bg);
+}
+.btn:disabled { opacity: 0.55; cursor: not-allowed; }
+.btn.mini { font-size: 11.5px; padding: 3px 10px; border-radius: var(--radius-sm); }
+
+/* ---------- 徽章 ---------- */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: var(--radius-pill);
+  font-size: 11.5px;
+  border: 1px solid var(--c-border);
+  background: var(--c-surface);
+  color: var(--c-text-2);
+  white-space: nowrap;
+}
+.chip.acc {
+  background: var(--c-primary-soft);
+  border-color: var(--c-primary-border);
+  color: var(--c-primary-strong);
+}
+.chip.ok {
+  background: var(--c-success-bg);
+  border-color: var(--c-success-border);
+  color: var(--c-success);
+}
+
+.dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #22c55e;
+  flex: none;
+}
+
+/* ---------- 开关 ---------- */
+.tgl {
+  width: 34px;
+  height: 20px;
+  border-radius: var(--radius-pill);
+  background: var(--c-primary);
+  position: relative;
+  flex: none;
+  cursor: pointer;
+  border: none;
+  transition: background 0.15s;
+}
+.tgl::after {
+  content: "";
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  top: 2px;
+  right: 2px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+  transition: right 0.15s, left 0.15s;
+}
+.tgl.off { background: #cbd5e1; }
+.tgl.off::after { right: auto; left: 2px; }
+
+/* ---------- 输入框 / 表单 ---------- */
+.f { margin-bottom: 11px; }
+.f > label {
+  display: block;
+  font-size: 11.5px;
+  color: var(--c-text-3);
+  margin-bottom: 5px;
+}
+.inp {
+  width: 100%;
+  border: 1px solid var(--c-border-strong);
+  border-radius: var(--radius-md);
+  padding: 7px 10px;
+  font-size: 12.5px;
+  font-family: inherit;
+  color: var(--c-text);
+  background: var(--c-surface);
+  box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.04);
+  outline: none;
+}
+.inp:focus { border-color: var(--c-primary); }
+.inp.mono { font-family: var(--font-mono); font-size: 12px; }
+textarea.inp { line-height: 1.7; resize: vertical; }
+
+.row2 { display: flex; gap: 10px; }
+.row2 > .f { flex: 1; min-width: 0; }
+
+/* ---------- 卡片 ---------- */
+.card {
+  background: var(--c-surface);
+  border: 1px solid #e7ecf3;
+  border-radius: var(--radius-lg);
+  padding: 14px;
+}
+.card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.card-head b { font-size: 13.5px; }
+.card-head .m { font-size: 11px; color: var(--c-text-muted); }
+
+/* ---------- 分段控件 ---------- */
+.seg {
+  display: flex;
+  border: 1px solid var(--c-border-strong);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+.seg span {
+  flex: 1;
+  text-align: center;
+  font-size: 12px;
+  padding: 6px 0;
+  color: var(--c-text-3);
+  background: var(--c-surface);
+  cursor: pointer;
+}
+.seg span.on {
+  background: var(--c-primary);
+  color: #fff;
+  font-weight: 600;
+}
+
+/* ---------- 键位标签 ---------- */
+.kbd {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  background: #f1f5f9;
+  border: 1px solid #d6dee9;
+  border-bottom-width: 2px;
+  border-radius: var(--radius-sm);
+  padding: 2px 7px;
+  color: var(--c-text-2);
+  white-space: nowrap;
+}

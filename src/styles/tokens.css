@@ -1,0 +1,50 @@
+/*
+ * 随译 SuiYi · 设计 token
+ * 来源：design/ui-mockup.html v0.2（色板/圆角/阴影/字体）
+ * 所有界面样式只允许引用这里的变量，不写魔法值。
+ */
+
+:root {
+  /* 主色 */
+  --c-primary: #4c6fff;
+  --c-primary-strong: #3b5bff;
+  --c-primary-soft: #eef2ff;
+  --c-primary-border: #d6deff;
+
+  /* 中性色 */
+  --c-text: #0f172a;
+  --c-text-2: #475569;
+  --c-text-3: #64748b;
+  --c-text-muted: #94a3b8;
+  --c-bg: #f6f8fb;
+  --c-surface: #ffffff;
+  --c-surface-2: #fbfcfe;
+  --c-border: #e2e8f0;
+  --c-border-strong: #d9e0ec;
+
+  /* 语义色 */
+  --c-success: #15803d;
+  --c-success-bg: #ecfdf3;
+  --c-success-border: #c6f1d6;
+  --c-danger: #dc2626;
+  --c-danger-bg: #fff7f7;
+  --c-danger-border: #f3c7c7;
+  --c-warn: #f59e0b;
+  --c-accent: #ffde59;
+
+  /* 圆角 */
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 11px;
+  --radius-xl: 14px;
+  --radius-pill: 999px;
+
+  /* 阴影 */
+  --shadow-card: 0 12px 32px rgba(15, 23, 42, 0.1);
+  --shadow-pop: 0 16px 40px rgba(15, 23, 42, 0.16);
+  --shadow-primary: 0 3px 8px rgba(76, 111, 255, 0.35);
+
+  /* 字体 */
+  --font-ui: "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif;
+  --font-mono: Consolas, "Microsoft YaHei", monospace;
+}

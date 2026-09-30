@@ -84,3 +84,8 @@ macOSï¼ˆè¾…åŠ©åŠŸèƒ½/å½•å±æƒé™å¼•å¯¼ï¼‰ã€Linuxï¼ˆX11 ä¼˜å…ˆï¼ŒWayland ç”¨å¤–
 1. å‰ç«¯æ¡†æ¶ React + TS æ˜¯å¦ OKï¼Ÿï¼ˆæƒ³ç”¨ Vue è¯·åœ¨ S0.2 ä¹‹å‰æå‡ºï¼‰
 2. M0 éªŒæ”¶éœ€è¦ä¸€ä¸ª OpenAI å…¼å®¹æœåŠ¡ï¼šDeepSeek / æ™ºè°± / Kimi / OneAPI ä¸­è½¬çš„ API Keyï¼Œæˆ–æœ¬æœº Ollamaï¼›
 3. S0.1 å®‰è£… Rust éœ€è¦è”ç½‘ä¸‹è½½å¹¶å¯èƒ½å¼¹å‡º VS Build Tools å®‰è£…å™¨ï¼Œå±Šæ—¶ä¼šå†æ¬¡å¾æ±‚æ‰¹å‡†ã€‚
+
+## 7. ½ø¶ÈÈÕÖ¾
+- 2026-09-29 S0.1 ? Rust 1.98.1£¨D:\dev\environment\rustup|cargo£©+ MSVC 14.44 + SDK 10.0.22621£»rsproxy ¾µÏñ£»hello-world Á´½ÓÊÕ»õ
+- 2026-09-29 S0.2 ? Tauri 2 react-ts ½ÅÊÖ¼ÜºÏ²¢½ø±¾ÏîÄ¿£¨identifier=com.suiyi.dev£¬title=ËæÒë SuiYi£©£»pnpm °²×°ÓëÇ°¶Ë¹¹½¨Í¨¹ı
+- 2026-09-29 S0.3 ? tokens.css / base.css Ç¨ÒÆÉè¼Æ token Óë»ù´¡×é¼şÑùÊ½£¬main.tsx ÒıÈë
