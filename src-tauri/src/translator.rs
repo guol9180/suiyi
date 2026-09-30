@@ -250,4 +250,93 @@ mod tests {
         // 空模板 → 默认模板（含默认变量壳）
         assert!(build_prompt(None, "EN", "中文", "hi").contains("hi"));
     }
+
+    /// 真实服务冒烟验收：读取本机 services.json + 凭据管理器中已启用的服务，
+    /// 发送一句真实翻译。平时被 #[ignore] 跳过，显式运行：
+    ///   cargo test real_service_smoke -- --ignored --nocapture
+    #[test]
+    #[ignore]
+    fn real_service_smoke() {
+        let appdata = std::env::var("APPDATA").expect("APPDATA 未定义");
+        let dir = std::path::Path::new(&appdata).join("com.suiyi.dev");
+        let file = crate::config::load_services(&dir).expect("读取配置失败");
+        let svc = file
+            .services
+            .iter()
+            .find(|s| s.enabled)
+            .expect("没有已启用的服务");
+        let key = crate::keyring::get_api_key(&svc.id)
+            .expect("读取凭据失败")
+            .expect("该服务没有保存 API Key");
+        // 可用 SUIYI_SMOKE_MODEL / SUIYI_SMOKE_BASE 覆盖模型与网关（排查用）
+        let model = std::env::var("SUIYI_SMOKE_MODEL").unwrap_or_else(|_| svc.model.clone());
+        let base = std::env::var("SUIYI_SMOKE_BASE").unwrap_or_else(|_| svc.base_url.clone());
+        let prompt = build_prompt(svc.prompt_template.as_deref(), "自动检测", "简体中文", "Hello, world!");
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let (text, ms) = rt
+            .block_on(translate_inner(
+                None,
+                TranslateParams {
+                    service_id: &svc.id,
+                    base_url: &base,
+                    api_key: &key,
+                    model: &model,
+                    prompt: &prompt,
+                    temperature: svc.temperature,
+                    stream: svc.stream,
+                    timeout: std::time::Duration::from_secs(file.timeout_secs.max(10)),
+                },
+            ))
+            .expect("真实服务翻译失败");
+        assert!(!text.trim().is_empty(), "真实服务返回了空文本");
+        println!("SMOKE_OK | 模型={model} | 耗时={ms}ms | 译文: {text}");
+    }
+
+    /// 探针：用已存 Key 请求 /models，验证 Key 与平台是否匹配（不打印 Key）
+    #[test]
+    #[ignore]
+    fn real_models_probe() {
+        let appdata = std::env::var("APPDATA").unwrap();
+        let dir = std::path::Path::new(&appdata).join("com.suiyi.dev");
+        let file = crate::config::load_services(&dir).unwrap();
+        let svc = file.services.iter().find(|s| s.enabled).expect("no enabled svc");
+        let key = crate::keyring::get_api_key(&svc.id)
+            .unwrap()
+            .expect("no api key");
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let out = rt.block_on(async {
+            let client = reqwest::Client::new();
+            let url = format!("{}/models", svc.base_url.trim_end_matches('/'));
+            let resp = client
+                .get(&url)
+                .header("Authorization", format!("Bearer {key}"))
+                .send()
+                .await;
+            match resp {
+                Ok(r) => {
+                    let status = r.status();
+                    let text = r.text().await.unwrap_or_default();
+                    if status.is_success() {
+                        if let Ok(v) = serde_json::from_str::<serde_json::Value>(&text) {
+                            let slugs: Vec<String> = v["models"]
+                                .as_array()
+                                .map(|a| {
+                                    a.iter()
+                                        .filter_map(|m| m["slug"].as_str().map(String::from))
+                                        .collect()
+                                })
+                                .unwrap_or_default();
+                            format!("GET /models → {status} | 可用模型: {slugs:?}")
+                        } else {
+                            format!("GET /models → {status} | 解析失败: {}", text.chars().take(300).collect::<String>())
+                        }
+                    } else {
+                        format!("GET /models → {status} | {}", text.chars().take(300).collect::<String>())
+                    }
+                }
+                Err(e) => format!("GET /models 连接失败: {e}"),
+            }
+        });
+        println!("MODELS_PROBE [{}] {}", svc.base_url, out);
+    }
 }
