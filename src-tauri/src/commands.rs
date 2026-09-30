@@ -24,9 +24,12 @@ pub struct GlobalSettings {
     pub timeout_secs: u64,
     /// 输入框转译的目标语言
     pub input_target_lang: String,
+    /// AnkiConnect 地址与目标牌组
+    pub anki_url: String,
+    pub anki_deck: String,
 }
 
-fn config_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+pub(crate) fn config_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     app.path()
         .app_config_dir()
         .map_err(|e| format!("获取配置目录失败: {e}"))
@@ -122,6 +125,8 @@ pub fn get_settings(app: tauri::AppHandle) -> Result<GlobalSettings, String> {
         concurrency: file.concurrency,
         timeout_secs: file.timeout_secs,
         input_target_lang: file.input_target_lang,
+        anki_url: file.anki_url,
+        anki_deck: file.anki_deck,
     })
 }
 
@@ -138,6 +143,8 @@ pub fn save_settings(app: tauri::AppHandle, settings: GlobalSettings) -> Result<
     } else {
         DEFAULT_INPUT_TARGET_LANG.to_string()
     };
+    file.anki_url = settings.anki_url.trim().to_string();
+    file.anki_deck = settings.anki_deck.trim().to_string();
     save_services(&dir, &file)
 }
 

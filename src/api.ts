@@ -2,6 +2,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { GlobalSettings, ServiceConfig, ServicesFile } from "./types";
 import type { HistoryEntry, HistoryKind } from "./types";
+import type { AnkiAddResult, AnkiStatus } from "./types";
 
 export function listServices(): Promise<ServicesFile> {
   return invoke("list_services");
@@ -87,4 +88,14 @@ export function deleteHistory(id: number): Promise<void> {
 
 export function clearHistory(): Promise<void> {
   return invoke("clear_history");
+}
+
+/** 探测 Anki 连接状态 */
+export function ankiStatus(): Promise<AnkiStatus> {
+  return invoke("anki_status");
+}
+
+/** 把词条加入 Anki 生词本 */
+export function ankiAdd(front: string, back: string): Promise<AnkiAddResult> {
+  return invoke("anki_add", { front, back });
 }

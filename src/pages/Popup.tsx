@@ -4,7 +4,7 @@ import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { listServices, replaceSelection, speakText, stopSpeaking } from "../api";
+import { ankiAdd, listServices, replaceSelection, speakText, stopSpeaking } from "../api";
 import {
   SOURCE_LANGS,
   TARGET_LANGS,
@@ -218,6 +218,20 @@ export default function PopupPage() {
     }
   }
 
+  /** 把「原文 → 第一条译文」推进 Anki 生词本 */
+  async function addToAnki() {
+    const done = cards.find((c) => c.status === "done" && c.text);
+    if (!done || !source.trim()) return;
+    try {
+      const r = await ankiAdd(source.trim(), done.text);
+      if (r.error) setNotice(`加入生词本失败：${r.error}`);
+      else if (r.duplicate) setNotice("这条已经在生词本里了");
+      else setNotice("已加入生词本");
+    } catch (e) {
+      setNotice(String(e));
+    }
+  }
+
   /** 用必应搜索选中文本（后续可在设置里换搜索引擎） */
   function searchWeb() {
     if (source.trim()) void openUrl(`https://www.bing.com/search?q=${encodeURIComponent(source.trim())}`);
@@ -381,8 +395,12 @@ export default function PopupPage() {
             <button className="mi" onClick={() => { setMoreOpen(false); void stopSpeech(); }}>
               <Icon name="pause" size="sm" />停止朗读
             </button>
-            <button className="mi locked" disabled title="M3 里程碑开放">
-              <Icon name="bookmark" size="sm" />生词本<span className="soon">M3</span>
+            <button
+              className="mi"
+              disabled={!source.trim() || !cards.some((c) => c.status === "done" && c.text)}
+              onClick={() => { setMoreOpen(false); void addToAnki(); }}
+            >
+              <Icon name="bookmark" size="sm" />加入生词本
             </button>
             <div className="sep" />
             <button className="mi" onClick={() => { setMoreOpen(false); searchWeb(); }}>

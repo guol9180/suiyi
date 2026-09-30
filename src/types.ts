@@ -24,6 +24,8 @@ export interface ServicesFile {
   concurrency: number;
   timeoutSecs: number;
   inputTargetLang: string;
+  ankiUrl: string;
+  ankiDeck: string;
   services: ServiceConfig[];
 }
 
@@ -32,6 +34,24 @@ export interface GlobalSettings {
   timeoutSecs: number;
   /** 输入框转译（Alt+T）的目标语言 */
   inputTargetLang: string;
+  /** AnkiConnect 地址与目标牌组 */
+  ankiUrl: string;
+  ankiDeck: string;
+}
+
+export interface AnkiStatus {
+  available: boolean;
+  version: number | null;
+  deckExists: boolean;
+  error: string | null;
+}
+
+export interface AnkiAddResult {
+  added: boolean;
+  /** 已存在同名词条，不算失败 */
+  duplicate: boolean;
+  noteId: number | null;
+  error: string | null;
 }
 
 /** 词典结构化结果（服务结果类型为「词典结构」时返回） */

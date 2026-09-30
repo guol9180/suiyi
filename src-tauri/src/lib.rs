@@ -1,3 +1,4 @@
+pub mod anki;
 pub mod commands;
 pub mod config;
 pub mod history;
@@ -124,6 +125,8 @@ pub fn run() {
             commands::delete_history,
             commands::clear_history,
             commands::test_connection,
+            anki::anki_status,
+            anki::anki_add,
             writeback::replace_selection,
             speech::speak_text,
             speech::stop_speaking,

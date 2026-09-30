@@ -83,6 +83,9 @@ pub struct ServicesFile {
     pub timeout_secs: u64,
     /// 输入框转译（Alt+T）的目标语言
     pub input_target_lang: String,
+    /// AnkiConnect 地址与目标牌组
+    pub anki_url: String,
+    pub anki_deck: String,
     pub services: Vec<ServiceConfig>,
 }
 
@@ -97,6 +100,8 @@ impl Default for ServicesFile {
             concurrency: 2,
             timeout_secs: 15,
             input_target_lang: DEFAULT_INPUT_TARGET_LANG.into(),
+            anki_url: crate::anki::DEFAULT_ANKI_URL.into(),
+            anki_deck: crate::anki::DEFAULT_ANKI_DECK.into(),
             services: Vec::new(),
         }
     }

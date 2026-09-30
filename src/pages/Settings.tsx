@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useState } from "react";
 import "./Settings.css";
 import {
+  ankiStatus,
   clearHistory,
   deleteHistory,
   deleteApiKey,
@@ -26,6 +27,7 @@ import {
   TARGET_LANGS,
   type HistoryEntry,
   type HistoryKind,
+  type AnkiStatus,
   type Protocol,
   type ResultType,
   type ServiceConfig,
@@ -97,7 +99,11 @@ export default function SettingsPage() {
     concurrency: 2,
     timeoutSecs: 15,
     inputTargetLang: "English",
+    ankiUrl: "http://127.0.0.1:8765",
+    ankiDeck: "随译",
   });
+  const [anki, setAnki] = useState<AnkiStatus | null>(null);
+  const [ankiTesting, setAnkiTesting] = useState(false);
   const [page, setPage] = useState<Page>("services");
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<ConnectionTest | null>(null);
@@ -119,6 +125,8 @@ export default function SettingsPage() {
         concurrency: f.concurrency,
         timeoutSecs: f.timeoutSecs,
         inputTargetLang: f.inputTargetLang || "English",
+        ankiUrl: f.ankiUrl || "http://127.0.0.1:8765",
+        ankiDeck: f.ankiDeck || "随译",
       });
       const sorted = sortServices(f.services);
       setSelectedId((cur) => cur ?? sorted[0]?.id ?? null);
@@ -276,6 +284,18 @@ export default function SettingsPage() {
     }
   }
 
+  /** 探测 Anki：未装 AnkiConnect 或 Anki 没开时给出可执行的提示 */
+  async function handleAnkiTest() {
+    setAnkiTesting(true);
+    try {
+      setAnki(await ankiStatus());
+    } catch (e) {
+      setAnki({ available: false, version: null, deckExists: false, error: String(e) });
+    } finally {
+      setAnkiTesting(false);
+    }
+  }
+
   function clearKey() {
     if (!draft?.id) return;
     void deleteApiKey(draft.id)
@@ -322,29 +342,84 @@ export default function SettingsPage() {
       {/* ---------- 主区 ---------- */}
       <div className="main">
         {page === "general" && (
-          <div className="card panel">
-            <div className="card-head">
-              <span className="hname">输入框转译</span>
-              <span className="m">Alt + T</span>
+          <div className="panel" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <div className="card">
+              <div className="card-head">
+                <span className="hname">输入框转译</span>
+                <span className="m">Alt + T</span>
+              </div>
+              <div className="f" style={{ maxWidth: 280 }}>
+                <label>目标语言</label>
+                <select
+                  className="inp"
+                  value={settings.inputTargetLang}
+                  onChange={(e) => {
+                    const next = { ...settings, inputTargetLang: e.target.value };
+                    setSettings(next);
+                    void saveGlobal(next);
+                  }}
+                >
+                  {TARGET_LANGS.map((l) => (
+                    <option key={l} value={l}>{l}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="thint">
+                按下 Alt+T 会读取当前输入框内容，翻译成该语言后原位写回。来源语言始终自动检测。
+              </div>
             </div>
-            <div className="f" style={{ maxWidth: 280 }}>
-              <label>目标语言</label>
-              <select
-                className="inp"
-                value={settings.inputTargetLang}
-                onChange={(e) => {
-                  const next = { ...settings, inputTargetLang: e.target.value };
-                  setSettings(next);
-                  void saveGlobal(next);
-                }}
-              >
-                {TARGET_LANGS.map((l) => (
-                  <option key={l} value={l}>{l}</option>
-                ))}
-              </select>
-            </div>
-            <div className="thint">
-              按下 Alt+T 会读取当前输入框内容，翻译成该语言后原位写回。来源语言始终自动检测。
+
+            <div className="card">
+              <div className="card-head">
+                <span className="hname">生词本 · Anki</span>
+                <span className="m">需要安装并启动 AnkiConnect 插件</span>
+              </div>
+              <div className="row2">
+                <div className="f">
+                  <label>AnkiConnect 地址</label>
+                  <input
+                    className="inp mono"
+                    value={settings.ankiUrl}
+                    onChange={(e) => setSettings((s) => ({ ...s, ankiUrl: e.target.value }))}
+                    onBlur={() => void saveGlobal()}
+                  />
+                </div>
+                <div className="f">
+                  <label>牌组</label>
+                  <input
+                    className="inp"
+                    value={settings.ankiDeck}
+                    onChange={(e) => setSettings((s) => ({ ...s, ankiDeck: e.target.value }))}
+                    onBlur={() => void saveGlobal()}
+                  />
+                </div>
+              </div>
+              <div className="testbox" style={{ marginBottom: 0 }}>
+                <div className="trow">
+                  <button className="btn mini" disabled={ankiTesting} onClick={() => void handleAnkiTest()}>
+                    <Icon name="bolt" size="sm" />{ankiTesting ? "测试中" : "测试连接"}
+                  </button>
+                  {ankiTesting && <span className="spin" />}
+                  {anki && anki.available && (
+                    <>
+                      <span className="chip ok"><Icon name="check" size="sm" />Anki 已连接</span>
+                      {anki.version != null && <span className="chip mile mini">AnkiConnect v{anki.version}</span>}
+                      <span className="t-cap">
+                        {anki.deckExists ? `牌组「${settings.ankiDeck}」已存在` : "牌组将在首次添加时自动创建"}
+                      </span>
+                    </>
+                  )}
+                </div>
+                {anki && !anki.available && (
+                  <div className="terr">
+                    <Icon name="alert" size="sm" />
+                    <span>
+                      连不上 Anki。请确认 Anki 正在运行，且已安装 AnkiConnect 插件（工具 → 插件 → 获取插件 → 代码 2055492159）。
+                      {anki.error ? ` 详情：${anki.error}` : ""}
+                    </span>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         )}
