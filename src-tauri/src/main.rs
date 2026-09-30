@@ -2,5 +2,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-    sui_scaffold_lib::run()
+    suiyi_lib::run()
 }
