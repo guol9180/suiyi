@@ -4,7 +4,7 @@ Windows 桌面翻译工具。三个入口：划词、截图、输入框。翻译
 
 ## 下载
 
-下载页 <https://guol9180.github.io/suiyi/> · 全部版本 <https://github.com/guol9180/suiyi/releases>
+下载页 <https://suiyi.imhgl.com/> · 全部版本 <https://github.com/guol9180/suiyi/releases>
 
 | 文件 | 说明 |
 |---|---|
