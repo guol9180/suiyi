@@ -1,96 +1,125 @@
 # 随译 SuiYi · 开发计划
 
-> 桌面 AI 翻译助手（Windows 首发）：划词翻译 / 截图 OCR / 输入框转译 / 多 AI 服务灵活配置。
-> 设计基线：`design/ui-mockup.html`（v0.2）。工作名「随译 SuiYi」为占位，可随时改。
+> Windows 桌面 AI 翻译助手：划词翻译、截图识别、输入框转译、多 AI 服务配置。
+> 界面基线：`design/ui-mockup.html`（v0.4）。
 
-## 1. 技术栈（定稿）
+## 1. 技术栈
 
 | 层 | 选型 | 说明 |
 |---|---|---|
-| 应用框架 | Tauri 2 | 轻量、跨平台；WebView 渲染前端 |
-| 后端 | Rust（stable, msvc） | 业务内核：服务编排 / 取词 / OCR / 写回 |
-| 前端 | Vite + React + TypeScript | 设置页与弹窗 UI；设计 token 从设计稿迁移 |
-| 状态管理 | zustand | 轻量 |
-| 配置存储 | services.json + keyring crate | API Key 只进 Windows 凭据管理器，配置文件零明文 |
-| 网络 | reqwest（stream） | OpenAI 兼容 `/chat/completions` + SSE 流式 |
-| 数据库 | rusqlite（M4 起） | 翻译历史 |
-| 后续按阶段引入 | tauri-plugin-global-shortcut、enigo、windows crate | M1 热键/取词、M2 OCR、M3 写回 |
+| 应用框架 | Tauri 2 | 轻量跨平台，WebView 渲染前端 |
+| 后端 | Rust stable (MSVC) | 业务内核：服务编排、取词、OCR、写回 |
+| 前端 | Vite + React + TypeScript | 三个入口：主窗口、划词弹窗、截图覆盖层 |
+| 配置存储 | services.json + keyring | API Key 只进系统凭据管理器，配置文件零明文 |
+| 网络 | reqwest stream | OpenAI 兼容 `/chat/completions` 与 SSE |
+| 取词与按键 | arboard + SendInput | 剪贴板往返取词，SendInput 发送真实虚拟键码 |
+| 截屏与 OCR | GDI BitBlt + Windows.Media.OCR | 抓虚拟屏幕冻结帧，离线识别 |
+| 后续引入 | rusqlite | M4 历史记录 |
 
-## 2. 目标目录结构（M0 完成后）
+## 2. 目录结构
 
 ```
 suiyi/
-├─ design/                  UI 设计稿（已有 ui-mockup.html / .png）
-├─ src/                     前端（React + TS）
-│  ├─ pages/translate/      主翻译窗口（M0 先做最小版）
-│  ├─ pages/settings/       设置窗口（服务配置等）
-│  ├─ components/           Toggle / Chip / Field 等基础组件
-│  └─ styles/tokens.css     设计变量（色板/圆角/阴影，对应设计稿）
+├─ design/                  UI 设计稿（单文件 HTML）
+├─ src/                     前端
+│  ├─ pages/                翻译页、设置页、划词弹窗、截图覆盖层
+│  ├─ styles/               tokens.css（设计变量）、base.css（基础组件）
+│  └─ api.ts                所有后端调用的唯一出口
 ├─ src-tauri/
-│  ├─ src/config.rs         services.json 读写 + 服务 Schema
-│  ├─ src/keyring.rs        API Key 存取（系统凭据管理器）
-│  ├─ src/translator.rs     OpenAI 兼容适配器 + SSE 流式
-│  └─ src/commands.rs       Tauri 命令层（前后端唯一通道）
+│  ├─ src/config.rs         services.json 读写与服务 Schema
+│  ├─ src/keyring.rs        API Key 存取
+│  ├─ src/translator.rs     OpenAI 兼容适配器与 SSE 流式
+│  ├─ src/selection.rs      Alt+D 取词与光标处弹窗
+│  ├─ src/screenshot.rs     Alt+S 冻结帧、覆盖层、OCR
+│  ├─ src/writeback.rs      Alt+T 输入框写回
+│  └─ src/commands.rs       Tauri 命令层，前后端唯一通道
 └─ DEVELOP_PLAN.md          本文件
 ```
 
 ## 3. 里程碑
 
-### M0 内核闭环（当前阶段）—— 目标：窗口里配好 AI 服务，流式翻出译文
+### M0 内核闭环 —— 已完成
+
 | 步骤 | 内容 | 验收 |
 |---|---|---|
-| S0.1 | 环境准备：安装 Rust（rustup + MSVC Build Tools）；确认 pnpm.cmd 可用 | `cargo --version` 出版本 |
-| S0.2 | 脚手架：create-tauri-app（react-ts 模板）落到本目录 | `pnpm tauri dev` 弹出空窗口 |
-| S0.3 | 设计 token：tokens.css + 基础组件样式（按设计稿④的表单风格） | 设置页静态样式就位 |
-| S0.4 | 配置层：config.rs（默认 services.json + 增删改查）+ keyring.rs | Rust 单元测试通过 |
-| S0.5 | 命令层：list/save/delete_service、get/set_api_key、test_connection | 前端能调通全部命令 |
-| S0.6 | 设置页：服务列表 + 编辑表单（对应设计稿④） | 配置真实保存、重启不丢 |
-| S0.7 | 翻译内核：translator.rs 流式请求 → `emit("translate-delta")` | 假服务返回流式文本 |
-| S0.8 | 最小翻译界面：输入 → 选服务 → 流式译文显示 | **真 Key 流式翻译成功** |
+| S0.1 | 环境准备：Rust 与 MSVC Build Tools | `cargo --version` 出版本 |
+| S0.2 | Tauri 2 react-ts 脚手架 | `pnpm tauri dev` 弹出窗口 |
+| S0.3 | 设计 token 与基础组件样式 | 设置页静态样式就位 |
+| S0.4 | 配置层 config.rs 与凭据层 keyring.rs | Rust 单元测试通过 |
+| S0.5 | 命令层：服务增删改查、密钥、全局设置 | 前端调通全部命令 |
+| S0.6 | 设置页：服务列表与编辑表单 | 配置真实保存、重启不丢 |
+| S0.7 | 翻译内核：流式请求与事件推送 | 假服务返回流式文本 |
+| S0.8 | 最小翻译界面 | 真实 Key 流式翻译成功 |
 
-### M1 划词翻译（Windows）
-S1.1 全局热键 Alt+D → S1.2 取词（模拟 Ctrl+C 读剪贴板；UIA 备选）→ S1.3 光标处无边框置顶弹窗（对应设计稿①）→ S1.4 多服务并发对比 + 回退链。
-验收：浏览器 / PDF 里划词出译文，Esc 关闭，服务失败自动切换。
+### M1 划词翻译 —— 已完成
 
-### M2 截图 OCR / 原图翻译
-S2.1 全屏遮罩框选 → S2.2 Windows.Media.OCR 离线识别 → S2.3 结果面板 + 翻译（对应设计稿③）→ S2.4 原图翻译覆盖标签。
-验收：对屏幕任意区域框选，出识别文本与译文，译文可覆盖回原位。
+全局热键 Alt+D；剪贴板往返取词（记录原内容、清空、模拟 Ctrl+C、读回、还原）；
+光标处无边框置顶弹窗，屏幕越界回退；失焦自动隐藏，可固定；Esc 关闭。
 
-### M3 写回与生词本
-S3.1 输入框转译 Alt+T（读焦点控件 → 翻译 → 快照校验后写回，失败回退复制+通知）→ S3.2 划词「翻译并替换」→ S3.3 Anki Connect 生词本。
-验收：聊天输入框中文一键变英文；错点窗口不会写错地方。
+验收：在浏览器或 PDF 中划词后按 Alt+D 弹出译文。
 
-### M4 词典结构化 + TTS + 历史记录
-结构化词典结果（resultType: dictionary）、朗读、rusqlite 历史与搜索。
+### M2 截图识别 —— 开发中
 
-### M5 插件系统
-manifest + JS 沙箱（QuickJS），翻译/OCR/语音/动作四类扩展点，参考 Manggo 插件格式设计。
+Alt+S 抓取虚拟屏幕冻结帧、全屏覆盖层框选、按逻辑坐标裁剪原图、
+Windows.Media.OCR 离线识别、识别文本投递给划词弹窗自动翻译。
 
-### M6 跨平台
-macOS（辅助功能/录屏权限引导）、Linux（X11 优先，Wayland 用外部调用方案）。
+验收：对屏幕任意区域框选，出识别文本与译文。
+
+### M3 输入框转译与写回 —— 计划中
+
+Alt+T 读取当前焦点输入框内容，翻译后原位写回；写入前做焦点与文本快照校验，
+失败则降级为复制并通知；提供撤销窗口；划词弹窗增加替换原文动作；Anki Connect 生词本。
+
+验收：聊天输入框里的中文一键变英文；误切窗口不会写错位置。
+
+### M4 词典结构化、朗读与历史 —— 计划中
+
+结构化词典结果、系统语音朗读、基于 rusqlite 的历史记录与搜索。
+
+### M5 插件系统 —— 计划中
+
+manifest 与 JS 沙箱（QuickJS），翻译、OCR、语音、动作四类扩展点。
+
+### M6 跨平台 —— 计划中
+
+macOS 的辅助功能与录屏权限引导；Linux 以 X11 优先，Wayland 走外部调用方案。
 
 ## 4. 开发约定
-1. **一步一步来**：每个 S 步骤一个 commit（`M0-S0.4: 配置层实现`），完成并汇报后再进下一步；
-2. 依赖只加当前阶段需要的，不预装；
-3. `.gitignore` 第一天建好；API Key / 密钥永远不进仓库与配置文件；
-4. 每个里程碑结束跑一次完整验收，再开下一个。
 
-## 5. 环境现状（2025-09-29 检查）
-- Node v22.23.2 ✓　Git 2.55 ✓
-- pnpm / npm 已装于 `D:\dev\environment\nodejs`，但 `.ps1` 垫片被执行策略拦截 → 调用 `.cmd` 版本即可（或以进程级 Bypass 运行）
-- **Rust 未安装** → S0.1 处理（rustup + MSVC Build Tools，首次安装约 2~4 GB 下载）
+1. 一个步骤一个 commit，提交信息写清里程碑与范围，不把无关改动混进同一个提交。
+2. 依赖只加当前阶段需要的，不预装。
+3. API Key 与任何密钥永远不进仓库和配置文件。
+4. 每个里程碑结束跑一次完整验收，再开下一个。
+5. 界面改动以 `design/ui-mockup.html` 为准；设计稿与实现出现分歧时先改稿再改码。
+
+## 5. 环境现状
+
+- Node v22.23.2、pnpm 12.5.1（`D:\dev\environment\nodejs`）
+- Rust 1.98.1，工具链在 `D:\dev\environment\rustup\toolchains\stable-x86_64-pc-windows-msvc`
+  - `D:\dev\environment\cargo\bin\cargo.exe` 是 rustup 垫片，需先配好默认 toolchain，或直接调用工具链目录
+- 已配置的翻译服务：Z.ai（`https://api.z.ai/api/paas/v4`，模型 `glm-5.3-flash`）
+- OCR 语言包：系统仅安装 `zh-Hans-CN`
 
 ## 6. 待确认
-1. 前端框架 React + TS 是否 OK？（想用 Vue 请在 S0.2 之前提出）
-2. M0 验收需要一个 OpenAI 兼容服务：DeepSeek / 智谱 / Kimi / OneAPI 中转的 API Key，或本机 Ollama；
-3. S0.1 安装 Rust 需要联网下载并可能弹出 VS Build Tools 安装器，届时会再次征求批准。
 
-## 7. ������־
-- 2026-09-29 S0.1 ? Rust 1.98.1��D:\dev\environment\rustup|cargo��+ MSVC 14.44 + SDK 10.0.22621��rsproxy ����hello-world �����ջ�
-- 2026-09-29 S0.2 ? Tauri 2 react-ts ���ּܺϲ�������Ŀ��identifier=com.suiyi.dev��title=���� SuiYi����pnpm ��װ��ǰ�˹���ͨ��
-- 2026-09-29 S0.3 ? tokens.css / base.css Ǩ����� token ����������ʽ��main.tsx ����
-- 2026-09-29 S0.4+S0.5 ? ���ò�/Կ�״�/����㣬6 ���ȫ�̣���ƾ�ݹ�������ʵ��д��
-- 2026-09-29 S0.6 ? ����ҳ�������գ�services.json �Զ����ɣ�Э��ö�����л������޸���
-- 2026-09-29 S0.7+S0.8 ? OpenAI ������ʽ�����ںˣ�SSE mock �˵��˵��⣩+ ����ҳ����񲢷���Ƭ
-- 2026-09-29 M0 �������� ? ��ʵ����ð�̣�Z.ai Key + glm-5.3-flash��"Hello, world!" �� "��ã����磡"��1.8s ��ʽ����
-  �Ų��¼��Key Ϊ Z.ai �࣬bigmodel.cn ���� 403 model_access_denied����ȷ����Ϊ https://api.z.ai/api/paas/v4���������浵���ã�
+1. 仓库当前没有 LICENSE，但已经公开。是否补开源协议、选哪一个。
+2. 应用图标仍是 Tauri 脚手架默认图标，需要替换为随译自己的图标。
+3. OCR 目前优先请求 `en-US` 语言包，本机只有中文包，是否需要改成按内容自适应。
+
+## 7. 开发日志
+
+- 2026-09-29 S0.1 完成：安装 Rust 与 MSVC Build Tools，用 rsproxy 镜像跑通 hello world。
+- 2026-09-29 S0.2 完成：Tauri 2 react-ts 脚手架并入现有目录，identifier `com.suiyi.dev`。
+- 2026-09-29 S0.3 完成：tokens.css、base.css 迁入设计 token。
+- 2026-09-29 S0.4 与 S0.5 完成：配置层、凭据层、命令层，含凭据管理器真实读写测试。
+- 2026-09-29 S0.6 完成：设置页服务列表与编辑表单，services.json 自动生成。
+- 2026-09-29 S0.7 与 S0.8 完成：OpenAI 兼容流式内核（含 SSE mock 端到端测试）与翻译页。
+- 2026-09-29 M0 验收通过：Z.ai Key 与 glm-5.3-flash 真实服务流式翻译成功。
+  期间确认 bigmodel.cn 会返回 403 model_access_denied，Z.ai 需使用 `https://api.z.ai/api/paas/v4`。
+- 2026-09-30 M1 完成：Alt+D 全局热键、剪贴板取词、光标处无边框弹窗。
+  取词最初用 SendInput 注入 Unicode 字符，无法触发目标程序的复制快捷键，改为发送真实虚拟键码。
+- 2026-09-30 M2 主体完成：Alt+S 冻结帧、覆盖层框选、GDI 裁剪、Windows.Media.OCR、结果投递弹窗。
+  覆盖层一度整屏黑，原因是 JPEG 不支持 Alpha 通道，编码前需把 RGBA 转成 RGB。
+- 2026-09-30 设计稿 v0.4：重做配色、字阶与状态设计，补齐失败态与空态，去掉装饰性 emoji。
+- 2026-09-30 仓库清理：删除脚手架残留资源与过期的设计稿导出图，设计稿合并为 `design/ui-mockup.html` 单一基线，
+  重写 README 与开发计划，修复开发日志的编码损坏。
