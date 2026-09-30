@@ -13,11 +13,43 @@ use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
 const POPUP_W: f64 = 430.0;
 const POPUP_H: f64 = 540.0;
 
+/// 追加一行调试日志到 %APPDATA%/com.suiyi.dev/debug.log（诊断热键链路用）
+pub fn log_line(msg: &str) {
+    let Some(dir) = std::env::var_os("APPDATA").map(std::path::PathBuf::from) else {
+        return;
+    };
+    let dir = dir.join("com.suiyi.dev");
+    let _ = std::fs::create_dir_all(&dir);
+    let ts = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis())
+        .unwrap_or(0);
+    if let Ok(mut f) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(dir.join("debug.log"))
+    {
+        use std::io::Write;
+        let _ = writeln!(f, "[{ts}] {msg}");
+    }
+}
+
 /// 热键入口：抓取选中文本并弹出翻译窗（重活放独立线程，不阻塞热键处理）
 pub fn trigger_selection_translate(app: AppHandle) {
+    log_line("trigger: Alt+D 热键触发");
     std::thread::spawn(move || {
-        let Some(text) = capture_selection() else { return };
-        if ensure_popup_at_cursor(&app).is_err() {
+        let text = match capture_selection() {
+            Some(t) => {
+                log_line(&format!("capture: 抓取到选中文本 {} 字符", t.chars().count()));
+                t
+            }
+            None => {
+                log_line("capture: 未取到选中文本（剪贴板无变化或为空），流程结束");
+                return;
+            }
+        };
+        if let Err(e) = ensure_popup_at_cursor(&app) {
+            log_line(&format!("popup: 弹窗创建/定位失败: {e}"));
             return;
         }
         // 等弹窗 webview 完成挂载监听
@@ -26,24 +58,79 @@ pub fn trigger_selection_translate(app: AppHandle) {
             "popup-set-source",
             serde_json::json!({ "text": text, "autoTranslate": true }),
         );
+        log_line("emit: 已投递文本到弹窗");
     });
+}
+
+/// 模拟 Ctrl+C：用 SendInput 发送真实虚拟键码（Unicode 注入无法触发快捷键）
+#[cfg(windows)]
+fn simulate_ctrl_c() -> Result<(), String> {
+    use windows::Win32::UI::Input::KeyboardAndMouse::{
+        SendInput, INPUT, INPUT_KEYBOARD, KEYBDINPUT, KEYEVENTF_KEYUP, VK_CONTROL,
+    };
+    const VK_C: u16 = 0x43; // 字母 C 的虚拟键码
+    let make = |vk: u16, keyup: bool| INPUT {
+        r#type: INPUT_KEYBOARD,
+        Anonymous: windows::Win32::UI::Input::KeyboardAndMouse::INPUT_0 {
+            ki: KEYBDINPUT {
+                wVk: windows::Win32::UI::Input::KeyboardAndMouse::VIRTUAL_KEY(vk),
+                wScan: 0,
+                dwFlags: if keyup { KEYEVENTF_KEYUP } else { Default::default() },
+                time: 0,
+                dwExtraInfo: 0,
+            },
+        },
+    };
+    let seq: [(u16, bool); 4] = [
+        (VK_CONTROL.0, false),
+        (VK_C, false),
+        (VK_C, true),
+        (VK_CONTROL.0, true),
+    ];
+    unsafe {
+        for (vk, up) in seq {
+            let input = make(vk, up);
+            let sent = SendInput(&[input], std::mem::size_of::<INPUT>() as i32);
+            if sent != 1 {
+                return Err(format!("SendInput 发送失败: {sent}"));
+            }
+            std::thread::sleep(Duration::from_millis(25));
+        }
+    }
+    Ok(())
 }
 
 /// 剪贴板法抓取选中文本
 fn capture_selection() -> Option<String> {
-    let mut cb = arboard::Clipboard::new().ok()?;
+    let mut cb = arboard::Clipboard::new().map_err(|e| log_line(&format!("capture: 剪贴板打开失败 {e}"))).ok()?;
     let prev = cb.get_text().ok();
+    log_line(&format!(
+        "capture: 原剪贴板={}，已清空并发送 Ctrl+C",
+        match &prev { Some(t) => t.chars().count().to_string(), None => "空/非文本".into() }
+    ));
 
     cb.clear().ok()?;
 
-    let mut enigo = enigo::Enigo::new(&enigo::Settings::default()).ok()?;
-    use enigo::{Direction, Key, Keyboard};
-    enigo.key(Key::Control, Direction::Press).ok()?;
-    enigo.key(Key::Unicode('c'), Direction::Click).ok()?;
-    enigo.key(Key::Control, Direction::Release).ok()?;
-    std::thread::sleep(Duration::from_millis(240));
+    if let Err(e) = simulate_ctrl_c() {
+        log_line(&format!("capture: 模拟按键失败 {e}"));
+        // 尽力恢复剪贴板后退出
+        if let Some(p) = &prev {
+            let _ = cb.set_text(p.clone());
+        }
+        return None;
+    }
+    std::thread::sleep(Duration::from_millis(350));
 
-    let now = cb.get_text().ok();
+    let mut now = cb.get_text().ok();
+    if now.as_deref().is_none() {
+        // 目标应用可能响应慢，再等一轮重试读取
+        std::thread::sleep(Duration::from_millis(250));
+        now = cb.get_text().ok();
+    }
+    log_line(&format!(
+        "capture: Ctrl+C 后剪贴板={}",
+        match &now { Some(t) => format!("{} 字符", t.chars().count()), None => "空/非文本".into() }
+    ));
 
     // 恢复用户剪贴板（仅文本；图片内容暂不恢复）
     if let Some(p) = &prev {

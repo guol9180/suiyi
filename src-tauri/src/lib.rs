@@ -33,10 +33,18 @@ pub fn run() {
                                 })
                                 .build(),
                         ) {
-                            eprintln!("全局热键注册失败（可能有另一个随译实例在运行）: {e}");
+                            let msg = format!("全局热键注册失败（可能有另一个随译实例在运行）: {e}");
+                            eprintln!("{msg}");
+                            selection::log_line(&msg);
+                        } else {
+                            selection::log_line("hotkey: Alt+D 注册成功");
                         }
                     }
-                    Err(e) => eprintln!("快捷键解析失败: {e}"),
+                    Err(e) => {
+                        let msg = format!("快捷键解析失败: {e}");
+                        eprintln!("{msg}");
+                        selection::log_line(&msg);
+                    }
                 }
             }
             Ok(())
