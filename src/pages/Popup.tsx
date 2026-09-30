@@ -286,7 +286,7 @@ export default function PopupPage() {
         {/* 头部：只剩拖拽把手与窗口按钮，语言选择移到下一行避免与拖动冲突 */}
         <div className="pop-head" data-tauri-drag-region>
           <span className="grip"><Icon name="grip" size="sm" /></span>
-          <span className="pop-title">随译 · 划词翻译</span>
+          <span className="pop-title">划词翻译</span>
           <span style={{ flex: 1 }} />
           <button
             className={`pop-icon${pinned ? " pin-on" : ""}`}
@@ -461,7 +461,7 @@ export default function PopupPage() {
         )}
         <div className="pop-status">
           <span className="dot" />
-          {busy ? "流式输出中" : "就绪"} · Esc 关闭 · 拖动标题栏移动
+          {busy ? "流式输出中" : "就绪"}，Esc 关闭，拖动标题栏移动
         </div>
       </div>
     </div>

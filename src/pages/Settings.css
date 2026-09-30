@@ -314,7 +314,13 @@ select.inp { appearance: auto; }
 .hist-detail .lab { font-size: var(--fs-sec); color: var(--c-caption); }
 .hist-detail .t-body { white-space: pre-wrap; }
 .hist-detail .terr { color: var(--c-danger); }
-.hmeta { font-size: var(--fs-cap); color: var(--c-caption); font-family: var(--font-mono); }
+.hmeta {
+  display: flex;
+  gap: 8px;
+  font-size: var(--fs-cap);
+  color: var(--c-caption);
+  font-variant-numeric: tabular-nums;
+}
 .hact { display: flex; gap: 6px; flex-wrap: wrap; margin-top: auto; }
 
 /* ---------- 插件页 ---------- */

@@ -1,5 +1,5 @@
 // S0.8 最小翻译界面：输入 → 各启用服务并发流式出稿（对应设计稿①的卡片形态）
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { emit, listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
@@ -22,7 +22,7 @@ export async function openTranslatePopup(sample: string) {
   if (!win) {
     win = new WebviewWindow("popup", {
       url: "popup.html",
-      title: "随译 · 划词翻译",
+    title: "划词翻译",
       width: 430,
       height: 540,
       minWidth: 360,
@@ -50,6 +50,11 @@ interface CardState {
   elapsedMs?: number;
   error?: string;
   dictionary?: DictionaryResult;
+}
+
+/** invoke 失败时可能抛字符串也可能抛 Error，统一成一句能给用户看的话 */
+function errText(e: unknown): string {
+  return e instanceof Error ? e.message : String(e);
 }
 
 export default function TranslatePage() {
@@ -125,7 +130,7 @@ export default function TranslatePage() {
           );
         } catch (e) {
           setCards((cs) =>
-            cs.map((c) => (c.id === s.id ? { ...c, status: "error", error: String(e) } : c)),
+            cs.map((c) => (c.id === s.id ? { ...c, status: "error", error: errText(e) } : c)),
           );
         }
       }),
@@ -133,9 +138,51 @@ export default function TranslatePage() {
     setBusy(false);
   }
 
+  /** 单独重跑一路服务：失败卡片上的「重试」 */
+  const retryOne = useCallback(
+    async (serviceId: string) => {
+      const s = services.find((x) => x.id === serviceId);
+      if (!s || !text.trim()) return;
+      setCards((cs) =>
+        cs.map((c) =>
+          c.id === serviceId ? { ...c, status: "streaming" as const, text: "", error: undefined } : c,
+        ),
+      );
+      try {
+        const r = await invoke<TranslateResult>("translate_text", {
+          serviceId: s.id,
+          text,
+          from,
+          to,
+          kind: "manual",
+        });
+        setCards((cs) =>
+          cs.map((c) =>
+            c.id === serviceId
+              ? { ...c, status: "done" as const, text: r.text, elapsedMs: r.elapsedMs, dictionary: r.dictionary }
+              : c,
+          ),
+        );
+      } catch (e) {
+        setCards((cs) =>
+          cs.map((c) =>
+            c.id === serviceId ? { ...c, status: "error" as const, error: errText(e) } : c,
+          ),
+        );
+      }
+    },
+    [services, text, from, to],
+  );
+
+  const doneCount = cards.filter((c) => c.status === "done").length;
+  const failedCount = cards.filter((c) => c.status === "error").length;
+  const settledCount = doneCount + failedCount;
+
   return (
     <div className="translate-page">
-      <div className="lang-row">
+      <div className="lang-group">
+        <div className="row-label">翻译设置</div>
+        <div className="lang-row">
         <select className="inp" value={from} onChange={(e) => setFrom(e.target.value)}>
           {SOURCE_LANGS.map((l) => (
             <option key={l} value={l}>{l}</option>
@@ -159,10 +206,19 @@ export default function TranslatePage() {
           ))}
         </select>
         <span style={{ flex: 1 }} />
-        {services.length > 0 && <span className="chip ok">{services.length} 个服务并发</span>}
+        {services.length > 0 && (
+          settledCount > 0 ? (
+            <span className={`chip ${failedCount > 0 ? "warn" : "ok"}`}>
+              {doneCount} / {services.length} 服务成功
+            </span>
+          ) : (
+            <span className="chip">{services.length} 个服务待命</span>
+          )
+        )}
         <button className="btn mini" onClick={() => void listServices().then((f) =>
           setServices(f.services.filter((s) => s.enabled && s.kind === "translation").sort((a, b) => a.order - b.order)),
-        )}><Icon name="refresh" size="sm" />刷新服务</button>
+          )}><Icon name="refresh" size="sm" />刷新服务</button>
+        </div>
       </div>
 
       <textarea
@@ -172,7 +228,7 @@ export default function TranslatePage() {
         onKeyDown={(e) => {
           if (e.key === "Enter" && e.ctrlKey) void doTranslate();
         }}
-        placeholder="输入要翻译的文本…（Ctrl+Enter 翻译）"
+        placeholder="输入要翻译的文本…"
       />
 
       <div className="actions">
@@ -188,7 +244,7 @@ export default function TranslatePage() {
         <button className="btn" onClick={() => void invoke("start_screenshot").catch(console.error)}>
           <Icon name="frame" size="sm" />截图识别
         </button>
-        <span className="muted">流式输出 · 多服务并发对比 · Ctrl+Enter 翻译</span>
+        <span className="muted">Ctrl+Enter 翻译</span>
       </div>
 
       <div className="cards">
@@ -207,7 +263,15 @@ export default function TranslatePage() {
               )}
             </div>
             {c.error ? (
-              <div className="rt rc-err">{c.error}</div>
+              <>
+                <div className="rt rc-err">{c.error}</div>
+                <div className="rc-foot">
+                  <span className="muted">配额限流可在「设置 → 服务配置」用测试连接排查</span>
+                  <button className="btn mini" onClick={() => void retryOne(c.id)}>
+                    <Icon name="refresh" size="sm" />重试
+                  </button>
+                </div>
+              </>
             ) : c.dictionary ? (
               <DictionaryCard dict={c.dictionary} />
             ) : (
@@ -215,6 +279,9 @@ export default function TranslatePage() {
                 {c.text}
                 {c.status === "streaming" && <span className="caret" />}
               </div>
+            )}
+            {c.status === "done" && c.text && !c.dictionary && (
+              <div className="rc-meta">输出 {c.text.length} 字</div>
             )}
           </div>
         ))}

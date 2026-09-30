@@ -21,6 +21,7 @@
         var q = new URLSearchParams(location.search);
         var isPopup = q.get("win") === "popup";
         var conflict = q.get("conflict") === "1";
+        var failOne = q.get("fail") === "1";
 
         var SERVICES = {
           version: 1, concurrency: 2, timeoutSecs: 15, inputTargetLang: "中文",
@@ -70,6 +71,9 @@
           retry_hotkeys: function () { return HOTKEYS; },
           test_connection: function () { return { ok: true, elapsedMs: 412, models: ["glm-5.3-flash"], error: null }; },
           translate_text: function (args) {
+            if (failOne && args.serviceId === "deepseek") {
+              throw new Error("服务返回 429：当前分组上游负载已饱和，请稍后再试");
+            }
             var o = TRANSLATED[args.serviceId] || { text: "（无模拟结果）", elapsedMs: 500 };
             return { serviceId: args.serviceId, text: o.text, elapsedMs: o.elapsedMs };
           },

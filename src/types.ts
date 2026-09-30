@@ -130,10 +130,11 @@ export const PROTOCOL_LABELS: Record<Protocol, string> = {
  * 所以只有非默认协议才带前缀。完整信息仍在右侧表单里。
  */
 export function serviceMeta(s: ServiceConfig): string {
-  if (s.pluginId) return `插件 · ${s.model || "本地脚本"}`;
+  // 插件服务在列表行里已经有「插件」标签，这里只报模型
+  if (s.pluginId) return s.model || "本地脚本";
   const proto = PROTOCOL_LABELS[s.protocol];
   if (s.protocol === "open_ai_compatible") return s.model || proto;
-  return s.model ? `${proto} · ${s.model}` : proto;
+  return s.model ? `${proto}：${s.model}` : proto;
 }
 
 export type PluginKind = "translation" | "ocr" | "speech" | "action";

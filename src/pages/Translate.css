@@ -11,6 +11,10 @@
   box-sizing: border-box;
 }
 
+/* 分组标题与它自己的那一行贴在一起，不跟着整页的 12px 间距走 */
+.lang-group { display: flex; flex-direction: column; gap: 6px; }
+.row-label { font-size: var(--fs-cap); color: var(--c-caption); }
+
 .lang-row { display: flex; align-items: center; gap: 10px; }
 .lang-row select.inp { width: auto; min-width: 120px; }
 .lang-row .arrow { color: var(--c-icon); }
@@ -66,6 +70,18 @@
   color: var(--c-text);
 }
 .rc-err { color: var(--c-danger); font-size: var(--fs-sec); }
+
+/* 失败卡片底部的排查提示与重试 */
+.rc-foot { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
+.rc-foot .muted { flex: 1; min-width: 0; }
+
+/* 成功卡片的第二信息行 */
+.rc-meta {
+  margin-top: 8px;
+  font-size: var(--fs-cap);
+  color: var(--c-caption);
+  font-variant-numeric: tabular-nums;
+}
 
 .caret {
   display: inline-block;

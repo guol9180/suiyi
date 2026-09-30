@@ -393,9 +393,9 @@ export default function SettingsPage() {
           <div key={item} className="side-item">{item}</div>
         ))}
         <div className="side-foot">
-          随译 v0.1.0 (dev)
+          随译 v0.1.0
           <br />
-          Tauri 2 · Rust + WebView
+          译文由你配置的服务提供
         </div>
       </aside>
 
@@ -431,7 +431,7 @@ export default function SettingsPage() {
 
             <div className="card">
               <div className="card-head">
-                <span className="hname">生词本 · Anki</span>
+                <span className="hname">Anki 生词本</span>
                 <span className="m">需要安装并启动 AnkiConnect 插件</span>
               </div>
               <div className="row2">
@@ -612,7 +612,7 @@ export default function SettingsPage() {
                       <div className="t-body">{selectedEntry.source}</div>
                     </div>
                     <div className="lab">
-                      译文{selectedEntry.serviceName ? ` · ${selectedEntry.serviceName}` : ""}
+                      译文{selectedEntry.serviceName ? `（${selectedEntry.serviceName}）` : ""}
                     </div>
                     <div className="card" style={{ padding: "10px 12px" }}>
                       <div className={selectedEntry.ok ? "t-body" : "t-body terr"}>
@@ -620,8 +620,8 @@ export default function SettingsPage() {
                       </div>
                     </div>
                     <div className="hmeta">
-                      {formatTime(selectedEntry.createdAt)}
-                      {selectedEntry.ok && ` · ${(selectedEntry.elapsedMs / 1000).toFixed(1)}s`}
+                      <span>{formatTime(selectedEntry.createdAt)}</span>
+                      {selectedEntry.ok && <span>{(selectedEntry.elapsedMs / 1000).toFixed(1)}s</span>}
                     </div>
                     <div className="hact">
                       <button
@@ -682,12 +682,11 @@ export default function SettingsPage() {
                   <span>
                     {p.ok
                       ? [
-                          p.version || "未标版本",
                           p.kind ? PLUGIN_KIND_LABELS[p.kind] : "",
                           p.permissions.length ? `权限：${p.permissions.join(" / ")}` : "无特殊权限",
                         ]
                           .filter(Boolean)
-                          .join(" · ")
+                          .join("，")
                       : p.error}
                   </span>
                 </span>
@@ -798,7 +797,7 @@ export default function SettingsPage() {
           ) : (
             <>
               <div className="card-head">
-                <b>{draft.id ? `编辑服务 · ${draft.name}` : "添加服务"}</b>
+                <b>{draft.id ? `编辑服务：${draft.name}` : "添加服务"}</b>
                 <span className="chip acc">{PROTOCOL_LABELS[draft.protocol]}</span>
                 <span style={{ flex: 1 }} />
                 {draft.id && (
@@ -903,7 +902,7 @@ export default function SettingsPage() {
               </div>
 
               <div className="f">
-                <label>Prompt 模板 · 变量 {"{{from}} {{to}} {{text}}"} 自动注入</label>
+                <label>Prompt 模板（{"{{from}} {{to}} {{text}}"} 自动注入）</label>
                 <textarea className="inp mono" rows={3} value={draft.promptTemplate ?? ""}
                   onChange={(e) => setDraft({ ...draft, promptTemplate: e.target.value })}
                   placeholder={DEFAULT_PROMPT} />
