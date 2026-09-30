@@ -18,9 +18,18 @@ export default function OverlayPage() {
   const busyRef = useRef(false);
 
   useEffect(() => {
-    void invoke<{ dataUrl: string }>("get_screenshot")
-      .then((p) => setDataUrl(p.dataUrl))
-      .catch(() => setFailed(true));
+    // 会话写入与窗口创建几乎同时完成，重试几次更稳
+    let tries = 0;
+    const tick = () => {
+      tries += 1;
+      void invoke<{ dataUrl: string }>("get_screenshot")
+        .then((p) => setDataUrl(p.dataUrl))
+        .catch(() => {
+          if (tries < 6) window.setTimeout(tick, 500);
+          else setFailed(true);
+        });
+    };
+    tick();
   }, []);
 
   useEffect(() => {

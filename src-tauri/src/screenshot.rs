@@ -87,6 +87,29 @@ fn run_screenshot(app: AppHandle) {
                 if let Ok(mut g) = SHOT.lock() {
                     *g = Some(session);
                 }
+                // 诊断：冻结帧落盘（定位黑屏问题）
+                if let Ok(g) = SHOT.lock() {
+                    if let Some(s) = g.as_ref() {
+                        if let Some(img) = image::RgbaImage::from_raw(s.w as u32, s.h as u32, s.rgba.clone()) {
+                            let rgb = image::DynamicImage::ImageRgba8(img).to_rgb8();
+                            let path = std::env::var("APPDATA")
+                                .map(|d| std::path::Path::new(&d).join("com.suiyi.dev").join("last-shot.jpg"))
+                                .unwrap_or_default();
+                            if let Some(parent) = path.parent() {
+                                let _ = std::fs::create_dir_all(parent);
+                            }
+                            match rgb.save(&path) {
+                                Ok(_) => crate::selection::log_line(&format!(
+                                    "screenshot: 冻结帧已保存 {}x{} → {}",
+                                    s.w, s.h, path.display()
+                                )),
+                                Err(e) => crate::selection::log_line(&format!(
+                                    "screenshot: 冻结帧保存失败 {e}"
+                                )),
+                            }
+                        }
+                    }
+                }
                 if let Err(e) = show_overlay(&app) {
                     crate::selection::log_line(&format!("screenshot: 覆盖层创建失败 {e}"));
                 }
@@ -328,9 +351,11 @@ pub fn rgba_to_jpeg_dataurl(rgba: &[u8], w: i32, h: i32) -> Result<String, Strin
 pub fn rgba_to_jpeg_base64(rgba: &[u8], w: i32, h: i32) -> Result<String, String> {
     let img = image::RgbaImage::from_raw(w as u32, h as u32, rgba.to_vec())
         .ok_or("图像数据尺寸不匹配")?;
+    // JPEG 不支持 Alpha 通道，先转 RGB8
+    let rgb = image::DynamicImage::ImageRgba8(img).to_rgb8();
     let mut cursor = std::io::Cursor::new(Vec::new());
     let encoder = image::codecs::jpeg::JpegEncoder::new_with_quality(&mut cursor, 88);
-    image::DynamicImage::ImageRgba8(img)
+    image::DynamicImage::ImageRgb8(rgb)
         .write_with_encoder(encoder)
         .map_err(|e| format!("JPEG 编码失败: {e}"))?;
     use base64::Engine as _;

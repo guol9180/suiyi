@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "随译 SuiYi · 设置",
+        "title": "随译 SuiYi",
         "width": 1024,
         "height": 700,
         "minWidth": 900,
