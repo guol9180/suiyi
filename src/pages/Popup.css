@@ -123,6 +123,7 @@ html, body, #root { height: 100%; }
 /* ---------- 动作条与状态 ---------- */
 .pop-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
   padding: 8px 12px 4px;
   flex: none;

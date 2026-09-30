@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import { listServices } from "../api";
 import type { ServiceConfig } from "../types";
 import "./Popup.css";
@@ -113,6 +114,23 @@ export default function PopupPage() {
     if (done) void navigator.clipboard.writeText(done.text);
   }
 
+  /** 用必应搜索选中文本（后续可在设置里换搜索引擎） */
+  function searchWeb() {
+    if (source.trim()) void openUrl(`https://www.bing.com/search?q=${encodeURIComponent(source.trim())}`);
+  }
+
+  /** 文本像 URL 就直接打开，否则交给搜索引擎 */
+  function openInBrowser() {
+    const t = source.trim();
+    if (!t) return;
+    const url = /^https?:\/\//i.test(t)
+      ? t
+      : /^[\w-]+(\.[\w-]+)+(:\d+)?(\/\S*)?$/.test(t)
+        ? `https://${t}`
+        : `https://www.bing.com/search?q=${encodeURIComponent(t)}`;
+    void openUrl(url);
+  }
+
   return (
     <div className="popup-root">
       <div className="popup-card">
@@ -196,6 +214,8 @@ export default function PopupPage() {
           <button className="btn mini disabled-soon" title="M3 里程碑开放">⇄ 替换原文</button>
           <button className="btn mini disabled-soon" title="M4 里程碑开放">🔊 朗读</button>
           <button className="btn mini disabled-soon" title="M3 里程碑开放">＋ 生词本</button>
+          <button className="btn mini" title="必应搜索选中文本" onClick={searchWeb}>🔍 搜索</button>
+          <button className="btn mini" title="文本是网址则直接打开" onClick={openInBrowser}>🌐 浏览器</button>
           <button
             className="btn mini"
             disabled={busy || !source}
