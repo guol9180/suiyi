@@ -943,7 +943,7 @@ backdrop-filter:var(--glass-blur);-webkit-backdrop-filter:var(--glass-blur)}
             </div>
 
             <div class="card form-col">
-              <div class="card-head"><span class="hname">编辑服务 · ZAI</span><span class="chip acc">OpenAI 兼容</span>
+              <div class="card-head"><span class="hname">编辑服务：ZAI</span><span class="chip acc">OpenAI 兼容</span>
                 <span style="flex:1"></span>
                 <button class="btn danger mini"><svg class="ico sm"><use href="#i-trash"/></svg>删除</button></div>
               <div class="row2">
@@ -953,7 +953,7 @@ backdrop-filter:var(--glass-blur);-webkit-backdrop-filter:var(--glass-blur)}
               <div class="f"><label>Base URL</label><div class="inp mono">https://api.z.ai/api/paas/v4</div></div>
               <div class="f">
                 <label>API Key（仅存于系统凭据管理器）<span class="key-state"><span class="chip ok">已保存</span></span></label>
-                <div class="keyrow"><div class="inp mono ghost">留空则不修改</div><button class="btn mini">清除</button></div>
+                <div class="keyrow"><div class="inp mono ghost">已保存，留空则不修改；输入新值则覆盖</div><button class="btn mini">清除</button></div>
               </div>
               <div class="testbox">
                 <div class="trow">
@@ -968,7 +968,7 @@ backdrop-filter:var(--glass-blur);-webkit-backdrop-filter:var(--glass-blur)}
                 <div class="f" style="flex:0 0 44%"><label>结果类型</label>
                   <div class="seg" style="width:100%"><span class="on" style="flex:1">纯文本</span><span style="flex:1">词典结构</span></div></div>
               </div>
-              <div class="f"><label>Prompt 模板 · 变量自动注入</label>
+              <div class="f"><label>Prompt 模板（{{from}} {{to}} {{text}} 自动注入）</label>
                 <div class="codebox">你是专业翻译引擎。将<span class="hl">{{from}}</span>翻译为<span class="hl">{{to}}</span>，只输出译文：
 <span class="hl">{{text}}</span></div></div>
               <div class="row2">
@@ -978,7 +978,7 @@ backdrop-filter:var(--glass-blur);-webkit-backdrop-filter:var(--glass-blur)}
                       <i style="display:block;height:100%;width:30%;background:var(--c-primary-strong)"></i></div>
                     <span class="t-cap" style="font-family:var(--font-mono)">0.3</span>
                   </div></div>
-                <div class="f"><label>流式输出 SSE</label>
+              <div class="f"><label>流式输出 (SSE)</label>
                   <button class="tgl" role="switch" aria-checked="true" aria-label="流式输出"></button></div>
               </div>
               <div class="form-foot"><button class="btn primary">保存修改</button>

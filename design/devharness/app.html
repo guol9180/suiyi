@@ -69,6 +69,9 @@
           anki_status: function () { return { available: true, version: 6, deckExists: true, error: null }; },
           hotkey_status: function () { return HOTKEYS; },
           retry_hotkeys: function () { return HOTKEYS; },
+          anki_add: function () { return { added: true, duplicate: false, noteId: 42, error: null }; },
+          speak_text: function () { return null; },
+          stop_speaking: function () { return null; },
           test_connection: function () { return { ok: true, elapsedMs: 412, models: ["glm-5.3-flash"], error: null }; },
           translate_text: function (args) {
             if (failOne && args.serviceId === "deepseek") {

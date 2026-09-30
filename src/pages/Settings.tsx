@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import "./Settings.css";
 import {
+  ankiAdd,
   ankiStatus,
   createSamplePlugin,
   clearHistory,
@@ -16,6 +17,8 @@ import {
   pluginsDirPath,
   reorderServices,
   retryHotkeys,
+  speakText,
+  stopSpeaking,
   saveService,
   saveSettings,
   setApiKey,
@@ -24,6 +27,7 @@ import {
   type ConnectionTest,
   type HotkeyStatus,
 } from "../api";
+import { invoke } from "@tauri-apps/api/core";
 import { Icon } from "../components/Icon";
 import { getVersion, lastOf, statusCodeOf, subscribe } from "../lastResult";
 import {
@@ -122,6 +126,10 @@ export default function SettingsPage() {
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   /** 三个全局热键的注册状态，切到热键页时刷新 */
   const [hotkeys, setHotkeys] = useState<HotkeyStatus[]>([]);
+  /** 正在朗读的那条记录；null 表示没有在朗读 */
+  const [speakingId, setSpeakingId] = useState<number | null>(null);
+  /** 换服务重译的临时结果，只留在界面上，不改动历史 */
+  const [retrans, setRetrans] = useState<{ id: number; service: string; text: string } | null>(null);
   const [histQuery, setHistQuery] = useState("");
   const [histKind, setHistKind] = useState<HistoryKind | "">("");
   const [histId, setHistId] = useState<number | null>(null);
@@ -234,6 +242,53 @@ export default function SettingsPage() {
     try {
       await deleteHistory(id);
       await loadHistory();
+    } catch (e) {
+      setError(String(e));
+    }
+  }
+
+  /** 朗读这条记录的译文；再点一次停止 */
+  async function handleSpeak(entry: HistoryEntry) {
+    if (speakingId === entry.id) {
+      await stopSpeaking().catch(() => {});
+      setSpeakingId(null);
+      return;
+    }
+    const text = entry.translated || entry.source;
+    if (!text) return;
+    try {
+      await speakText(text);
+      setSpeakingId(entry.id);
+    } catch (e) {
+      setError(String(e));
+    }
+  }
+
+  /** 把这条记录加进 Anki 生词本：正面原文、背面译文 */
+  async function handleAddToAnki(entry: HistoryEntry) {
+    try {
+      const r = await ankiAdd(entry.source, entry.translated || entry.error || "");
+      if (r.duplicate) flash("这条已经在生词本里了");
+      else if (r.added) flash("已加入生词本");
+      else setError(r.error ?? "加入生词本失败");
+    } catch (e) {
+      setError(String(e));
+    }
+  }
+
+  /** 换个服务重译这条的原文，结果只显示在详情里，不写回历史 */
+  async function handleRetranslate(entry: HistoryEntry, serviceId: string) {
+    const svc = file?.services.find((s) => s.id === serviceId);
+    if (!svc) return;
+    try {
+      const r = await invoke<{ text: string }>("translate_text", {
+        serviceId,
+        text: entry.source,
+        from: "自动检测",
+        to: "简体中文",
+        kind: "manual",
+      });
+      setRetrans({ id: entry.id, service: svc.name, text: r.text });
     } catch (e) {
       setError(String(e));
     }
@@ -637,11 +692,47 @@ export default function SettingsPage() {
                       </button>
                       <button
                         className="btn mini"
+                        disabled={!selectedEntry.translated}
+                        onClick={() => void handleAddToAnki(selectedEntry)}
+                      >
+                        <Icon name="bookmark" size="sm" />生词本
+                      </button>
+                      <button
+                        className="btn mini"
+                        disabled={!(selectedEntry.translated || selectedEntry.source)}
+                        onClick={() => void handleSpeak(selectedEntry)}
+                      >
+                        <Icon name={speakingId === selectedEntry.id ? "pause" : "speaker"} size="sm" />
+                        {speakingId === selectedEntry.id ? "停止" : "朗读"}
+                      </button>
+                      <select
+                        className="inp mini-sel"
+                        value=""
+                        onChange={(e) => {
+                          if (e.target.value) void handleRetranslate(selectedEntry, e.target.value);
+                        }}
+                      >
+                        <option value="">换服务重译…</option>
+                        {(file?.services ?? [])
+                          .filter((s) => s.enabled && s.kind === "translation")
+                          .filter((s) => s.name !== selectedEntry.serviceName)
+                          .map((s) => (
+                            <option key={s.id} value={s.id}>{s.name}</option>
+                          ))}
+                      </select>
+                      <button
+                        className="btn mini"
                         onClick={() => void handleDeleteEntry(selectedEntry.id)}
                       >
                         <Icon name="trash" size="sm" />删除这条
                       </button>
                     </div>
+                    {retrans && retrans.id === selectedEntry.id && (
+                      <div className="retrans">
+                        <div className="lab">换服务重译（{retrans.service}）</div>
+                        <div className="t-body">{retrans.text}</div>
+                      </div>
+                    )}
                   </>
                 ) : (
                   <div className="empty-hint">← 选择左侧记录查看详情</div>

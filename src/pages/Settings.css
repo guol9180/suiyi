@@ -347,6 +347,25 @@ select.inp { appearance: auto; }
 }
 .hact { display: flex; gap: 6px; flex-wrap: wrap; margin-top: auto; }
 
+/* 历史详情里的「换服务重译」下拉：做成紧凑的胶囊，和按钮同一行高度 */
+.mini-sel {
+  width: auto;
+  height: 26px;
+  padding: 0 8px;
+  border-radius: var(--radius-pill);
+  font-size: var(--fs-cap);
+  color: var(--c-text-2);
+}
+.retrans {
+  margin-top: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--glass-edge);
+  border-radius: var(--radius-lg);
+  background: var(--glass-card);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+}
+
 /* ---------- 插件页 ---------- */
 .plpath {
   display: flex;
