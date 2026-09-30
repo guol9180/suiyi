@@ -4,7 +4,7 @@ import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { listServices, replaceSelection } from "../api";
+import { listServices, replaceSelection, speakText, stopSpeaking } from "../api";
 import { SOURCE_LANGS, TARGET_LANGS, swapLanguages, type ServiceConfig } from "../types";
 import { Icon } from "../components/Icon";
 import "./Popup.css";
@@ -174,6 +174,25 @@ export default function PopupPage() {
     }
   }
 
+  /** 用本地语音朗读第一条成功译文（重复点击会打断上一次播放） */
+  async function speakResult() {
+    const done = cards.find((c) => c.status === "done" && c.text);
+    if (!done) return;
+    try {
+      await speakText(done.text);
+    } catch (e) {
+      setNotice(String(e));
+    }
+  }
+
+  async function stopSpeech() {
+    try {
+      await stopSpeaking();
+    } catch {
+      /* 没在播放时忽略 */
+    }
+  }
+
   /** 用必应搜索选中文本（后续可在设置里换搜索引擎） */
   function searchWeb() {
     if (source.trim()) void openUrl(`https://www.bing.com/search?q=${encodeURIComponent(source.trim())}`);
@@ -325,8 +344,15 @@ export default function PopupPage() {
         </div>
         {moreOpen && (
           <div className="more-menu">
-            <button className="mi locked" disabled title="M4 里程碑开放">
-              <Icon name="speaker" size="sm" />朗读<span className="soon">M4</span>
+            <button
+              className="mi"
+              disabled={!cards.some((c) => c.status === "done" && c.text)}
+              onClick={() => { setMoreOpen(false); void speakResult(); }}
+            >
+              <Icon name="speaker" size="sm" />朗读译文
+            </button>
+            <button className="mi" onClick={() => { setMoreOpen(false); void stopSpeech(); }}>
+              <Icon name="pause" size="sm" />停止朗读
             </button>
             <button className="mi locked" disabled title="M3 里程碑开放">
               <Icon name="bookmark" size="sm" />生词本<span className="soon">M3</span>

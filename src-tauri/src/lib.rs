@@ -3,6 +3,7 @@ pub mod config;
 pub mod keyring;
 pub mod screenshot;
 pub mod selection;
+pub mod speech;
 pub mod translator;
 pub mod writeback;
 
@@ -120,6 +121,8 @@ pub fn run() {
             commands::translate_text,
             commands::test_connection,
             writeback::replace_selection,
+            speech::speak_text,
+            speech::stop_speaking,
             screenshot::get_screenshot,
             screenshot::finish_region,
             screenshot::cancel_screenshot,

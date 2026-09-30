@@ -55,3 +55,13 @@ export function testConnection(serviceId: string): Promise<ConnectionTest> {
 export function replaceSelection(text: string): Promise<void> {
   return invoke("replace_selection", { text });
 }
+
+/** 用 Windows 本地语音朗读文本（离线，不消耗翻译额度） */
+export function speakText(text: string): Promise<void> {
+  return invoke("speak_text", { text });
+}
+
+/** 停止当前朗读 */
+export function stopSpeaking(): Promise<void> {
+  return invoke("stop_speaking");
+}
