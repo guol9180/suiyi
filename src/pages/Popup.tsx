@@ -1,5 +1,5 @@
 // 划词翻译弹窗（设计稿①）：无边框小窗，接收选中文本，多服务并发流式出稿
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -88,15 +88,28 @@ export default function PopupPage() {
     };
   }, [doTranslate]);
 
-  // Esc 关闭（隐藏窗口，保留内容）
+  // Esc 关闭（隐藏窗口，保留内容）；失焦自动隐藏（固定时除外）
+  const pinnedRef = useRef(false);
+  useEffect(() => {
+    pinnedRef.current = pinned;
+  }, [pinned]);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         void getCurrentWindow().hide();
       }
     };
+    const onBlur = () => {
+      if (!pinnedRef.current) {
+        void getCurrentWindow().hide();
+      }
+    };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    window.addEventListener("blur", onBlur);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("blur", onBlur);
+    };
   }, []);
 
   async function togglePin() {
