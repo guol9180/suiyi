@@ -48,10 +48,12 @@
 .cards { display: flex; flex-direction: column; gap: 10px; overflow: auto; flex: 1; min-height: 60px; }
 
 .rescard {
-  border: 1px solid var(--c-border);
-  border-radius: 10px;
+  border: 1px solid var(--glass-edge);
+  border-radius: var(--radius-lg);
   padding: 10px 12px;
-  background: var(--c-surface);
+  background: var(--glass-card);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
 }
 .rh {
   display: flex;

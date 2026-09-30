@@ -12,9 +12,11 @@
 /* ---------- 侧边栏 ---------- */
 .side {
   width: 186px;
-  border-right: 1px solid var(--c-muted-bg);
+  border-right: 1px solid var(--glass-edge);
   padding: 12px 10px;
-  background: var(--c-side-bg);
+  background: var(--glass-card-strong);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
   display: flex;
   flex-direction: column;
   flex: none;
@@ -45,7 +47,8 @@
 /* ---------- 主区两栏 ---------- */
 .main {
   flex: 1;
-  background: var(--c-app-bg);
+  /* 不铺底色，让窗口那层流动色雾透上来 */
+  background: transparent;
   padding: 16px;
   display: flex;
   gap: 14px;
@@ -110,9 +113,11 @@
 /* ---------- 列表底部全局设置 ---------- */
 .fallback {
   margin-top: 14px;
-  background: var(--c-surface-2);
-  border: 1px solid var(--c-border);
-  border-radius: 9px;
+  background: var(--glass-card);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-edge);
+  border-radius: var(--radius-lg);
   padding: 9px 11px;
   font-size: var(--fs-sec);
   color: var(--c-text-3);
@@ -200,10 +205,12 @@ select.inp { appearance: auto; }
 
 /* ---------- 测试连接 ---------- */
 .testbox {
-  border: 1px solid var(--c-border);
+  border: 1px solid var(--glass-edge);
   border-radius: var(--radius-md);
   padding: 11px 12px;
-  background: var(--c-surface-2);
+  background: var(--glass-card);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
   margin-bottom: 11px;
 }
 .trow { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }

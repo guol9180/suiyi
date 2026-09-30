@@ -1,18 +1,52 @@
 /* App 外壳：顶部标签栏 + 页面主体 */
 
 .app-shell {
+  position: relative;
   height: 100vh;
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  background-color: var(--wash-base);
+}
+
+/* 会缓慢游动的色雾：底层、不接收事件；两层反向漂移，颜色一直在动 */
+.app-shell::before,
+.app-shell::after {
+  content: "";
+  position: absolute;
+  inset: -25%;
+  z-index: 0;
+  pointer-events: none;
+  background-image: var(--wash-layers);
+  background-repeat: no-repeat;
+}
+.app-shell::before { animation: wash-a var(--wash-duration) ease-in-out infinite alternate; }
+.app-shell::after {
+  opacity: 0.55;
+  animation: wash-b calc(var(--wash-duration) * 1.4) ease-in-out infinite alternate;
+}
+@keyframes wash-a {
+  from { transform: translate3d(-3%, -2%, 0) scale(1.02); }
+  to   { transform: translate3d(3%, 2.5%, 0) scale(1.09); }
+}
+@keyframes wash-b {
+  from { transform: translate3d(2.5%, 3%, 0) scale(1.07); }
+  to   { transform: translate3d(-3%, -3%, 0) scale(1.0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .app-shell::before, .app-shell::after { animation: none; }
 }
 
 .tabbar {
+  position: relative;
+  z-index: 1;
   display: flex;
   gap: 4px;
   padding: 8px 12px 0;
-  background: var(--c-surface-2);
-  border-bottom: 1px solid var(--c-muted-bg);
+  background: var(--glass-card-strong);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border-bottom: 1px solid var(--glass-edge);
   flex: none;
 }
 .tabbar button {
@@ -31,6 +65,8 @@
   font-weight: 600;
 }
 .tab-body {
+  position: relative;
+  z-index: 1;
   flex: 1;
   min-height: 0;
   overflow: auto;

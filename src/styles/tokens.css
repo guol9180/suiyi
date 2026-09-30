@@ -39,7 +39,7 @@
   --c-success-bg: #ecfdf3;
   --c-success-border: #c6f1d6;
   --c-success-ink: #14603a;
-  --c-danger: #d92d20;
+  --c-danger: #c42b1c;           /* 深一档，保证红底上仍有 5.2:1 */
   --c-danger-bg: #fef3f2;
   --c-danger-border: #fecdca;
   --c-danger-ink: #b42318;
@@ -74,15 +74,35 @@
   --glass-dark-tint: rgba(28, 25, 23, 0.68);
   --glass-dark-edge: rgba(255, 255, 255, 0.16);
 
-  /* 形状 */
-  --radius-sm: 4px;
-  --radius-md: 6px;
-  --radius-lg: 8px;
-  --radius-xl: 10px;
+  /* 形状：按钮与标签用胶囊，卡片用 12px，输入框用 10px。
+     DeepSeek 的界面就是这套比例，圆角比我们之前更大。 */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
   --radius-pill: 999px;
-  --shadow-card: 0 10px 26px rgba(15, 17, 21, 0.08);
-  --shadow-pop: 0 14px 34px rgba(15, 17, 21, 0.18);
-  --shadow-float: 0 4px 14px rgba(15, 17, 21, 0.10);
+  /* 阴影只给真正浮起来的层（弹窗、溢出菜单、toast），卡片不再投影 */
+  --shadow-card: 0 1px 2px rgba(15, 17, 21, 0.04);
+  --shadow-pop: 0 16px 40px rgba(15, 17, 21, 0.16);
+  --shadow-float: 0 6px 20px rgba(15, 17, 21, 0.10);
+
+  /* 质感：底色不是纯色填充，而是几团会缓慢游动的色雾。
+     用多层 radial-gradient 叠出来，再叠一层极慢的位移，
+     这样界面里卡片之间的空隙是"有颜色的空气"而不是一块灰。 */
+  --wash-base: #f5f6f7;
+  --wash-layers:
+    radial-gradient(58% 46% at 14% 6%, rgba(121, 165, 255, 0.38) 0%, rgba(121, 165, 255, 0) 68%),
+    radial-gradient(52% 44% at 86% 2%, rgba(157, 197, 255, 0.34) 0%, rgba(157, 197, 255, 0) 66%),
+    radial-gradient(56% 48% at 78% 94%, rgba(147, 183, 255, 0.30) 0%, rgba(147, 183, 255, 0) 68%),
+    radial-gradient(48% 42% at 18% 92%, rgba(186, 170, 255, 0.24) 0%, rgba(186, 170, 255, 0) 66%),
+    radial-gradient(70% 50% at 50% 50%, rgba(255, 255, 255, 0.55) 0%, rgba(255, 255, 255, 0) 70%);
+  --wash-duration: 48s;
+
+  /* 毛玻璃：卡片、按钮、浮层都用这组 */
+  --glass-card: rgba(255, 255, 255, 0.72);
+  --glass-card-strong: rgba(255, 255, 255, 0.86);
+  --glass-edge: rgba(255, 255, 255, 0.72);
+  --glass-blur: blur(22px) saturate(155%);
 
   /* 字体 */
   --font-ui: "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif;
