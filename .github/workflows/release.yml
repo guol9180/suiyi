@@ -41,7 +41,17 @@ jobs:
 
       - name: 运行后端测试
         working-directory: src-tauri
-        run: cargo test
+        shell: pwsh
+        run: |
+          cargo test 2>&1 | Tee-Object -FilePath ../test-output.txt
+          if ($LASTEXITCODE -ne 0) {
+            # 把失败摘要发成注解：没有日志读取权限时也能在 check 上看到原因
+            Get-Content ../test-output.txt |
+              Select-String -Pattern 'panicked at|FAILED|assertion|test result: FAILED|error\[' |
+              Select-Object -First 8 |
+              ForEach-Object { Write-Host "::error::$($_.Line.Trim())" }
+            exit 1
+          }
 
       - name: 构建安装包
         run: pnpm tauri build
