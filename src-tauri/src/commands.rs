@@ -7,7 +7,7 @@
 
 use crate::config::{
     load_services, new_service_id, save_services, ServiceConfig, ServiceKind, ServicesFile,
-    DEFAULT_INPUT_TARGET_LANG, INPUT_TARGET_LANGS,
+    ResultType, DEFAULT_INPUT_TARGET_LANG, DICTIONARY_PROMPT, INPUT_TARGET_LANGS,
 };
 use crate::keyring;
 use crate::translator::{self, DonePayload, TranslateParams};
@@ -163,7 +163,15 @@ pub async fn translate_text(
     }
     let key = keyring::get_api_key(&service_id)?
         .ok_or("该服务尚未设置 API Key，请到设置页填写")?;
-    let prompt = translator::build_prompt(svc.prompt_template.as_deref(), &from, &to, &text);
+    // 词典结构化：没有自定义模板时用内置的 JSON 模板，并且强制非流式，
+    // 否则拿不到完整 JSON 就没法解析。
+    let dictionary_mode = svc.result_type == ResultType::Dictionary;
+    let template = if dictionary_mode && svc.prompt_template.is_none() {
+        Some(DICTIONARY_PROMPT)
+    } else {
+        svc.prompt_template.as_deref()
+    };
+    let prompt = translator::build_prompt(template, &from, &to, &text);
     let params = TranslateParams {
         service_id: &service_id,
         base_url: &svc.base_url,
@@ -171,12 +179,18 @@ pub async fn translate_text(
         model: &svc.model,
         prompt: &prompt,
         temperature: svc.temperature,
-        stream: svc.stream,
+        stream: svc.stream && !dictionary_mode,
         timeout: Duration::from_secs(file.timeout_secs.max(3)),
     };
     let (text, elapsed_ms) = translator::translate(&app, params).await?;
     Ok(DonePayload {
         service_id,
+        dictionary: if dictionary_mode {
+            translator::parse_dictionary(&text)
+        } else {
+            None
+        },
+        // 解析失败时保留模型原始输出，前端回退为纯文本展示
         text,
         elapsed_ms,
     })

@@ -4,8 +4,16 @@ import { emit, listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { listServices } from "../api";
-import { SOURCE_LANGS, TARGET_LANGS, swapLanguages, type ServiceConfig } from "../types";
+import {
+  SOURCE_LANGS,
+  TARGET_LANGS,
+  swapLanguages,
+  type DictionaryResult,
+  type ServiceConfig,
+  type TranslateResult,
+} from "../types";
 import { Icon } from "../components/Icon";
+import { DictionaryCard } from "../components/DictionaryCard";
 import "./Translate.css";
 
 /** 打开划词弹窗并投递文本（M1 将由取词服务自动调用） */
@@ -41,6 +49,7 @@ interface CardState {
   status: "streaming" | "done" | "error";
   elapsedMs?: number;
   error?: string;
+  dictionary?: DictionaryResult;
 }
 
 export default function TranslatePage() {
@@ -97,14 +106,20 @@ export default function TranslatePage() {
     await Promise.allSettled(
       services.map(async (s) => {
         try {
-          const r = await invoke<{ serviceId: string; text: string; elapsedMs: number }>(
+          const r = await invoke<TranslateResult>(
             "translate_text",
             { serviceId: s.id, text, from, to },
           );
           setCards((cs) =>
             cs.map((c) =>
               c.id === s.id
-                ? { ...c, text: r.text, status: "done", elapsedMs: r.elapsedMs }
+                ? {
+                    ...c,
+                    text: r.text,
+                    status: "done",
+                    elapsedMs: r.elapsedMs,
+                    dictionary: r.dictionary,
+                  }
                 : c,
             ),
           );
@@ -193,6 +208,8 @@ export default function TranslatePage() {
             </div>
             {c.error ? (
               <div className="rt rc-err">{c.error}</div>
+            ) : c.dictionary ? (
+              <DictionaryCard dict={c.dictionary} />
             ) : (
               <div className="rt">
                 {c.text}

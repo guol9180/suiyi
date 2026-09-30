@@ -200,6 +200,25 @@ textarea.inp { height: auto; min-height: 86px; padding: 9px 11px; line-height: 1
 /* ---------- 提示条 ---------- */
 .t-cap { font-size: var(--fs-cap); line-height: 1.6; color: var(--c-caption); }
 
+/* ---------- 词典结果卡 ---------- */
+.dict-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 6px; }
+.dict-head .w { font-size: 19px; font-weight: 600; }
+.dict-head .ph { font-family: var(--font-mono); font-size: 12px; color: var(--c-caption); }
+.dict .sense { padding: 7px 0; border-top: 1px dashed var(--c-border); }
+.dict .sense .pos {
+  display: inline-flex;
+  font-size: 11px;
+  color: var(--c-info);
+  background: var(--c-info-bg);
+  border: 1px solid var(--c-info-border);
+  border-radius: var(--radius-sm);
+  padding: 0 6px;
+  font-family: var(--font-mono);
+  margin-bottom: 3px;
+}
+.dict .sense .def { font-size: 13px; color: var(--c-text); }
+.dict .sense .eg { font-size: 12px; color: var(--c-text-3); margin-top: 3px; }
+
 .toast {
   display: flex;
   align-items: center;

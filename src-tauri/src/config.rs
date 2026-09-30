@@ -106,6 +106,13 @@ impl Default for ServicesFile {
 pub const DEFAULT_PROMPT: &str =
     "你是专业翻译引擎。将{{from}}翻译为{{to}}，只输出译文：\n{{text}}";
 
+/// 词典结构化的默认 Prompt：要求模型只吐严格 JSON，方便解析。
+/// 服务若自带 prompt_template，则尊重用户的模板，解析失败会回退为纯文本。
+pub const DICTIONARY_PROMPT: &str = "你是词典引擎。把{{text}}（{{from}} → {{to}}）整理成词条，\
+只输出严格 JSON，不要代码块、不要任何解释：\n\
+{\"word\":\"词条原形\",\"phonetic\":\"音标，没有就留空\",\
+\"senses\":[{\"pos\":\"词性缩写\",\"def\":\"释义\",\"example\":\"例句，可空\"}]}";
+
 /// 首次启动时的预置服务（全部未启用、无密钥，用户在设置页填 Key）
 pub fn default_services() -> Vec<ServiceConfig> {
     vec![ServiceConfig {

@@ -34,6 +34,28 @@ export interface GlobalSettings {
   inputTargetLang: string;
 }
 
+/** 词典结构化结果（服务结果类型为「词典结构」时返回） */
+export interface Sense {
+  pos: string;
+  def: string;
+  example?: string;
+}
+
+export interface DictionaryResult {
+  word: string;
+  phonetic?: string;
+  senses: Sense[];
+}
+
+/** translate_text 的返回值 */
+export interface TranslateResult {
+  serviceId: string;
+  text: string;
+  elapsedMs: number;
+  /** 解析成功时存在；解析失败只有 text，按纯文本展示 */
+  dictionary?: DictionaryResult;
+}
+
 export const DEFAULT_PROMPT =
   "你是专业翻译引擎。将{{from}}翻译为{{to}}，只输出译文：\n{{text}}";
 

@@ -5,8 +5,16 @@ import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { listServices, replaceSelection, speakText, stopSpeaking } from "../api";
-import { SOURCE_LANGS, TARGET_LANGS, swapLanguages, type ServiceConfig } from "../types";
+import {
+  SOURCE_LANGS,
+  TARGET_LANGS,
+  swapLanguages,
+  type DictionaryResult,
+  type ServiceConfig,
+  type TranslateResult,
+} from "../types";
 import { Icon } from "../components/Icon";
+import { DictionaryCard } from "../components/DictionaryCard";
 import "./Popup.css";
 
 interface CardState {
@@ -16,6 +24,7 @@ interface CardState {
   status: "streaming" | "done" | "error";
   elapsedMs?: number;
   error?: string;
+  dictionary?: DictionaryResult;
 }
 
 export default function PopupPage() {
@@ -53,13 +62,21 @@ export default function PopupPage() {
       await Promise.allSettled(
         services.map(async (s) => {
           try {
-            const r = await invoke<{ serviceId: string; text: string; elapsedMs: number }>(
+            const r = await invoke<TranslateResult>(
               "translate_text",
               { serviceId: s.id, text: src, from, to },
             );
             setCards((cs) =>
               cs.map((c) =>
-                c.id === s.id ? { ...c, text: r.text, status: "done", elapsedMs: r.elapsedMs } : c,
+                c.id === s.id
+                  ? {
+                      ...c,
+                      text: r.text,
+                      status: "done",
+                      elapsedMs: r.elapsedMs,
+                      dictionary: r.dictionary,
+                    }
+                  : c,
               ),
             );
           } catch (e) {
@@ -310,6 +327,8 @@ export default function PopupPage() {
               </div>
               {c.error ? (
                 <div className="rt rc-err">{c.error}</div>
+              ) : c.dictionary ? (
+                <DictionaryCard dict={c.dictionary} />
               ) : (
                 <div className="rt">
                   {c.text}

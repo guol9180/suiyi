@@ -23,6 +23,77 @@ pub struct DonePayload {
     pub service_id: String,
     pub text: String,
     pub elapsed_ms: u64,
+    /// 词典结构化结果；纯文本服务或无解析结果时为 None
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dictionary: Option<DictionaryResult>,
+}
+
+/// 词典释义的一条义项
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct Sense {
+    pub pos: String,
+    pub def: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub example: Option<String>,
+}
+
+/// 结构化词条
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct DictionaryResult {
+    pub word: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub phonetic: Option<String>,
+    pub senses: Vec<Sense>,
+}
+
+/// 从模型输出里解析词典 JSON。
+/// 容忍 ```json 代码块、前后夹带的说明文字；解析不出有效义项时返回 None，
+/// 由调用方回退为纯文本展示。
+pub fn parse_dictionary(raw: &str) -> Option<DictionaryResult> {
+    let start = raw.find('{')?;
+    let end = raw.rfind('}')?;
+    if end <= start {
+        return None;
+    }
+    let v: serde_json::Value = serde_json::from_str(&raw[start..=end]).ok()?;
+
+    let word = v["word"].as_str().unwrap_or_default().trim().to_string();
+    let phonetic = v["phonetic"]
+        .as_str()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(String::from);
+
+    let senses: Vec<Sense> = v["senses"]
+        .as_array()?
+        .iter()
+        .filter_map(|s| {
+            let def = s["def"].as_str()?.trim();
+            if def.is_empty() {
+                return None;
+            }
+            Some(Sense {
+                pos: s["pos"].as_str().unwrap_or_default().trim().to_string(),
+                def: def.to_string(),
+                example: s["example"]
+                    .as_str()
+                    .map(str::trim)
+                    .filter(|e| !e.is_empty())
+                    .map(String::from),
+            })
+        })
+        .collect();
+
+    if senses.is_empty() {
+        return None;
+    }
+    Some(DictionaryResult {
+        word: if word.is_empty() { "词条".into() } else { word },
+        phonetic,
+        senses,
+    })
 }
 
 pub struct TranslateParams<'a> {
@@ -66,6 +137,8 @@ fn emit_done(app: Option<&AppHandle>, service_id: &str, text: &str, elapsed_ms: 
                 service_id: service_id.to_string(),
                 text: text.to_string(),
                 elapsed_ms,
+                // 结构化解析在命令层完成，事件只负责通知文本已完成
+                dictionary: None,
             },
         );
     }
@@ -249,6 +322,31 @@ mod tests {
         assert_eq!(build_prompt(t, "EN", "中文", "hi"), "AENB中文Chi");
         // 空模板 → 默认模板（含默认变量壳）
         assert!(build_prompt(None, "EN", "中文", "hi").contains("hi"));
+    }
+
+    #[test]
+    fn parses_dictionary_payloads() {
+        // 干净的 JSON
+        let plain = r#"{"word":"retrieval","phonetic":"/rɪˈtriːvl/",
+            "senses":[{"pos":"n.","def":"检索；找回","example":"efficient retrieval — 高效检索"},
+                      {"pos":"n.","def":"数据读取"}]}"#;
+        let d = parse_dictionary(plain).expect("应能解析");
+        assert_eq!(d.word, "retrieval");
+        assert_eq!(d.phonetic.as_deref(), Some("/rɪˈtriːvl/"));
+        assert_eq!(d.senses.len(), 2);
+        assert_eq!(d.senses[0].def, "检索；找回");
+        assert!(d.senses[1].example.is_none());
+
+        // 夹带代码块与说明文字
+        let wrapped = "好的，结果如下：\n```json\n{\"word\":\"hi\",\"senses\":[{\"pos\":\"int.\",\"def\":\"你好\"}]}\n```\n希望有帮助";
+        let d = parse_dictionary(wrapped).expect("应能容错解析");
+        assert_eq!(d.word, "hi");
+        assert!(d.phonetic.is_none());
+
+        // 不是 JSON / 没有义项 → None，由调用方回退纯文本
+        assert!(parse_dictionary("就是一段普通译文").is_none());
+        assert!(parse_dictionary(r#"{"word":"x","senses":[]}"#).is_none());
+        assert!(parse_dictionary(r#"{"word":"x","senses":[{"pos":"n.","def":"  "}]}"#).is_none());
     }
 
     /// 真实服务冒烟验收：读取本机 services.json + 凭据管理器中已启用的服务，
