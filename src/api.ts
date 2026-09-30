@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import type { GlobalSettings, ServiceConfig, ServicesFile } from "./types";
 import type { HistoryEntry, HistoryKind } from "./types";
 import type { AnkiAddResult, AnkiStatus } from "./types";
+import type { PluginInfo } from "./types";
 
 export function listServices(): Promise<ServicesFile> {
   return invoke("list_services");
@@ -98,4 +99,25 @@ export function ankiStatus(): Promise<AnkiStatus> {
 /** 把词条加入 Anki 生词本 */
 export function ankiAdd(front: string, back: string): Promise<AnkiAddResult> {
   return invoke("anki_add", { front, back });
+}
+
+export function listPlugins(): Promise<PluginInfo[]> {
+  return invoke("list_plugins");
+}
+
+export function setPluginEnabled(id: string, enabled: boolean): Promise<PluginInfo[]> {
+  return invoke("set_plugin_enabled", { id, enabled });
+}
+
+export function createSamplePlugin(): Promise<PluginInfo[]> {
+  return invoke("create_sample_plugin");
+}
+
+export function pluginsDirPath(): Promise<string> {
+  return invoke("plugins_dir_path");
+}
+
+/** 运行动作插件，返回要展示给用户的提示文本 */
+export function runActionPlugin(id: string, source: string, translated: string): Promise<string> {
+  return invoke("run_action_plugin", { id, source, translated });
 }

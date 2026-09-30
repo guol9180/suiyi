@@ -53,6 +53,9 @@ pub struct ServiceConfig {
     pub result_type: ResultType,
     /// 服务列表中的排序值（拖拽排序时重排）
     pub order: u32,
+    /// 由插件提供的服务填插件 id；普通服务为 None，且这类服务不落盘
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub plugin_id: Option<String>,
 }
 
 impl Default for ServiceConfig {
@@ -70,6 +73,7 @@ impl Default for ServiceConfig {
             stream: true,
             result_type: ResultType::Text,
             order: 0,
+            plugin_id: None,
         }
     }
 }
@@ -133,6 +137,7 @@ pub fn default_services() -> Vec<ServiceConfig> {
         stream: true,
         result_type: ResultType::Text,
         order: 0,
+        plugin_id: None,
     }]
 }
 

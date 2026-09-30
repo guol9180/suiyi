@@ -312,13 +312,23 @@ pub fn finish_region(
 
     hide_overlay(&app);
 
-    // OCR（英文优先，失败回退用户语言）
-    let lines = match ocr_bytes(&png, "en-US") {
-        Ok(l) => l,
-        Err(e) => {
-            crate::selection::log_line(&format!("screenshot: OCR 失败 {e}"));
-            return Err(format!("OCR 识别失败: {e}"));
-        }
+    // 装了 OCR 插件就优先用插件；插件失败不让整条链路挂掉，回落到系统离线 OCR
+    let plugin_result = plugin_ocr(&app, &png);
+    if let Err(e) = &plugin_result {
+        crate::selection::log_line(&format!(
+            "screenshot: OCR 插件失败（{e}），回落到系统 OCR"
+        ));
+    }
+    let lines = match plugin_result.ok().flatten() {
+        Some(l) => l,
+        // 系统 OCR：英文优先，取不到语言包时回退用户语言
+        None => match ocr_bytes(&png, "en-US") {
+            Ok(l) => l,
+            Err(e) => {
+                crate::selection::log_line(&format!("screenshot: OCR 失败 {e}"));
+                return Err(format!("OCR 识别失败: {e}"));
+            }
+        },
     };
     let text = lines.iter().map(|l| l.text.as_str()).collect::<Vec<_>>().join("\n");
     crate::selection::log_line(&format!("screenshot: OCR 完成 {} 行 / {} 字符", lines.len(), text.chars().count()));
@@ -342,6 +352,51 @@ pub fn finish_region(
 }
 
 // ==================== 屏幕捕获（GDI） ====================
+
+/// 用 OCR 插件识别选区。没有可用插件时返回 Ok(None)，由调用方回落到系统 OCR。
+fn plugin_ocr(app: &AppHandle, png: &[u8]) -> Result<Option<Vec<OcrLine>>, String> {
+    let dir = app
+        .path()
+        .app_config_dir()
+        .map_err(|e| format!("获取配置目录失败: {e}"))?;
+    let Some(p) = crate::plugin::first_enabled(&dir, crate::plugin::PluginKind::Ocr) else {
+        return Ok(None);
+    };
+    let main = p.main.clone().ok_or("OCR 插件缺少入口脚本")?;
+
+    use base64::Engine as _;
+    let args = serde_json::json!({
+        "pngBase64": base64::engine::general_purpose::STANDARD.encode(png)
+    })
+    .to_string();
+    let permissions = p.permissions.clone();
+    let raw = tauri::async_runtime::block_on(tauri::async_runtime::spawn_blocking(move || {
+        crate::plugin_js::call(std::path::Path::new(&main), "ocr", &args, &permissions)
+    }))
+    .map_err(|e| format!("OCR 插件调用失败: {e}"))??;
+
+    let text = crate::plugin_js::text_of(&raw)?;
+    crate::selection::log_line(&format!(
+        "screenshot: OCR 插件「{}」返回 {} 字符",
+        p.name,
+        text.chars().count()
+    ));
+
+    // 插件只给文字、没有行级坐标；坐标留给「原图覆盖」的后续增强
+    Ok(Some(
+        text.lines()
+            .map(str::trim)
+            .filter(|l| !l.is_empty())
+            .map(|l| OcrLine {
+                text: l.to_string(),
+                x: 0.0,
+                y: 0.0,
+                w: 0.0,
+                h: 0.0,
+            })
+            .collect(),
+    ))
+}
 
 #[cfg(windows)]
 pub fn capture_rect(vx: i32, vy: i32, vw: i32, vh: i32) -> Result<Vec<u8>, String> {

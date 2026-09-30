@@ -3,6 +3,8 @@ pub mod commands;
 pub mod config;
 pub mod history;
 pub mod keyring;
+pub mod plugin;
+pub mod plugin_js;
 pub mod screenshot;
 pub mod selection;
 pub mod speech;
@@ -124,6 +126,11 @@ pub fn run() {
             commands::list_history,
             commands::delete_history,
             commands::clear_history,
+            commands::list_plugins,
+            commands::set_plugin_enabled,
+            commands::create_sample_plugin,
+            commands::plugins_dir_path,
+            commands::run_action_plugin,
             commands::test_connection,
             anki::anki_status,
             anki::anki_add,

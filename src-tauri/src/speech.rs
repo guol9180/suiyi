@@ -120,7 +120,28 @@ pub fn stop() {}
 
 /// 朗读一段文本（本地离线合成）
 #[tauri::command]
-pub async fn speak_text(text: String) -> Result<(), String> {
+pub async fn speak_text(app: tauri::AppHandle, text: String) -> Result<(), String> {
+    // 装了语音插件就优先用插件：用户装它说明要的就是它的音色
+    let dir = crate::commands::config_dir(&app)?;
+    if let Some(p) = crate::plugin::first_enabled(&dir, crate::plugin::PluginKind::Speech) {
+        if let Some(main) = p.main.clone() {
+            let args = serde_json::json!({ "text": text.clone() }).to_string();
+            let permissions = p.permissions.clone();
+            log_line(&format!("speech: 交给语音插件「{}」朗读", p.name));
+            return tauri::async_runtime::spawn_blocking(move || {
+                crate::plugin_js::call(
+                    std::path::Path::new(&main),
+                    "speak",
+                    &args,
+                    &permissions,
+                )
+                .map(|_| ())
+            })
+            .await
+            .map_err(|e| format!("语音插件调用失败: {e}"))?;
+        }
+    }
+
     // 合成是阻塞式的，丢到阻塞线程池，别占住 async 运行时
     tauri::async_runtime::spawn_blocking(move || speak(&text))
         .await

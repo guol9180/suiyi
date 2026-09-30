@@ -6,9 +6,14 @@
 //! - API Key 相关命令只与系统凭据管理器交互。
 
 use crate::config::{
-    load_services, new_service_id, save_services, ServiceConfig, ServiceKind, ServicesFile,
-    ResultType, DEFAULT_INPUT_TARGET_LANG, DICTIONARY_PROMPT, INPUT_TARGET_LANGS,
+    load_services, new_service_id, save_services, Protocol, ServiceConfig, ServiceKind,
+    ServicesFile, ResultType, DEFAULT_INPUT_TARGET_LANG, DICTIONARY_PROMPT, INPUT_TARGET_LANGS,
 };
+use crate::plugin::{self, PluginKind};
+use crate::plugin_js;
+
+/// 插件服务的 id 前缀，翻译时据此分流到插件运行时
+pub const PLUGIN_SERVICE_PREFIX: &str = "plugin:";
 use crate::keyring;
 use crate::history::{self, HistoryEntry, NewEntry};
 use crate::translator::{self, DonePayload, TranslateParams};
@@ -39,9 +44,35 @@ pub(crate) fn config_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
 #[tauri::command]
 pub fn list_services(app: tauri::AppHandle) -> Result<ServicesFile, String> {
     let dir = config_dir(&app)?;
-    let file = load_services(&dir)?;
+    let mut file = load_services(&dir)?;
     save_services(&dir, &file)?; // 首次启动把默认内容固化到磁盘
+    // 插件服务只出现在返回值里，不写进 services.json：它们随插件目录动态变化
+    file.services.extend(plugin_services(&dir));
     Ok(file)
+}
+
+/// 把启用的翻译插件包装成服务，排序放在手工配置的服务之后
+fn plugin_services(dir: &std::path::Path) -> Vec<ServiceConfig> {
+    plugin::discover(dir)
+        .into_iter()
+        .filter(|p| p.ok && p.enabled && p.kind == Some(PluginKind::Translation))
+        .enumerate()
+        .map(|(i, p)| ServiceConfig {
+            id: format!("{PLUGIN_SERVICE_PREFIX}{}", p.id),
+            name: p.name.clone(),
+            kind: ServiceKind::Translation,
+            protocol: Protocol::OpenAiCompatible,
+            enabled: true,
+            base_url: String::new(),
+            model: p.version.clone(),
+            prompt_template: None,
+            temperature: Some(0.3),
+            stream: false,
+            result_type: ResultType::Text,
+            order: 10_000 + i as u32,
+            plugin_id: Some(p.id.clone()),
+        })
+        .collect()
 }
 
 /// 新增或更新服务（id 为空视为新增，自动分配 ID 与排序尾位）
@@ -160,6 +191,12 @@ pub async fn translate_text(
     kind: Option<String>,
 ) -> Result<DonePayload, String> {
     let dir = config_dir(&app)?;
+
+    // 插件服务走插件运行时，不碰 API Key 与 HTTP
+    if let Some(plugin_id) = service_id.strip_prefix(PLUGIN_SERVICE_PREFIX) {
+        return translate_with_plugin(&dir, plugin_id, &text, &from, &to, kind.as_deref()).await;
+    }
+
     let file = load_services(&dir)?;
     let service_name = file
         .services
@@ -236,6 +273,143 @@ pub async fn translate_text(
         text: translated,
         elapsed_ms,
     })
+}
+
+/// 用插件翻译：调用插件的 `translate({ text, from, to })`
+async fn translate_with_plugin(
+    dir: &std::path::Path,
+    plugin_id: &str,
+    text: &str,
+    from: &str,
+    to: &str,
+    kind: Option<&str>,
+) -> Result<DonePayload, String> {
+    let found = plugin::discover(dir)
+        .into_iter()
+        .find(|p| p.id == plugin_id)
+        .ok_or_else(|| format!("插件不存在: {plugin_id}"))?;
+    if !found.ok {
+        return Err(format!(
+            "插件未通过校验: {}",
+            found.error.unwrap_or_default()
+        ));
+    }
+    if !found.enabled {
+        return Err("该插件已停用".into());
+    }
+    if found.kind != Some(PluginKind::Translation) {
+        return Err("该插件不是翻译插件".into());
+    }
+    let main = found.main.clone().ok_or("插件缺少入口脚本")?;
+
+    let args = serde_json::json!({ "text": text, "from": from, "to": to }).to_string();
+    let permissions = found.permissions.clone();
+    let started = std::time::Instant::now();
+    // 插件脚本是同步执行的，放到阻塞线程池，别占住异步运行时
+    let raw = tauri::async_runtime::spawn_blocking(move || {
+        plugin_js::call(std::path::Path::new(&main), "translate", &args, &permissions)
+    })
+    .await
+    .map_err(|e| format!("插件调用失败: {e}"))??;
+    let elapsed_ms = started.elapsed().as_millis() as u64;
+
+    let translated = plugin_js::text_of(&raw)?;
+    record_history(
+        dir,
+        kind,
+        text,
+        &translated,
+        &found.name,
+        elapsed_ms as i64,
+        None,
+    );
+    Ok(DonePayload {
+        service_id: format!("{PLUGIN_SERVICE_PREFIX}{plugin_id}"),
+        text: translated,
+        elapsed_ms,
+        dictionary: None,
+    })
+}
+
+// ==================== 插件管理 ====================
+
+/// 列出全部插件（校验失败的也在，带原因）
+#[tauri::command]
+pub fn list_plugins(app: tauri::AppHandle) -> Result<Vec<plugin::PluginInfo>, String> {
+    Ok(plugin::discover(&config_dir(&app)?))
+}
+
+/// 启用/停用插件
+#[tauri::command]
+pub fn set_plugin_enabled(
+    app: tauri::AppHandle,
+    id: String,
+    enabled: bool,
+) -> Result<Vec<plugin::PluginInfo>, String> {
+    let dir = config_dir(&app)?;
+    plugin::set_enabled(&dir, &id, enabled)?;
+    Ok(plugin::discover(&dir))
+}
+
+/// 首次使用铺一个示例插件
+#[tauri::command]
+pub fn create_sample_plugin(app: tauri::AppHandle) -> Result<Vec<plugin::PluginInfo>, String> {
+    let dir = config_dir(&app)?;
+    plugin::ensure_sample(&dir)?;
+    Ok(plugin::discover(&dir))
+}
+
+/// 插件目录绝对路径，界面上展示给用户
+#[tauri::command]
+pub fn plugins_dir_path(app: tauri::AppHandle) -> Result<String, String> {
+    Ok(plugin::plugins_dir(&config_dir(&app)?)
+        .to_string_lossy()
+        .to_string())
+}
+
+/// 运行动作插件：把原文与译文交给插件的 `run({ source, translated })`，
+/// 返回值作为提示文本展示给用户（返回 null 表示不需要提示）。
+#[tauri::command]
+pub async fn run_action_plugin(
+    app: tauri::AppHandle,
+    id: String,
+    source: String,
+    translated: String,
+) -> Result<String, String> {
+    let dir = config_dir(&app)?;
+    let found = plugin::discover(&dir)
+        .into_iter()
+        .find(|p| p.id == id)
+        .ok_or_else(|| format!("插件不存在: {id}"))?;
+    if !found.ok {
+        return Err(format!(
+            "插件未通过校验: {}",
+            found.error.unwrap_or_default()
+        ));
+    }
+    if !found.enabled {
+        return Err("该插件已停用".into());
+    }
+    if found.kind != Some(PluginKind::Action) {
+        return Err("该插件不是动作插件".into());
+    }
+    let main = found.main.clone().ok_or("插件缺少入口脚本")?;
+
+    let args = serde_json::json!({
+        "source": source,
+        "translated": translated,
+        "text": translated
+    })
+    .to_string();
+    let permissions = found.permissions.clone();
+    let raw = tauri::async_runtime::spawn_blocking(move || {
+        plugin_js::call(std::path::Path::new(&main), "run", &args, &permissions)
+    })
+    .await
+    .map_err(|e| format!("动作插件调用失败: {e}"))??;
+
+    // 允许插件返回 null（不需要提示），这时给个空串
+    Ok(plugin_js::text_of(&raw).unwrap_or_default())
 }
 
 /// 记一条历史。失败只写日志，不能影响翻译本身。
@@ -399,7 +573,7 @@ fn parse_model_ids(body: &str) -> Vec<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::parse_model_ids;
+    use super::*;
 
     #[test]
     fn parses_openai_and_zai_model_shapes() {
@@ -414,5 +588,118 @@ mod tests {
     fn tolerates_unexpected_bodies() {
         assert!(parse_model_ids("not json").is_empty());
         assert!(parse_model_ids("{}").is_empty());
+    }
+
+    #[test]
+    fn parses_plugin_return_shapes() {
+        assert_eq!(plugin_js::text_of("\"你好\"").unwrap(), "你好");
+        assert_eq!(
+            plugin_js::text_of(r#"{"text":"你好","extra":1}"#).unwrap(),
+            "你好"
+        );
+        assert!(plugin_js::text_of(r#"{"foo":1}"#).is_err());
+        assert!(plugin_js::text_of("null").is_err());
+        assert!(plugin_js::text_of("42").is_err());
+    }
+
+    /// 端到端：插件目录 → 清单校验 → QuickJS 执行 → 结果解析 → 历史入库
+    #[tokio::test]
+    async fn translates_through_plugin() {
+        let dir = std::env::temp_dir().join(format!("suiyi-plugin-cmd-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let pdir = crate::plugin::plugins_dir(&dir).join("upper");
+        std::fs::create_dir_all(&pdir).unwrap();
+        std::fs::write(
+            pdir.join("manifest.json"),
+            serde_json::json!({
+                "id": "com.x.upper",
+                "name": "转大写",
+                "version": "1.0.0",
+                "main": "index.js",
+                "kind": "translation",
+                "permissions": []
+            })
+            .to_string(),
+        )
+        .unwrap();
+        std::fs::write(
+            pdir.join("index.js"),
+            "function translate(input) { return input.text.toUpperCase(); }",
+        )
+        .unwrap();
+
+        let out = translate_with_plugin(&dir, "com.x.upper", "hello", "EN", "中文", Some("manual"))
+            .await
+            .expect("插件翻译应成功");
+        assert_eq!(out.text, "HELLO");
+        assert_eq!(out.service_id, "plugin:com.x.upper");
+
+        // 历史里应留下插件名与译文
+        let rows = crate::history::list(&dir, None, None, 10, 0).unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].service_name, "转大写");
+        assert_eq!(rows[0].translated, "HELLO");
+        assert_eq!(rows[0].kind, "manual");
+
+        // 停用后不再参与翻译
+        crate::plugin::set_enabled(&dir, "com.x.upper", false).unwrap();
+        assert!(
+            translate_with_plugin(&dir, "com.x.upper", "hello", "EN", "中文", None)
+                .await
+                .is_err()
+        );
+
+        // 不存在的插件给出明确错误
+        let err = translate_with_plugin(&dir, "com.x.nope", "hi", "EN", "中文", None)
+            .await
+            .unwrap_err();
+        assert!(err.contains("插件不存在"), "实际: {err}");
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// 只有校验通过且启用的翻译插件才会出现在服务列表里
+    #[test]
+    fn plugin_services_only_include_ready_translation_plugins() {
+        let dir = std::env::temp_dir().join(format!("suiyi-plugin-svc-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let root = crate::plugin::plugins_dir(&dir);
+
+        let mk = |name: &str, kind: &str, script: &str| {
+            let d = root.join(name);
+            std::fs::create_dir_all(&d).unwrap();
+            std::fs::write(
+                d.join("manifest.json"),
+                serde_json::json!({
+                    "id": format!("com.x.{name}"), "name": name, "version": "1.0.0",
+                    "main": "index.js", "kind": kind, "permissions": []
+                })
+                .to_string(),
+            )
+            .unwrap();
+            std::fs::write(d.join("index.js"), script).unwrap();
+        };
+        mk("good", "translation", "function translate(i){return i.text;}");
+        mk("ocr", "ocr", "function ocr(i){return '';}");
+        // 入口脚本缺失 → 校验失败
+        let broken = root.join("broken");
+        std::fs::create_dir_all(&broken).unwrap();
+        std::fs::write(
+            broken.join("manifest.json"),
+            serde_json::json!({
+                "id": "com.x.broken", "name": "broken", "main": "missing.js",
+                "kind": "translation", "permissions": []
+            })
+            .to_string(),
+        )
+        .unwrap();
+
+        let svc = plugin_services(&dir);
+        assert_eq!(svc.len(), 1, "只应包装合格的翻译插件");
+        assert_eq!(svc[0].id, "plugin:com.x.good");
+        assert_eq!(svc[0].plugin_id.as_deref(), Some("com.x.good"));
+        assert!(svc[0].order > 1000, "插件服务排在手工配置的服务之后");
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

@@ -4,13 +4,22 @@ import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { ankiAdd, listServices, replaceSelection, speakText, stopSpeaking } from "../api";
+import {
+  ankiAdd,
+  listPlugins,
+  listServices,
+  replaceSelection,
+  runActionPlugin,
+  speakText,
+  stopSpeaking,
+} from "../api";
 import {
   SOURCE_LANGS,
   TARGET_LANGS,
   swapLanguages,
   type DictionaryResult,
   type HistoryKind,
+  type PluginInfo,
   type ServiceConfig,
   type TranslateResult,
 } from "../types";
@@ -39,6 +48,7 @@ export default function PopupPage() {
   const [moreOpen, setMoreOpen] = useState(false);
   const [notice, setNotice] = useState("");
   const [replacing, setReplacing] = useState(false);
+  const [actionPlugins, setActionPlugins] = useState<PluginInfo[]>([]);
   // 当前这轮文本的来源，历史归类用；用 ref 避免重建 doTranslate
   const kindRef = useRef<HistoryKind>("selection");
 
@@ -56,6 +66,15 @@ export default function PopupPage() {
   useEffect(() => {
     void refreshServices();
   }, [refreshServices]);
+
+  // 启用的动作插件会出现在「更多」菜单里，对当前这轮译文做自定义处理
+  useEffect(() => {
+    void listPlugins()
+      .then((list) =>
+        setActionPlugins(list.filter((p) => p.ok && p.enabled && p.kind === "action")),
+      )
+      .catch(() => setActionPlugins([]));
+  }, []);
 
   const doTranslate = useCallback(
     async (src: string) => {
@@ -232,6 +251,18 @@ export default function PopupPage() {
     }
   }
 
+  /** 运行动作插件，把它返回的提示展示出来 */
+  async function runAction(p: PluginInfo) {
+    const done = cards.find((c) => c.status === "done" && c.text);
+    if (!done) return;
+    try {
+      const msg = await runActionPlugin(p.id, source, done.text);
+      setNotice(msg || `已执行「${p.name}」`);
+    } catch (e) {
+      setNotice(String(e));
+    }
+  }
+
   /** 用必应搜索选中文本（后续可在设置里换搜索引擎） */
   function searchWeb() {
     if (source.trim()) void openUrl(`https://www.bing.com/search?q=${encodeURIComponent(source.trim())}`);
@@ -402,6 +433,16 @@ export default function PopupPage() {
             >
               <Icon name="bookmark" size="sm" />加入生词本
             </button>
+            {actionPlugins.map((p) => (
+              <button
+                key={p.id}
+                className="mi"
+                disabled={!cards.some((c) => c.status === "done" && c.text)}
+                onClick={() => { setMoreOpen(false); void runAction(p); }}
+              >
+                <Icon name="bolt" size="sm" />{p.name}
+              </button>
+            ))}
             <div className="sep" />
             <button className="mi" onClick={() => { setMoreOpen(false); searchWeb(); }}>
               <Icon name="search" size="sm" />搜索选中文本

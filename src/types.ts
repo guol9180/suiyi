@@ -17,6 +17,8 @@ export interface ServiceConfig {
   stream: boolean;
   resultType: ResultType;
   order: number;
+  /** 由插件提供的服务才有；这类服务不落盘，也不能在服务列表里编辑 */
+  pluginId?: string | null;
 }
 
 export interface ServicesFile {
@@ -124,9 +126,34 @@ export const PROTOCOL_LABELS: Record<Protocol, string> = {
 
 /** 列表行的第二行摘要：协议 · 模型 */
 export function serviceMeta(s: ServiceConfig): string {
+  if (s.pluginId) return `插件 · ${s.model || "本地脚本"}`;
   const proto = PROTOCOL_LABELS[s.protocol];
   return s.model ? `${proto} · ${s.model}` : proto;
 }
+
+export type PluginKind = "translation" | "ocr" | "speech" | "action";
+
+export interface PluginInfo {
+  id: string;
+  name: string;
+  version: string;
+  description: string;
+  author: string;
+  kind: PluginKind | null;
+  permissions: string[];
+  dir: string;
+  main: string | null;
+  enabled: boolean;
+  ok: boolean;
+  error: string | null;
+}
+
+export const PLUGIN_KIND_LABELS: Record<PluginKind, string> = {
+  translation: "翻译",
+  ocr: "OCR",
+  speech: "语音",
+  action: "动作",
+};
 
 /**
  * 语言方向选项。目标语言不含「自动检测」，其余与来源一致，

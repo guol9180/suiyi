@@ -3,17 +3,21 @@ import { useCallback, useEffect, useState } from "react";
 import "./Settings.css";
 import {
   ankiStatus,
+  createSamplePlugin,
   clearHistory,
   deleteHistory,
   deleteApiKey,
   deleteService,
   getApiKey,
   listHistory,
+  listPlugins,
   listServices,
+  pluginsDirPath,
   reorderServices,
   saveService,
   saveSettings,
   setApiKey,
+  setPluginEnabled,
   testConnection,
   type ConnectionTest,
 } from "../api";
@@ -22,26 +26,29 @@ import {
   DEFAULT_PROMPT,
   EMPTY_SERVICE,
   HISTORY_KIND_LABELS,
+  PLUGIN_KIND_LABELS,
   PROTOCOL_LABELS,
   serviceMeta,
   TARGET_LANGS,
   type HistoryEntry,
   type HistoryKind,
   type AnkiStatus,
+  type PluginInfo,
   type Protocol,
   type ResultType,
   type ServiceConfig,
   type ServicesFile,
 } from "../types";
 
-const SIDEBAR_MAIN = ["通用", "热键", "服务配置", "历史记录"];
+const SIDEBAR_MAIN = ["通用", "热键", "服务配置", "历史记录", "插件"];
 
-type Page = "general" | "hotkeys" | "services" | "history";
+type Page = "general" | "hotkeys" | "services" | "history" | "plugins";
 const SIDEBAR_PAGES: Record<string, Page> = {
   通用: "general",
   热键: "hotkeys",
   服务配置: "services",
   历史记录: "history",
+  插件: "plugins",
 };
 
 /** 已注册的全局热键，与 src-tauri/src/lib.rs 的 with_shortcuts 一一对应 */
@@ -54,7 +61,6 @@ const HOTKEYS: { name: string; key: string; desc: string }[] = [
 const SIDEBAR_SOON: { name: string; milestone: string }[] = [
   { name: "生词本", milestone: "M3" },
   { name: "语音合成", milestone: "M4" },
-  { name: "插件", milestone: "M5" },
 ];
 const SIDEBAR_TAIL = ["关于"];
 
@@ -104,6 +110,8 @@ export default function SettingsPage() {
   });
   const [anki, setAnki] = useState<AnkiStatus | null>(null);
   const [ankiTesting, setAnkiTesting] = useState(false);
+  const [plugins, setPlugins] = useState<PluginInfo[]>([]);
+  const [pluginsPath, setPluginsPath] = useState("");
   const [page, setPage] = useState<Page>("services");
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<ConnectionTest | null>(null);
@@ -158,6 +166,36 @@ export default function SettingsPage() {
   useEffect(() => {
     if (page === "history") void loadHistory();
   }, [page, loadHistory]);
+
+  const loadPlugins = useCallback(async () => {
+    try {
+      setPlugins(await listPlugins());
+      setPluginsPath(await pluginsDirPath());
+    } catch (e) {
+      setError(String(e));
+    }
+  }, []);
+
+  useEffect(() => {
+    if (page === "plugins") void loadPlugins();
+  }, [page, loadPlugins]);
+
+  async function handleTogglePlugin(id: string, enabled: boolean) {
+    try {
+      setPlugins(await setPluginEnabled(id, enabled));
+    } catch (e) {
+      setError(String(e));
+    }
+  }
+
+  async function handleCreateSample() {
+    try {
+      setPlugins(await createSamplePlugin());
+      flash("示例插件已生成，改改就能用");
+    } catch (e) {
+      setError(String(e));
+    }
+  }
 
   async function handleClearHistory() {
     if (!window.confirm("清空全部翻译历史？此操作不可撤销。")) return;
@@ -254,6 +292,11 @@ export default function SettingsPage() {
 
   async function toggleEnabled(s: ServiceConfig) {
     try {
+      // 插件服务的启停归插件页管，不能写进 services.json
+      if (s.pluginId) {
+        setPlugins(await setPluginEnabled(s.pluginId, !s.enabled));
+        return;
+      }
       const list = await saveService({ ...s, enabled: !s.enabled });
       setFile((f) => (f ? { ...f, services: list } : f));
     } catch (e) {
@@ -555,6 +598,63 @@ export default function SettingsPage() {
           </div>
         )}
 
+        {page === "plugins" && (
+          <div className="card panel wide">
+            <div className="card-head">
+              <span className="hname">插件</span>
+              <span className="m">每个子目录一个插件，入口是 manifest.json</span>
+              <span style={{ flex: 1 }} />
+              <button className="btn mini" onClick={() => void loadPlugins()}>
+                <Icon name="refresh" size="sm" />刷新
+              </button>
+              <button className="btn primary mini" onClick={() => void handleCreateSample()}>
+                <Icon name="plus" size="sm" />生成示例插件
+              </button>
+            </div>
+
+            {pluginsPath && (
+              <div className="plpath">
+                <Icon name="info" size="sm" />
+                <span>插件目录：<code>{pluginsPath}</code></span>
+              </div>
+            )}
+
+            {plugins.length === 0 && (
+              <div className="empty-hint">
+                还没有插件。点「生成示例插件」会创建一个可用的翻译插件，改改就能变成自己的。
+              </div>
+            )}
+
+            {plugins.map((p) => (
+              <div className="plrow" key={p.dir}>
+                <Toggle on={p.enabled} onClick={() => void handleTogglePlugin(p.id, !p.enabled)} />
+                <span className="nm">
+                  <b>{p.name}</b>
+                  <span>
+                    {p.ok
+                      ? [
+                          p.version || "未标版本",
+                          p.kind ? PLUGIN_KIND_LABELS[p.kind] : "",
+                          p.permissions.length ? `权限：${p.permissions.join(" / ")}` : "无特殊权限",
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")
+                      : p.error}
+                  </span>
+                </span>
+                <span className={`chip ${p.ok ? "ok" : "err"} mini`}>
+                  {p.ok ? "校验通过" : "有问题"}
+                </span>
+              </div>
+            ))}
+
+            <div className="thint">
+              翻译类插件通过校验并启用后，会自动出现在服务列表里参与多服务对比。
+              插件目前没有网络能力，只有申请了 clipboard 权限才能读写剪贴板。
+            </div>
+          </div>
+        )}
+
         {page === "services" && (
           <>
         {/* 服务列表 */}
@@ -579,23 +679,31 @@ export default function SettingsPage() {
           {services.map((s) => (
             <div key={s.id} className={`svc${draft?.id === s.id ? " on" : ""}`}>
               <span className="arrows">
-                <button className="mini-as-link" onClick={() => void move(s, -1)} title="上移"><Icon name="chev-up" size="sm" /></button>
-                <button className="mini-as-link" onClick={() => void move(s, 1)} title="下移"><Icon name="chev-down" size="sm" /></button>
+                {!s.pluginId && (
+                  <>
+                    <button className="mini-as-link" onClick={() => void move(s, -1)} title="上移"><Icon name="chev-up" size="sm" /></button>
+                    <button className="mini-as-link" onClick={() => void move(s, 1)} title="下移"><Icon name="chev-down" size="sm" /></button>
+                  </>
+                )}
               </span>
               <Toggle on={s.enabled} onClick={() => void toggleEnabled(s)} />
               <span className="svc-name">
                 <b>{s.name || "未命名服务"}</b>
                 <span>{serviceMeta(s)}</span>
               </span>
-              <button
-                className="btn mini"
-                onClick={() => {
-                  setDraft({ ...s });
-                  setSelectedId(s.id);
-                }}
-              >
-                编辑
-              </button>
+              {s.pluginId ? (
+                <span className="chip acc mini">插件</span>
+              ) : (
+                <button
+                  className="btn mini"
+                  onClick={() => {
+                    setDraft({ ...s });
+                    setSelectedId(s.id);
+                  }}
+                >
+                  编辑
+                </button>
+              )}
             </div>
           ))}
           {services.length === 0 && (
