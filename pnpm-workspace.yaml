@@ -1,2 +1,4 @@
+packages:
+  - '.'
 minimumReleaseAgeExclude:
   - '@tauri-apps/plugin-opener@2.7.0'
