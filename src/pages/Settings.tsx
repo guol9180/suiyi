@@ -397,7 +397,7 @@ export default function SettingsPage() {
           <div key={item} className="side-item">{item}</div>
         ))}
         <div className="side-foot">
-          随译 v0.1.0
+          随译 v{__APP_VERSION__}
           <br />
           译文由你配置的服务提供
         </div>

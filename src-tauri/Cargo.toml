@@ -1,6 +1,6 @@
 [package]
 name = "suiyi"
-version = "0.1.0"
+version = "0.1.1"
 description = "随译 SuiYi · 桌面 AI 翻译助手"
 authors = ["suiyi-dev"]
 edition = "2021"
