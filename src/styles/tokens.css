@@ -1,57 +1,78 @@
 /*
  * 随译 SuiYi · 设计 token
- * 来源：design/ui-mockup.html（v0.4）
+ * 配色方向：墨与朱砂。界面主体是暖纸底 + 炭墨近黑，
+ * 朱砂只出现在品牌图形、进度、选中标记这些落笔处，不做大面积填充。
+ * 中性色一律用暖纸系，不掺蓝调。
  * 界面样式只引用这里的变量，不写魔法值。
  */
 
 :root {
   /* 品牌与交互 */
-  --c-primary: #4c6fff;          /* 品牌识别：logo、图形、进度 */
-  --c-primary-strong: #3b5bff;   /* 交互主色：主按钮、链接、选中（白字 5.1:1） */
-  --c-primary-hover: #2f49e0;
-  --c-primary-soft: #eef2ff;
-  --c-primary-border: #d6deff;
+  --c-primary: #a8331f;          /* 品牌识别：logo、进度、选中标记（朱砂） */
+  --c-primary-strong: #191817;   /* 交互主色：主按钮、链接、选中（白字 16.4:1） */
+  --c-primary-hover: #33302d;
+  --c-primary-press: #0d0c0b;
+  --c-primary-soft: #f0ede7;
+  --c-primary-border: #dfdad1;
 
-  /* 中性色 */
-  --c-text: #0f172a;             /* 正文主色（白底 17.9:1） */
-  --c-text-2: #475569;           /* 次级文字（7.6:1） */
-  --c-text-3: #64748b;           /* 弱文字，仅用于 12px 及以上（4.5:1） */
-  --c-caption: #5c6b80;          /* 11px 小字标注（5.1:1） */
-  --c-icon: #94a3b8;             /* 图标与分隔线，不用于文字 */
+  /* 中性色：暖纸系 */
+  --c-text: #191817;             /* 正文主色（白底 16.4:1） */
+  --c-text-2: #514e4a;           /* 次级文字（8.3:1） */
+  --c-text-3: #736f6a;           /* 弱文字，仅用于 12px 及以上（5.1:1） */
+  --c-caption: #6b6762;          /* 11px 小字标注（5.7:1） */
+  --c-icon: #a9a49d;             /* 图标与分隔线，不用于文字 */
   --c-surface: #ffffff;
-  --c-surface-2: #fbfcfe;
-  --c-app-bg: #f6f8fb;
-  --c-border: #e2e8f0;
-  --c-border-strong: #d9e0ec;
-  --c-border-soft: #e9edf3;
+  --c-surface-2: #fbfaf7;
+  --c-app-bg: #f3f1ec;
+  --c-side-bg: #f7f5f0;          /* 设置页侧边栏底 */
+  --c-border: #e7e3dc;
+  --c-border-strong: #d7d2c9;
+  --c-border-soft: #efebe4;
+  --c-border-hover: #ccc6bb;     /* 输入框与次要按钮的 hover 描边 */
+  --c-subtle-bg: #efece5;        /* 键帽、行内代码底 */
+  --c-muted-bg: #e9e5de;         /* 禁用与未开放的底色 */
+  --c-muted-ink: #8c8880;        /* 禁用与未开放的文字 */
+  --c-idle-dot: #cdc8c0;         /* 空闲圆点与开关关闭态 */
 
   /* 语义色 */
   --c-success: #15803d;
   --c-success-bg: #ecfdf3;
   --c-success-border: #c6f1d6;
-  --c-danger: #dc2626;
-  --c-danger-bg: #fff7f7;
-  --c-danger-border: #f3c7c7;
-  --c-warn: #b45309;
-  --c-warn-bg: #fff7e6;
-  --c-warn-border: #fde1b9;
-  --c-info: #0369a1;
-  --c-info-bg: #f0f9ff;
-  --c-info-border: #bae6fd;
-  /* 里程碑与文档状态：中性灰蓝，与运行时状态区分开 */
-  --c-mile: #52607a;
-  --c-mile-bg: #eef1f6;
-  --c-mile-border: #dfe5ee;
+  --c-success-ink: #14603a;
+  --c-danger: #b03420;
+  --c-danger-bg: #fbf0ed;
+  --c-danger-border: #edcfc7;
+  --c-danger-ink: #932c1a;
+  --c-danger-hover-bg: #f7e4df;
+  --c-warn: #9a6010;
+  --c-warn-bg: #fbf3e2;
+  --c-warn-border: #ecd9b4;
+  --c-info: #6a5a46;
+  --c-info-bg: #f5f1ea;
+  --c-info-border: #e5dcd0;
+  /* 里程碑与文档状态：中性暖灰，与运行时状态区分开 */
+  --c-mile: #6b6762;
+  --c-mile-bg: #f0ede7;
+  --c-mile-border: #ded9d1;
   /* 原文覆盖与高亮标记 */
   --c-highlight: #ffde59;
   --c-highlight-text: #4a3b00;
 
   /* 深色区（截图与覆盖层） */
-  --c-dark-bg: #0f1626;
-  --c-dark-surface: #18213a;
-  --c-dark-border: #2a3651;
-  --c-dark-text: #e2e8f0;
-  --c-dark-text-2: #b6c2d6;
+  --c-dark-bg: #1c1917;
+  --c-dark-surface: #292524;
+  --c-dark-border: #44403c;
+  --c-dark-text: #e7e5e4;
+  --c-dark-text-2: #a8a29e;
+
+  /* 毛玻璃：只给浮在别的内容之上的表面用（划词弹窗、溢出菜单、覆盖层提示）。
+     不透明度留在 0.82 以上，即使系统不支持模糊也不会影响可读性。 */
+  --glass-tint: rgba(255, 255, 255, 0.84);
+  --glass-tint-2: rgba(251, 250, 247, 0.72);
+  --glass-edge: rgba(255, 255, 255, 0.68);
+  --glass-blur: blur(20px) saturate(160%);
+  --glass-dark-tint: rgba(28, 25, 23, 0.68);
+  --glass-dark-edge: rgba(255, 255, 255, 0.16);
 
   /* 形状 */
   --radius-sm: 4px;
@@ -59,9 +80,9 @@
   --radius-lg: 8px;
   --radius-xl: 10px;
   --radius-pill: 999px;
-  --shadow-card: 0 10px 26px rgba(15, 23, 42, 0.09);
-  --shadow-pop: 0 14px 34px rgba(15, 23, 42, 0.2);
-  --shadow-float: 0 4px 14px rgba(15, 23, 42, 0.1);
+  --shadow-card: 0 10px 26px rgba(28, 25, 23, 0.10);
+  --shadow-pop: 0 14px 34px rgba(28, 25, 23, 0.20);
+  --shadow-float: 0 4px 14px rgba(28, 25, 23, 0.10);
 
   /* 字体 */
   --font-ui: "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif;

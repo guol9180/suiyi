@@ -11,9 +11,9 @@
 /* ---------- 侧边栏 ---------- */
 .side {
   width: 186px;
-  border-right: 1px solid #edf1f7;
+  border-right: 1px solid var(--c-muted-bg);
   padding: 12px 10px;
-  background: #fafbfd;
+  background: var(--c-side-bg);
   display: flex;
   flex-direction: column;
   flex: none;
@@ -63,13 +63,13 @@
   border-radius: 9px;
   margin-bottom: 4px;
 }
-.svc.on { border-color: #c9d6ff; background: #f4f7ff; }
+.svc.on { border-color: var(--c-primary-border); background: var(--c-primary-soft); }
 .arrows { display: flex; flex-direction: column; }
 .mini-as-link {
   border: none;
   background: none;
   font-size: 9px;
-  color: #b6c2d6;
+  color: var(--c-icon);
   cursor: pointer;
   padding: 0 2px;
   line-height: 1.1;
@@ -82,8 +82,8 @@
 /* ---------- 列表底部全局设置 ---------- */
 .fallback {
   margin-top: auto;
-  background: #fbfcfe;
-  border: 1px dashed #d6dee9;
+  background: var(--c-surface-2);
+  border: 1px dashed var(--c-border-strong);
   border-radius: 9px;
   padding: 9px 11px;
   font-size: 11.5px;
@@ -108,7 +108,7 @@
   gap: 8px;
   margin-top: 14px;
   padding-top: 12px;
-  border-top: 1px solid #eef2f7;
+  border-top: 1px solid var(--c-border-soft);
 }
 .sec-note { margin-left: auto; font-size: 11px; color: var(--c-caption); }
 .empty-hint {
@@ -150,17 +150,17 @@ select.inp { appearance: auto; }
   color: var(--c-caption);
 }
 .side-item.soon {
-  color: #6b7a92;
+  color: var(--c-muted-ink);
   cursor: not-allowed;
 }
-.side-item.soon:hover { background: #f1f4f9; }
+.side-item.soon:hover { background: var(--c-muted-bg); }
 .side-item.soon .lk {
   margin-left: auto;
   display: inline-flex;
   align-items: center;
   gap: 4px;
   font-size: 10.5px;
-  color: #9aa7bc;
+  color: var(--c-icon);
 }
 
 /* ---------- 性能与回退分组 ---------- */
@@ -196,7 +196,7 @@ select.inp { appearance: auto; }
   margin-top: 8px;
   font-size: 11.5px;
   line-height: 1.7;
-  color: #9f1f1f;
+  color: var(--c-danger-ink);
 }
 .thint { margin-top: 6px; font-size: 11px; color: var(--c-caption); }
 
@@ -295,7 +295,7 @@ select.inp { appearance: auto; }
   background: var(--c-mile-bg);
   border-radius: 3px;
   padding: 1px 5px;
-  color: #3c4a60;
+  color: var(--c-text-2);
 }
 .plrow {
   display: flex;

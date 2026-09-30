@@ -11,6 +11,8 @@ pub mod speech;
 pub mod translator;
 pub mod writeback;
 
+use tauri::utils::config::WindowEffectsConfig;
+use tauri::utils::WindowEffect;
 use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
 use tauri_plugin_global_shortcut::ShortcutState;
 
@@ -69,6 +71,16 @@ pub fn run() {
                 .transparent(true)
                 .shadow(true)
                 .resizable(true)
+                // 系统级磨砂：CSS 的 backdrop-filter 只作用于页面内部，
+                // 弹窗背后的桌面要靠 DWM 的 Acrylic 才会被模糊。
+                // 系统不支持时静默退回半透明，卡片本身不透明度在 0.84，仍可读。
+                .effects(WindowEffectsConfig {
+                    effects: vec![WindowEffect::Acrylic],
+                    state: None,
+                    radius: Some(14.0),
+                    color: None,
+                    interactive: false,
+                })
                 .visible(false)
                 .build()?;
 

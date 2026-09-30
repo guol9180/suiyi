@@ -237,6 +237,13 @@ pub(crate) fn ensure_popup_at_cursor(app: &AppHandle) -> Result<(), String> {
             .transparent(true)
             .shadow(true)
             .resizable(true)
+            .effects(tauri::utils::config::WindowEffectsConfig {
+                effects: vec![tauri::utils::WindowEffect::Acrylic],
+                state: None,
+                radius: Some(14.0),
+                color: None,
+                interactive: false,
+            })
             .build()
             .map(|_| ())
             .map_err(|e| format!("创建弹窗失败: {e}")),

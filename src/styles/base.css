@@ -56,33 +56,33 @@ body {
   white-space: nowrap;
   transition: background 0.14s, border-color 0.14s, color 0.14s;
 }
-.btn:hover { background: var(--c-app-bg); border-color: #bfcbe0; color: var(--c-text); }
-.btn:active { background: #e6ebf3; }
+.btn:hover { background: var(--c-app-bg); border-color: var(--c-border-hover); color: var(--c-text); }
+.btn:active { background: var(--c-subtle-bg); }
 .btn.primary {
   background: var(--c-primary-strong);
   border-color: var(--c-primary-strong);
   color: #fff;
 }
 .btn.primary:hover { background: var(--c-primary-hover); border-color: var(--c-primary-hover); color: #fff; }
-.btn.primary:active { background: #2740c8; border-color: #2740c8; }
+.btn.primary:active { background: var(--c-primary-press); border-color: var(--c-primary-press); }
 .btn.danger { color: var(--c-danger); border-color: var(--c-danger-border); background: var(--c-danger-bg); }
-.btn.danger:hover { background: #fbe6e6; border-color: #e4a3a3; color: #b91c1c; }
+.btn.danger:hover { background: var(--c-danger-hover-bg); border-color: var(--c-danger-border); color: var(--c-danger-ink); }
 .btn.mini { height: var(--h-btn-mini); padding: 0 9px; font-size: 11.5px; border-radius: var(--radius-sm); }
 .btn:disabled,
 .btn.is-disabled {
-  background: #edf1f7;
+  background: var(--c-muted-bg);
   border-color: var(--c-border);
-  color: #7c8aa0;
+  color: var(--c-muted-ink);
   cursor: not-allowed;
 }
 /* 未开放的动作用灰底加锁图标，而不是单纯降透明度 */
 .btn.locked {
-  background: #edf1f7;
+  background: var(--c-muted-bg);
   border-color: var(--c-border);
-  color: #6b7a92;
+  color: var(--c-muted-ink);
   cursor: not-allowed;
 }
-.btn.locked:hover { background: #edf1f7; border-color: var(--c-border); color: #6b7a92; }
+.btn.locked:hover { background: var(--c-muted-bg); border-color: var(--c-border); color: var(--c-muted-ink); }
 
 /* ---------- 标签 ---------- */
 .chip {
@@ -107,9 +107,9 @@ body {
 .chip.mini { font-size: 10.5px; padding: 1px 6px; }
 
 .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--c-success); flex: none; }
-.dot.warn { background: #d97706; }
+.dot.warn { background: var(--c-warn); }
 .dot.err { background: var(--c-danger); }
-.dot.idle { background: #c3cddc; }
+.dot.idle { background: var(--c-idle-dot); }
 
 /* ---------- 开关（唯一的胶囊形态） ---------- */
 .tgl {
@@ -134,7 +134,7 @@ body {
   left: 16px;
   transition: left 0.14s;
 }
-.tgl[aria-checked="false"] { background: #c3cddc; }
+.tgl[aria-checked="false"] { background: var(--c-idle-dot); }
 .tgl[aria-checked="false"]::after { left: 2px; }
 
 /* ---------- 输入框 ---------- */
@@ -151,7 +151,7 @@ body {
   transition: border-color 0.14s;
   outline: none;
 }
-.inp:hover { border-color: #bfcbe0; }
+.inp:hover { border-color: var(--c-border-hover); }
 .inp:focus { border-color: var(--c-primary-strong); }
 .inp.mono { font-family: var(--font-mono); font-size: 12px; }
 .inp::placeholder { color: var(--c-caption); }
@@ -188,8 +188,8 @@ textarea.inp { height: auto; min-height: 86px; padding: 9px 11px; line-height: 1
 .kbd {
   font-family: var(--font-mono);
   font-size: 11.5px;
-  background: #f1f5f9;
-  border: 1px solid #d6dee9;
+  background: var(--c-subtle-bg);
+  border: 1px solid var(--c-border-strong);
   border-bottom-width: 2px;
   border-radius: var(--radius-sm);
   padding: 2px 7px;
@@ -229,7 +229,7 @@ textarea.inp { height: auto; min-height: 86px; padding: 9px 11px; line-height: 1
   border: 1px solid;
 }
 .toast.float { box-shadow: var(--shadow-float); }
-.toast.ok { background: var(--c-success-bg); border-color: var(--c-success-border); color: #14603a; }
+.toast.ok { background: var(--c-success-bg); border-color: var(--c-success-border); color: var(--c-success-ink); }
 .toast.info { background: var(--c-info-bg); border-color: var(--c-info-border); color: var(--c-info); }
 .toast.warn { background: var(--c-warn-bg); border-color: var(--c-warn-border); color: var(--c-warn); }
-.toast.err { background: var(--c-danger-bg); border-color: var(--c-danger-border); color: #9f1f1f; }
+.toast.err { background: var(--c-danger-bg); border-color: var(--c-danger-border); color: var(--c-danger-ink); }

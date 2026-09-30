@@ -44,10 +44,10 @@
 .cards { display: flex; flex-direction: column; gap: 10px; overflow: auto; flex: 1; min-height: 60px; }
 
 .rescard {
-  border: 1px solid #e5eaf2;
+  border: 1px solid var(--c-border);
   border-radius: 10px;
   padding: 10px 12px;
-  background: #fdfeff;
+  background: var(--c-surface);
 }
 .rh {
   display: flex;
