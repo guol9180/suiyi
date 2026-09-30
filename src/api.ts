@@ -50,3 +50,8 @@ export interface ConnectionTest {
 export function testConnection(serviceId: string): Promise<ConnectionTest> {
   return invoke("test_connection", { serviceId });
 }
+
+/** 把译文替换回取词时所在的那个窗口 */
+export function replaceSelection(text: string): Promise<void> {
+  return invoke("replace_selection", { text });
+}

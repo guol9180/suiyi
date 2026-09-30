@@ -23,12 +23,15 @@ export interface ServicesFile {
   version: number;
   concurrency: number;
   timeoutSecs: number;
+  inputTargetLang: string;
   services: ServiceConfig[];
 }
 
 export interface GlobalSettings {
   concurrency: number;
   timeoutSecs: number;
+  /** 输入框转译（Alt+T）的目标语言 */
+  inputTargetLang: string;
 }
 
 export const DEFAULT_PROMPT =

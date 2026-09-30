@@ -119,6 +119,7 @@ pub fn run() {
             commands::save_settings,
             commands::translate_text,
             commands::test_connection,
+            writeback::replace_selection,
             screenshot::get_screenshot,
             screenshot::finish_region,
             screenshot::cancel_screenshot,

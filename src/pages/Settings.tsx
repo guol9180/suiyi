@@ -19,6 +19,7 @@ import {
   EMPTY_SERVICE,
   PROTOCOL_LABELS,
   serviceMeta,
+  TARGET_LANGS,
   type Protocol,
   type ResultType,
   type ServiceConfig,
@@ -26,6 +27,20 @@ import {
 } from "../types";
 
 const SIDEBAR_MAIN = ["通用", "热键", "服务配置"];
+
+type Page = "general" | "hotkeys" | "services";
+const SIDEBAR_PAGES: Record<string, Page> = {
+  通用: "general",
+  热键: "hotkeys",
+  服务配置: "services",
+};
+
+/** 已注册的全局热键，与 src-tauri/src/lib.rs 的 with_shortcuts 一一对应 */
+const HOTKEYS: { name: string; key: string; desc: string }[] = [
+  { name: "划词翻译", key: "D", desc: "取选中文字并在光标处弹出翻译窗" },
+  { name: "截图识别", key: "S", desc: "冻结鼠标所在显示器，框选后离线识别" },
+  { name: "输入框转译", key: "T", desc: "翻译当前输入框内容并原位写回" },
+];
 /** 未实现的入口收进「即将推出」分组并带里程碑锁标，不再平铺成一排空壳 */
 const SIDEBAR_SOON: { name: string; milestone: string }[] = [
   { name: "生词本", milestone: "M3" },
@@ -56,7 +71,12 @@ export default function SettingsPage() {
   const [hasKey, setHasKey] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  const [settings, setSettings] = useState({ concurrency: 2, timeoutSecs: 15 });
+  const [settings, setSettings] = useState({
+    concurrency: 2,
+    timeoutSecs: 15,
+    inputTargetLang: "English",
+  });
+  const [page, setPage] = useState<Page>("services");
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<ConnectionTest | null>(null);
 
@@ -66,7 +86,11 @@ export default function SettingsPage() {
     try {
       const f = await listServices();
       setFile(f);
-      setSettings({ concurrency: f.concurrency, timeoutSecs: f.timeoutSecs });
+      setSettings({
+        concurrency: f.concurrency,
+        timeoutSecs: f.timeoutSecs,
+        inputTargetLang: f.inputTargetLang || "English",
+      });
       const sorted = sortServices(f.services);
       setSelectedId((cur) => cur ?? sorted[0]?.id ?? null);
       return sorted;
@@ -175,9 +199,9 @@ export default function SettingsPage() {
     }
   }
 
-  async function saveGlobal() {
+  async function saveGlobal(next = settings) {
     try {
-      await saveSettings(settings);
+      await saveSettings(next);
       flash("全局设置已保存");
     } catch (e) {
       setError(String(e));
@@ -198,15 +222,18 @@ export default function SettingsPage() {
     <div className="set-body">
       {/* ---------- 侧边栏 ---------- */}
       <aside className="side">
-        {SIDEBAR_MAIN.map((item) => (
-          <div
-            key={item}
-            className={`side-item${item === "服务配置" ? " on" : ""}`}
-            title={item === "服务配置" ? undefined : "后续里程碑开放"}
-          >
-            {item}
-          </div>
-        ))}
+        {SIDEBAR_MAIN.map((item) => {
+          const target = SIDEBAR_PAGES[item];
+          return (
+            <div
+              key={item}
+              className={`side-item${page === target ? " on" : ""}`}
+              onClick={() => setPage(target)}
+            >
+              {item}
+            </div>
+          );
+        })}
         <div className="side-group">即将推出</div>
         {SIDEBAR_SOON.map(({ name, milestone }) => (
           <div key={name} className="side-item soon" title={`${milestone} 里程碑开放`}>
@@ -226,6 +253,56 @@ export default function SettingsPage() {
 
       {/* ---------- 主区 ---------- */}
       <div className="main">
+        {page === "general" && (
+          <div className="card panel">
+            <div className="card-head">
+              <span className="hname">输入框转译</span>
+              <span className="m">Alt + T</span>
+            </div>
+            <div className="f" style={{ maxWidth: 280 }}>
+              <label>目标语言</label>
+              <select
+                className="inp"
+                value={settings.inputTargetLang}
+                onChange={(e) => {
+                  const next = { ...settings, inputTargetLang: e.target.value };
+                  setSettings(next);
+                  void saveGlobal(next);
+                }}
+              >
+                {TARGET_LANGS.map((l) => (
+                  <option key={l} value={l}>{l}</option>
+                ))}
+              </select>
+            </div>
+            <div className="thint">
+              按下 Alt+T 会读取当前输入框内容，翻译成该语言后原位写回。来源语言始终自动检测。
+            </div>
+          </div>
+        )}
+
+        {page === "hotkeys" && (
+          <div className="card panel">
+            <div className="card-head">
+              <span className="hname">全局热键</span>
+              <span className="m">自定义录制后续开放</span>
+            </div>
+            {HOTKEYS.map((h) => (
+              <div className="hkrow" key={h.name}>
+                <span className="n">{h.name}</span>
+                <span className="m">{h.desc}</span>
+                <span className="key"><span className="kbd">Alt</span><span className="kbd">{h.key}</span></span>
+              </div>
+            ))}
+            <div className="thint">
+              热键在应用启动时注册；被其他程序占用时会后台重试。想排查可查看
+              %APPDATA%/com.suiyi.dev/debug.log。
+            </div>
+          </div>
+        )}
+
+        {page === "services" && (
+          <>
         {/* 服务列表 */}
         <div className="card list-col">
           <div className="card-head">
@@ -441,6 +518,8 @@ export default function SettingsPage() {
             </>
           )}
         </div>
+          </>
+        )}
       </div>
 
       {/* ---------- 全局提示条 ---------- */}

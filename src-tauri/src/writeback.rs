@@ -20,9 +20,6 @@ use crate::selection::{log_line, simulate_ctrl_a, simulate_ctrl_c, simulate_ctrl
 /// 抓到的内容超过这个长度，就认为 Ctrl+A 选中的是整个页面而不是输入框
 const MAX_INPUT_CHARS: usize = 5000;
 
-/// 输入框转译的目标语言。M3 先固定为英文，后续开放为设置项。
-const TARGET_LANG: &str = "English";
-
 #[cfg(windows)]
 fn foreground_hwnd() -> isize {
     unsafe { GetForegroundWindow().0 as isize }
@@ -117,10 +114,15 @@ fn run_input_translate(app: &AppHandle) -> Result<(), String> {
         .ok_or("没有已启用的翻译服务")?;
     let key = crate::keyring::get_api_key(&svc.id)?.ok_or("该服务尚未设置 API Key")?;
 
+    let target_lang = if file.input_target_lang.trim().is_empty() {
+        crate::config::DEFAULT_INPUT_TARGET_LANG
+    } else {
+        file.input_target_lang.as_str()
+    };
     let prompt = crate::translator::build_prompt(
         svc.prompt_template.as_deref(),
         "自动检测",
-        TARGET_LANG,
+        target_lang,
         &original,
     );
     let (translated, ms) = tauri::async_runtime::block_on(crate::translator::translate(
@@ -159,6 +161,66 @@ fn run_input_translate(app: &AppHandle) -> Result<(), String> {
     }
     log_line("input: 写回完成");
     Ok(())
+}
+
+/// 弹窗里的「替换原文」：把译文粘回取词时所在的那个窗口。
+///
+/// 取词时记下了目标窗口句柄；这里先把弹窗藏起来让焦点回到目标窗口，
+/// 校验前台窗口确实是它之后才粘贴，否则取消并恢复剪贴板。
+#[cfg(windows)]
+#[tauri::command]
+pub fn replace_selection(app: AppHandle, text: String) -> Result<(), String> {
+    if text.trim().is_empty() {
+        return Err("没有可替换的译文".into());
+    }
+    if let Some(win) = app.get_webview_window("popup") {
+        let _ = win.hide();
+    }
+
+    let target = crate::selection::last_target();
+    if target == 0 {
+        return Err("还没有取词目标，请重新划词后再替换".into());
+    }
+
+    let mut cb = Clipboard::new().map_err(|e| format!("剪贴板打开失败: {e}"))?;
+    let prev = cb.get_text().ok();
+    cb.set_text(text).map_err(|e| format!("设置剪贴板失败: {e}"))?;
+
+    std::thread::sleep(Duration::from_millis(150));
+    {
+        use windows::Win32::Foundation::HWND;
+        use windows::Win32::UI::WindowsAndMessaging::SetForegroundWindow;
+        unsafe {
+            let _ = SetForegroundWindow(HWND(target as *mut core::ffi::c_void));
+        }
+    }
+    std::thread::sleep(Duration::from_millis(250));
+
+    let restore = |cb: &mut Clipboard, prev: &Option<String>| {
+        if let Some(p) = prev {
+            let _ = cb.set_text(p.clone());
+        }
+    };
+
+    if crate::selection::foreground_hwnd() != target {
+        restore(&mut cb, &prev);
+        return Err("目标窗口没有回到前台，已取消替换".into());
+    }
+
+    if let Err(e) = simulate_ctrl_v() {
+        restore(&mut cb, &prev);
+        return Err(format!("模拟 Ctrl+V 失败: {e}"));
+    }
+    std::thread::sleep(Duration::from_millis(300));
+    restore(&mut cb, &prev);
+    log_line("input: 替换原文完成");
+    Ok(())
+}
+
+#[cfg(not(windows))]
+#[tauri::command]
+pub fn replace_selection(_app: AppHandle, _text: String) -> Result<(), String> {
+    Err("当前平台暂不支持替换原文".into())
 }
 
 #[cfg(test)]

@@ -4,7 +4,7 @@ import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { listServices } from "../api";
+import { listServices, replaceSelection } from "../api";
 import { SOURCE_LANGS, TARGET_LANGS, swapLanguages, type ServiceConfig } from "../types";
 import { Icon } from "../components/Icon";
 import "./Popup.css";
@@ -28,6 +28,7 @@ export default function PopupPage() {
   const [pinned, setPinned] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
   const [notice, setNotice] = useState("");
+  const [replacing, setReplacing] = useState(false);
 
   const refreshServices = useCallback(async () => {
     try {
@@ -154,6 +155,23 @@ export default function PopupPage() {
   function copyResult() {
     const done = cards.find((c) => c.status === "done" && c.text) ?? cards.find((c) => c.text);
     if (done) void navigator.clipboard.writeText(done.text);
+  }
+
+  /**
+   * 用第一条成功译文替换掉原应用里选中的文字。
+   * 主进程会先把弹窗藏起来、把焦点送回取词时的窗口，校验通过才粘贴。
+   */
+  async function replaceOriginal() {
+    const done = cards.find((c) => c.status === "done" && c.text);
+    if (!done) return;
+    setReplacing(true);
+    try {
+      await replaceSelection(done.text);
+    } catch (e) {
+      setNotice(String(e));
+    } finally {
+      setReplacing(false);
+    }
   }
 
   /** 用必应搜索选中文本（后续可在设置里换搜索引擎） */
@@ -288,8 +306,13 @@ export default function PopupPage() {
           <button className="btn primary mini" onClick={copyResult} disabled={!cards.some((c) => c.text)}>
             <Icon name="copy" size="sm" />复制
           </button>
-          <button className="btn mini locked" title="M3 里程碑开放" disabled>
-            <Icon name="lock" size="sm" />替换原文
+          <button
+            className="btn mini"
+            title="用第一条译文替换原应用里选中的文字"
+            disabled={replacing || !cards.some((c) => c.status === "done" && c.text)}
+            onClick={() => void replaceOriginal()}
+          >
+            <Icon name="swap" size="sm" />替换原文
           </button>
           <span style={{ flex: 1 }} />
           <button

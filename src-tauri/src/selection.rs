@@ -4,14 +4,29 @@
 //! 1. 记录当前剪贴板内容并清空；
 //! 2. 模拟 Ctrl+C 让目标应用把选中文本写入剪贴板；
 //! 3. 读回剪贴板：非空且与原内容不同 → 视为选中文本；
-//! 4. 恢复原剪贴板（不打扰用户）。
+//! 4. 恢复原剪贴板（不打扰用户），并记下目标窗口句柄供「替换原文」使用。
 //! UIA 直读是后续增强，不阻塞本里程碑。
 
+use std::sync::atomic::{AtomicIsize, Ordering};
 use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
 
 const POPUP_W: f64 = 430.0;
 const POPUP_H: f64 = 540.0;
+
+/// 最近一次取词时目标窗口的句柄。弹窗里的「替换原文」要靠它把焦点送回去，
+/// 否则粘贴会落到别的地方。
+static LAST_TARGET: AtomicIsize = AtomicIsize::new(0);
+
+pub(crate) fn last_target() -> isize {
+    LAST_TARGET.load(Ordering::SeqCst)
+}
+
+#[cfg(windows)]
+pub(crate) fn foreground_hwnd() -> isize {
+    use windows::Win32::UI::WindowsAndMessaging::GetForegroundWindow;
+    unsafe { GetForegroundWindow().0 as isize }
+}
 
 /// 追加一行调试日志到 %APPDATA%/com.suiyi.dev/debug.log（诊断热键链路用）
 pub fn log_line(msg: &str) {
@@ -123,6 +138,8 @@ pub(crate) fn simulate_ctrl_v() -> Result<(), String> {
 
 /// 剪贴板法抓取选中文本
 fn capture_selection() -> Option<String> {
+    // 先记下目标窗口，取词成功后再落库，供「替换原文」回焦
+    let target = foreground_hwnd();
     let mut cb = arboard::Clipboard::new().map_err(|e| log_line(&format!("capture: 剪贴板打开失败 {e}"))).ok()?;
     let prev = cb.get_text().ok();
     log_line(&format!(
@@ -162,6 +179,7 @@ fn capture_selection() -> Option<String> {
         Some(t)
             if !t.trim().is_empty() && prev.as_deref() != Some(t.as_str()) =>
         {
+            LAST_TARGET.store(target, Ordering::SeqCst);
             Some(t)
         }
         _ => None,

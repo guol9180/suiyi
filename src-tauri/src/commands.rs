@@ -7,6 +7,7 @@
 
 use crate::config::{
     load_services, new_service_id, save_services, ServiceConfig, ServiceKind, ServicesFile,
+    DEFAULT_INPUT_TARGET_LANG, INPUT_TARGET_LANGS,
 };
 use crate::keyring;
 use crate::translator::{self, DonePayload, TranslateParams};
@@ -20,6 +21,8 @@ use tauri::Manager;
 pub struct GlobalSettings {
     pub concurrency: u32,
     pub timeout_secs: u64,
+    /// 输入框转译的目标语言
+    pub input_target_lang: String,
 }
 
 fn config_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
@@ -117,6 +120,7 @@ pub fn get_settings(app: tauri::AppHandle) -> Result<GlobalSettings, String> {
     Ok(GlobalSettings {
         concurrency: file.concurrency,
         timeout_secs: file.timeout_secs,
+        input_target_lang: file.input_target_lang,
     })
 }
 
@@ -127,6 +131,12 @@ pub fn save_settings(app: tauri::AppHandle, settings: GlobalSettings) -> Result<
     let mut file = load_services(&dir)?;
     file.concurrency = settings.concurrency.clamp(1, 8);
     file.timeout_secs = settings.timeout_secs.clamp(3, 120);
+    // 只接受白名单内的语言，脏数据一律回落到默认值
+    file.input_target_lang = if INPUT_TARGET_LANGS.contains(&settings.input_target_lang.as_str()) {
+        settings.input_target_lang
+    } else {
+        DEFAULT_INPUT_TARGET_LANG.to_string()
+    };
     save_services(&dir, &file)
 }
 

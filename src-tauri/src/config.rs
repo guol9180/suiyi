@@ -81,8 +81,14 @@ pub struct ServicesFile {
     pub version: u32,
     pub concurrency: u32,
     pub timeout_secs: u64,
+    /// 输入框转译（Alt+T）的目标语言
+    pub input_target_lang: String,
     pub services: Vec<ServiceConfig>,
 }
+
+/// 输入框转译可选的目标语言，与前端 types.ts 的 TARGET_LANGS 保持一致
+pub const INPUT_TARGET_LANGS: [&str; 4] = ["中文", "简体中文", "English", "日本語"];
+pub const DEFAULT_INPUT_TARGET_LANG: &str = "English";
 
 impl Default for ServicesFile {
     fn default() -> Self {
@@ -90,6 +96,7 @@ impl Default for ServicesFile {
             version: 1,
             concurrency: 2,
             timeout_secs: 15,
+            input_target_lang: DEFAULT_INPUT_TARGET_LANG.into(),
             services: Vec::new(),
         }
     }
@@ -178,6 +185,7 @@ mod tests {
         let raw = fs::read_to_string(dir.join(SERVICES_FILE)).unwrap();
         assert!(raw.contains("\"baseUrl\""));
         assert!(raw.contains("\"promptTemplate\""));
+        assert!(raw.contains("\"inputTargetLang\""));
         assert!(!raw.to_lowercase().contains("apikey"), "密钥绝不能出现在配置文件");
 
         let _ = fs::remove_dir_all(&dir);
