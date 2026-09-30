@@ -10,6 +10,7 @@ use crate::config::{
     ResultType, DEFAULT_INPUT_TARGET_LANG, DICTIONARY_PROMPT, INPUT_TARGET_LANGS,
 };
 use crate::keyring;
+use crate::history::{self, HistoryEntry, NewEntry};
 use crate::translator::{self, DonePayload, TranslateParams};
 use std::path::PathBuf;
 use std::time::Duration;
@@ -148,21 +149,40 @@ pub async fn translate_text(
     text: String,
     from: String,
     to: String,
+    // 调用来源：selection / screenshot / manual / input，用于历史归类
+    kind: Option<String>,
 ) -> Result<DonePayload, String> {
-    let file = load_services(&config_dir(&app)?)?;
+    let dir = config_dir(&app)?;
+    let file = load_services(&dir)?;
+    let service_name = file
+        .services
+        .iter()
+        .find(|s| s.id == service_id)
+        .map(|s| s.name.clone())
+        .unwrap_or_default();
     let svc = file
         .services
         .iter()
         .find(|s| s.id == service_id)
         .ok_or_else(|| format!("服务不存在: {service_id}"))?;
     if !svc.enabled {
-        return Err("该服务未启用".into());
+        let msg = "该服务未启用".to_string();
+        record_history(&dir, kind.as_deref(), &text, "", &service_name, 0, Some(&msg));
+        return Err(msg);
     }
     if svc.kind != ServiceKind::Translation {
-        return Err("该服务不是翻译服务".into());
+        let msg = "该服务不是翻译服务".to_string();
+        record_history(&dir, kind.as_deref(), &text, "", &service_name, 0, Some(&msg));
+        return Err(msg);
     }
-    let key = keyring::get_api_key(&service_id)?
-        .ok_or("该服务尚未设置 API Key，请到设置页填写")?;
+    let key = match keyring::get_api_key(&service_id)? {
+        Some(k) => k,
+        None => {
+            let msg = "该服务尚未设置 API Key，请到设置页填写".to_string();
+            record_history(&dir, kind.as_deref(), &text, "", &service_name, 0, Some(&msg));
+            return Err(msg);
+        }
+    };
     // 词典结构化：没有自定义模板时用内置的 JSON 模板，并且强制非流式，
     // 否则拿不到完整 JSON 就没法解析。
     let dictionary_mode = svc.result_type == ResultType::Dictionary;
@@ -182,18 +202,91 @@ pub async fn translate_text(
         stream: svc.stream && !dictionary_mode,
         timeout: Duration::from_secs(file.timeout_secs.max(3)),
     };
-    let (text, elapsed_ms) = translator::translate(&app, params).await?;
+    let (translated, elapsed_ms) = match translator::translate(&app, params).await {
+        Ok(v) => v,
+        Err(e) => {
+            record_history(&dir, kind.as_deref(), &text, "", &service_name, 0, Some(&e));
+            return Err(e);
+        }
+    };
+    record_history(
+        &dir,
+        kind.as_deref(),
+        &text,
+        &translated,
+        &service_name,
+        elapsed_ms as i64,
+        None,
+    );
     Ok(DonePayload {
         service_id,
         dictionary: if dictionary_mode {
-            translator::parse_dictionary(&text)
+            translator::parse_dictionary(&translated)
         } else {
             None
         },
         // 解析失败时保留模型原始输出，前端回退为纯文本展示
-        text,
+        text: translated,
         elapsed_ms,
     })
+}
+
+/// 记一条历史。失败只写日志，不能影响翻译本身。
+fn record_history(
+    dir: &std::path::Path,
+    kind: Option<&str>,
+    source: &str,
+    translated: &str,
+    service_name: &str,
+    elapsed_ms: i64,
+    error: Option<&str>,
+) {
+    let entry = NewEntry {
+        kind: kind.unwrap_or("manual").to_string(),
+        source: source.to_string(),
+        translated: translated.to_string(),
+        service_name: service_name.to_string(),
+        elapsed_ms,
+        ok: error.is_none(),
+        error: error.map(String::from),
+    };
+    if let Err(e) = history::record(dir, entry) {
+        crate::selection::log_line(&format!("history: 写入失败 {e}"));
+    }
+}
+
+/// 查询历史：query 在原文与译文中模糊匹配，kind 按来源过滤
+#[tauri::command]
+pub async fn list_history(
+    app: tauri::AppHandle,
+    query: Option<String>,
+    kind: Option<String>,
+    limit: Option<i64>,
+    offset: Option<i64>,
+) -> Result<Vec<HistoryEntry>, String> {
+    let dir = config_dir(&app)?;
+    let (limit, offset) = (limit.unwrap_or(100), offset.unwrap_or(0));
+    tauri::async_runtime::spawn_blocking(move || history::list(&dir, query, kind, limit, offset))
+        .await
+        .map_err(|e| format!("查询历史失败: {e}"))?
+}
+
+/// 删除单条历史
+#[tauri::command]
+pub async fn delete_history(app: tauri::AppHandle, id: i64) -> Result<(), String> {
+    let dir = config_dir(&app)?;
+    tauri::async_runtime::spawn_blocking(move || history::delete(&dir, id))
+        .await
+        .map_err(|e| format!("删除历史失败: {e}"))?
+}
+
+/// 清空历史
+#[tauri::command]
+pub async fn clear_history(app: tauri::AppHandle) -> Result<(), String> {
+    let dir = config_dir(&app)?;
+    tauri::async_runtime::spawn_blocking(move || history::clear(&dir))
+        .await
+        .map_err(|e| format!("清空历史失败: {e}"))?
 }
 
 /// 测试连接的结果。字段可直接展示给用户，不含密钥。

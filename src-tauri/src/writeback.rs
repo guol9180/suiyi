@@ -142,6 +142,19 @@ fn run_input_translate(app: &AppHandle) -> Result<(), String> {
         "input: 翻译完成 {} 字符（{ms}ms）",
         translated.chars().count()
     ));
+    // 输入框转译走的是内部调用，不经命令层，历史要在这里补记
+    let _ = crate::history::record(
+        &dir,
+        crate::history::NewEntry {
+            kind: "input".into(),
+            source: original.clone(),
+            translated: translated.clone(),
+            service_name: svc.name.clone(),
+            elapsed_ms: ms as i64,
+            ok: true,
+            error: None,
+        },
+    );
 
     // 3) 焦点快照校验：焦点变了绝不写回，降级为复制
     if foreground_hwnd() != fg_before {

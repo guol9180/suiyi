@@ -336,7 +336,7 @@ pub fn finish_region(
     std::thread::sleep(std::time::Duration::from_millis(150));
     let _ = app.emit(
         "popup-set-source",
-        serde_json::json!({ "text": text, "autoTranslate": true }),
+        serde_json::json!({ "text": text, "autoTranslate": true, "kind": "screenshot" }),
     );
     Ok(OcrPayload { text, lines })
 }

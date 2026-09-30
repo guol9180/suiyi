@@ -10,7 +10,7 @@ Windows 桌面 AI 翻译助手。划词翻译、截图识别、输入框转译�
 | M1 | Alt+D 划词取词，光标处弹出翻译窗 | 已完成 |
 | M2 | Alt+S 截图识别：冻结帧、框选、离线 OCR、翻译 | 开发中 |
 | M3 | Alt+T 输入框转译、划词替换、Anki 生词本 | 部分完成（前两项已实现） |
-| M4 | 词典结构化结果、朗读、历史记录 | 部分完成（前两项已实现） |
+| M4 | 词典结构化结果、朗读、历史记录 | 已完成 |
 | M5 / M6 | 插件系统 / macOS 与 Linux 移植 | 计划中 |
 
 详细拆解与验收标准见 [DEVELOP_PLAN.md](./DEVELOP_PLAN.md)，界面基线见 [design/ui-mockup.html](./design/ui-mockup.html)。

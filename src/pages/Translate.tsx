@@ -39,7 +39,7 @@ export async function openTranslatePopup(sample: string) {
     await win.show();
     await win.setFocus();
   }
-  await emit("popup-set-source", { text: sample, autoTranslate: true });
+  await emit("popup-set-source", { text: sample, autoTranslate: true, kind: "manual" });
 }
 
 interface CardState {
@@ -108,7 +108,7 @@ export default function TranslatePage() {
         try {
           const r = await invoke<TranslateResult>(
             "translate_text",
-            { serviceId: s.id, text, from, to },
+            { serviceId: s.id, text, from, to, kind: "manual" },
           );
           setCards((cs) =>
             cs.map((c) =>

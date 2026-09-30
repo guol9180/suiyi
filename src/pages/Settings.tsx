@@ -2,9 +2,12 @@
 import { useCallback, useEffect, useState } from "react";
 import "./Settings.css";
 import {
+  clearHistory,
+  deleteHistory,
   deleteApiKey,
   deleteService,
   getApiKey,
+  listHistory,
   listServices,
   reorderServices,
   saveService,
@@ -17,22 +20,26 @@ import { Icon } from "../components/Icon";
 import {
   DEFAULT_PROMPT,
   EMPTY_SERVICE,
+  HISTORY_KIND_LABELS,
   PROTOCOL_LABELS,
   serviceMeta,
   TARGET_LANGS,
+  type HistoryEntry,
+  type HistoryKind,
   type Protocol,
   type ResultType,
   type ServiceConfig,
   type ServicesFile,
 } from "../types";
 
-const SIDEBAR_MAIN = ["通用", "热键", "服务配置"];
+const SIDEBAR_MAIN = ["通用", "热键", "服务配置", "历史记录"];
 
-type Page = "general" | "hotkeys" | "services";
+type Page = "general" | "hotkeys" | "services" | "history";
 const SIDEBAR_PAGES: Record<string, Page> = {
   通用: "general",
   热键: "hotkeys",
   服务配置: "services",
+  历史记录: "history",
 };
 
 /** 已注册的全局热键，与 src-tauri/src/lib.rs 的 with_shortcuts 一一对应 */
@@ -44,11 +51,26 @@ const HOTKEYS: { name: string; key: string; desc: string }[] = [
 /** 未实现的入口收进「即将推出」分组并带里程碑锁标，不再平铺成一排空壳 */
 const SIDEBAR_SOON: { name: string; milestone: string }[] = [
   { name: "生词本", milestone: "M3" },
-  { name: "历史记录", milestone: "M4" },
   { name: "语音合成", milestone: "M4" },
   { name: "插件", milestone: "M5" },
 ];
 const SIDEBAR_TAIL = ["关于"];
+
+/** 历史时间显示成「今天 14:22」这种更好读的形式 */
+function formatTime(ms: number): string {
+  const d = new Date(ms);
+  const today = new Date();
+  const yesterday = new Date(today.getTime() - 86_400_000);
+  const day =
+    d.toDateString() === today.toDateString()
+      ? "今天"
+      : d.toDateString() === yesterday.toDateString()
+        ? "昨天"
+        : `${d.getMonth() + 1} 月 ${d.getDate()} 日`;
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mm = String(d.getMinutes()).padStart(2, "0");
+  return `${day} ${hh}:${mm}`;
+}
 
 function Toggle(props: { on: boolean; onClick: () => void }) {
   return (
@@ -79,6 +101,13 @@ export default function SettingsPage() {
   const [page, setPage] = useState<Page>("services");
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<ConnectionTest | null>(null);
+  const [history, setHistory] = useState<HistoryEntry[]>([]);
+  const [histQuery, setHistQuery] = useState("");
+  const [histKind, setHistKind] = useState<HistoryKind | "">("");
+  const [histId, setHistId] = useState<number | null>(null);
+
+  const selectedEntry =
+    history.find((h) => h.id === histId) ?? history[0] ?? null;
 
   const sortServices = (list: ServiceConfig[]) => [...list].sort((a, b) => a.order - b.order);
 
@@ -103,6 +132,45 @@ export default function SettingsPage() {
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  const loadHistory = useCallback(async () => {
+    try {
+      const rows = await listHistory({
+        query: histQuery,
+        kind: histKind || undefined,
+        limit: 200,
+      });
+      setHistory(rows);
+      setHistId((cur) => (rows.some((r) => r.id === cur) ? cur : (rows[0]?.id ?? null)));
+    } catch (e) {
+      setError(String(e));
+    }
+  }, [histQuery, histKind]);
+
+  useEffect(() => {
+    if (page === "history") void loadHistory();
+  }, [page, loadHistory]);
+
+  async function handleClearHistory() {
+    if (!window.confirm("清空全部翻译历史？此操作不可撤销。")) return;
+    try {
+      await clearHistory();
+      setHistory([]);
+      setHistId(null);
+      flash("历史已清空");
+    } catch (e) {
+      setError(String(e));
+    }
+  }
+
+  async function handleDeleteEntry(id: number) {
+    try {
+      await deleteHistory(id);
+      await loadHistory();
+    } catch (e) {
+      setError(String(e));
+    }
+  }
 
   // 选中变化：加载草稿 + 查询密钥状态（不取明文）
   useEffect(() => {
@@ -297,6 +365,117 @@ export default function SettingsPage() {
             <div className="thint">
               热键在应用启动时注册；被其他程序占用时会后台重试。想排查可查看
               %APPDATA%/com.suiyi.dev/debug.log。
+            </div>
+          </div>
+        )}
+
+        {page === "history" && (
+          <div className="card panel wide">
+            <div className="card-head">
+              <span className="hname">历史记录</span>
+              <span className="m">保留最近 2000 条</span>
+              <span style={{ flex: 1 }} />
+              <button className="btn mini" onClick={() => void loadHistory()}>
+                <Icon name="refresh" size="sm" />刷新
+              </button>
+              <button
+                className="btn danger mini"
+                disabled={history.length === 0}
+                onClick={() => void handleClearHistory()}
+              >
+                <Icon name="trash" size="sm" />清空
+              </button>
+            </div>
+
+            <div className="hist-tools">
+              <span className="search">
+                <Icon name="search" size="sm" />
+                <input
+                  className="inp"
+                  placeholder="搜索原文或译文…"
+                  value={histQuery}
+                  onChange={(e) => setHistQuery(e.target.value)}
+                />
+              </span>
+              <span className={`chip${histKind === "" ? " acc" : ""}`} onClick={() => setHistKind("")}>
+                全部
+              </span>
+              {(Object.keys(HISTORY_KIND_LABELS) as HistoryKind[]).map((k) => (
+                <span
+                  key={k}
+                  className={`chip${histKind === k ? " acc" : ""}`}
+                  onClick={() => setHistKind(k)}
+                >
+                  {HISTORY_KIND_LABELS[k]}
+                </span>
+              ))}
+            </div>
+
+            <div className="hist">
+              <div className="hist-list">
+                {history.length === 0 && (
+                  <div className="empty-hint">
+                    {histQuery || histKind ? "没有匹配的记录" : "还没有翻译记录"}
+                  </div>
+                )}
+                {history.map((h) => (
+                  <div
+                    key={h.id}
+                    className={`hrow${selectedEntry?.id === h.id ? " on" : ""}`}
+                    onClick={() => setHistId(h.id)}
+                  >
+                    <div className="hl1">
+                      <span className={`dot${h.ok ? "" : " err"}`} />
+                      <span className="t">{h.source}</span>
+                      <span className="chip mile mini">{HISTORY_KIND_LABELS[h.kind] ?? h.kind}</span>
+                      {h.serviceName && <span className="chip acc mini">{h.serviceName}</span>}
+                    </div>
+                    <div className="hl2">
+                      {h.translated || h.error || "—"} · {formatTime(h.createdAt)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="hist-detail">
+                {selectedEntry ? (
+                  <>
+                    <div className="lab">原文</div>
+                    <div className="card" style={{ padding: "10px 12px" }}>
+                      <div className="t-body">{selectedEntry.source}</div>
+                    </div>
+                    <div className="lab">
+                      译文{selectedEntry.serviceName ? ` · ${selectedEntry.serviceName}` : ""}
+                    </div>
+                    <div className="card" style={{ padding: "10px 12px" }}>
+                      <div className={selectedEntry.ok ? "t-body" : "t-body terr"}>
+                        {selectedEntry.translated || selectedEntry.error}
+                      </div>
+                    </div>
+                    <div className="hmeta">
+                      {formatTime(selectedEntry.createdAt)}
+                      {selectedEntry.ok && ` · ${(selectedEntry.elapsedMs / 1000).toFixed(1)}s`}
+                    </div>
+                    <div className="hact">
+                      <button
+                        className="btn primary mini"
+                        disabled={!selectedEntry.translated}
+                        onClick={() => void navigator.clipboard.writeText(selectedEntry.translated)}
+                      >
+                        <Icon name="copy" size="sm" />复制译文
+                      </button>
+                      <button
+                        className="btn mini"
+                        onClick={() => void handleDeleteEntry(selectedEntry.id)}
+                      >
+                        <Icon name="trash" size="sm" />删除这条
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <div className="empty-hint">← 选择左侧记录查看详情</div>
+                )}
+              </div>
             </div>
           </div>
         )}

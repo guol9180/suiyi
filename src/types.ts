@@ -56,6 +56,28 @@ export interface TranslateResult {
   dictionary?: DictionaryResult;
 }
 
+/** 翻译来源，用于历史归类 */
+export type HistoryKind = "selection" | "screenshot" | "manual" | "input";
+
+export interface HistoryEntry {
+  id: number;
+  createdAt: number;
+  kind: HistoryKind;
+  source: string;
+  translated: string;
+  serviceName: string;
+  elapsedMs: number;
+  ok: boolean;
+  error?: string;
+}
+
+export const HISTORY_KIND_LABELS: Record<HistoryKind, string> = {
+  selection: "划词",
+  screenshot: "截图",
+  manual: "手输",
+  input: "输入框",
+};
+
 export const DEFAULT_PROMPT =
   "你是专业翻译引擎。将{{from}}翻译为{{to}}，只输出译文：\n{{text}}";
 

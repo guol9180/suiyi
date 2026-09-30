@@ -71,7 +71,7 @@ pub fn trigger_selection_translate(app: AppHandle) {
         std::thread::sleep(Duration::from_millis(150));
         let _ = app.emit(
             "popup-set-source",
-            serde_json::json!({ "text": text, "autoTranslate": true }),
+            serde_json::json!({ "text": text, "autoTranslate": true, "kind": "selection" }),
         );
         log_line("emit: 已投递文本到弹窗");
     });

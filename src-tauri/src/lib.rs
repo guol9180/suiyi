@@ -1,5 +1,6 @@
 pub mod commands;
 pub mod config;
+pub mod history;
 pub mod keyring;
 pub mod screenshot;
 pub mod selection;
@@ -119,6 +120,9 @@ pub fn run() {
             commands::get_settings,
             commands::save_settings,
             commands::translate_text,
+            commands::list_history,
+            commands::delete_history,
+            commands::clear_history,
             commands::test_connection,
             writeback::replace_selection,
             speech::speak_text,

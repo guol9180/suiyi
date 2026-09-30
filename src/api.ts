@@ -1,6 +1,7 @@
 // Tauri 命令封装：前端所有后端调用只经过这里
 import { invoke } from "@tauri-apps/api/core";
 import type { GlobalSettings, ServiceConfig, ServicesFile } from "./types";
+import type { HistoryEntry, HistoryKind } from "./types";
 
 export function listServices(): Promise<ServicesFile> {
   return invoke("list_services");
@@ -64,4 +65,26 @@ export function speakText(text: string): Promise<void> {
 /** 停止当前朗读 */
 export function stopSpeaking(): Promise<void> {
   return invoke("stop_speaking");
+}
+
+export function listHistory(opts: {
+  query?: string;
+  kind?: HistoryKind;
+  limit?: number;
+  offset?: number;
+} = {}): Promise<HistoryEntry[]> {
+  return invoke("list_history", {
+    query: opts.query ?? null,
+    kind: opts.kind ?? null,
+    limit: opts.limit ?? 100,
+    offset: opts.offset ?? 0,
+  });
+}
+
+export function deleteHistory(id: number): Promise<void> {
+  return invoke("delete_history", { id });
+}
+
+export function clearHistory(): Promise<void> {
+  return invoke("clear_history");
 }

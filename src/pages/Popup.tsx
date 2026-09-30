@@ -10,6 +10,7 @@ import {
   TARGET_LANGS,
   swapLanguages,
   type DictionaryResult,
+  type HistoryKind,
   type ServiceConfig,
   type TranslateResult,
 } from "../types";
@@ -38,6 +39,8 @@ export default function PopupPage() {
   const [moreOpen, setMoreOpen] = useState(false);
   const [notice, setNotice] = useState("");
   const [replacing, setReplacing] = useState(false);
+  // 当前这轮文本的来源，历史归类用；用 ref 避免重建 doTranslate
+  const kindRef = useRef<HistoryKind>("selection");
 
   const refreshServices = useCallback(async () => {
     try {
@@ -64,7 +67,7 @@ export default function PopupPage() {
           try {
             const r = await invoke<TranslateResult>(
               "translate_text",
-              { serviceId: s.id, text: src, from, to },
+              { serviceId: s.id, text: src, from, to, kind: kindRef.current },
             );
             setCards((cs) =>
               cs.map((c) =>
@@ -93,15 +96,19 @@ export default function PopupPage() {
 
   // 主窗口（或未来的取词服务）投递选中文本
   useEffect(() => {
-    const un = listen<{ text: string; autoTranslate?: boolean }>("popup-set-source", (e) => {
-      setSource(e.payload.text);
-      setCards([]);
-      setNotice("");
-      if (e.payload.autoTranslate !== false) {
-        // 等服务列表就绪后自动翻译
-        window.setTimeout(() => void doTranslate(e.payload.text), 120);
-      }
-    });
+    const un = listen<{ text: string; autoTranslate?: boolean; kind?: HistoryKind }>(
+      "popup-set-source",
+      (e) => {
+        setSource(e.payload.text);
+        setCards([]);
+        setNotice("");
+        kindRef.current = e.payload.kind ?? "selection";
+        if (e.payload.autoTranslate !== false) {
+          // 等服务列表就绪后自动翻译
+          window.setTimeout(() => void doTranslate(e.payload.text), 120);
+        }
+      },
+    );
     return () => {
       void un.then((f) => f());
     };
@@ -113,6 +120,7 @@ export default function PopupPage() {
       "popup-writeback-fallback",
       (e) => {
         setSource(e.payload.original);
+        kindRef.current = "input";
         setCards([
           {
             id: "__writeback",
