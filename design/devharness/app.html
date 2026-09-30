@@ -175,6 +175,17 @@
           document.head.appendChild(st);
         }
 
+        // ?w=900&h=620：把应用钉在指定窗口尺寸里，用来复现真实窗口下的布局
+        var w = q.get("w");
+        var h = q.get("h");
+        if (w && h) {
+          var st2 = document.createElement("style");
+          st2.textContent =
+            "html,body{margin:0;padding:0;overflow:hidden;background:#fff}" +
+            "#root>.app-shell{width:" + w + "px;height:" + h + "px;overflow:hidden;border:1px solid #d33}";
+          document.head.appendChild(st2);
+        }
+
         var scr = document.createElement("script");
         scr.type = "module";
         scr.src = isPopup ? "/src/popup-main.tsx" : "/src/main.tsx";

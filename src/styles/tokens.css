@@ -1,69 +1,69 @@
 /*
  * 随译 SuiYi · 设计 token
- * 配色方向：墨与朱砂。界面主体是暖纸底 + 炭墨近黑，
- * 朱砂只出现在品牌图形、进度、选中标记这些落笔处，不做大面积填充。
- * 中性色一律用暖纸系，不掺蓝调。
+ * 配色方向：取自 DeepSeek 官网的设计 token。
+ * 底色是极浅的冷灰（#F5F6F7 / #F9FAFB）而不是纯白，
+ * 文字走他们的 neutral-bluish 色阶，唯一的彩色是品牌蓝 #3964FE。
  * 界面样式只引用这里的变量，不写魔法值。
  */
 
 :root {
-  /* 品牌与交互 */
-  --c-primary: #a8331f;          /* 品牌识别：logo、进度、选中标记（朱砂） */
-  --c-primary-strong: #191817;   /* 交互主色：主按钮、链接、选中（白字 16.4:1） */
-  --c-primary-hover: #33302d;
-  --c-primary-press: #0d0c0b;
-  --c-primary-soft: #f0ede7;
-  --c-primary-border: #dfdad1;
+  /* 品牌与交互：DeepSeek 的 deepseek-500 及其邻近档 */
+  --c-primary: #3964fe;          /* 品牌识别：logo、进度、选中标记 */
+  --c-primary-strong: #3964fe;   /* 交互主色：主按钮、链接（白字 4.7:1） */
+  --c-primary-hover: #2b52e0;    /* 悬停压深，保证白字仍然达标 */
+  --c-primary-press: #2445c4;
+  --c-primary-soft: #edf3fe;     /* deepseek-50 */
+  --c-primary-border: #d3e2ff;   /* deepseek-200 */
 
-  /* 中性色：暖纸系 */
-  --c-text: #191817;             /* 正文主色（白底 16.4:1） */
-  --c-text-2: #514e4a;           /* 次级文字（8.3:1） */
-  --c-text-3: #736f6a;           /* 弱文字，仅用于 12px 及以上（5.1:1） */
-  --c-caption: #6b6762;          /* 11px 小字标注（5.7:1） */
-  --c-icon: #a9a49d;             /* 图标与分隔线，不用于文字 */
+  /* 中性色：neutral-bluish 色阶 */
+  --c-text: #0f1115;             /* bluish-1000，白底 18.9:1 */
+  --c-text-2: #353638;           /* bluish-800，12.2:1 */
+  --c-text-3: #61666b;           /* bluish-700，5.8:1 */
+  --c-caption: #61666b;
+  --c-icon: #adb2b8;             /* bluish-400，只用于图标与分隔线 */
   --c-surface: #ffffff;
-  --c-surface-2: #fbfaf7;
-  --c-app-bg: #f3f1ec;
-  --c-side-bg: #f7f5f0;          /* 设置页侧边栏底 */
-  --c-border: #e7e3dc;
-  --c-border-strong: #d7d2c9;
-  --c-border-soft: #efebe4;
-  --c-border-hover: #ccc6bb;     /* 输入框与次要按钮的 hover 描边 */
-  --c-subtle-bg: #efece5;        /* 键帽、行内代码底 */
-  --c-muted-bg: #e9e5de;         /* 禁用与未开放的底色 */
-  --c-muted-ink: #8c8880;        /* 禁用与未开放的文字 */
-  --c-idle-dot: #cdc8c0;         /* 空闲圆点与开关关闭态 */
+  --c-surface-2: #f9fafb;        /* bluish-50 */
+  --c-app-bg: #f5f6f7;           /* bluish-60，应用底 */
+  --c-side-bg: #f9fafb;
+  --c-border: #e9ecf2;           /* bluish-150 */
+  --c-border-strong: #e1e5ee;    /* bluish-200 */
+  --c-border-soft: #ebeef2;      /* bluish-100 */
+  --c-border-hover: #cfd3d6;     /* bluish-300 */
+  --c-subtle-bg: #f1f3f5;        /* bluish-75 */
+  --c-muted-bg: #f5f6f7;
+  --c-muted-ink: #979da6;        /* bluish-500 */
+  --c-idle-dot: #cfd3d6;
 
   /* 语义色 */
   --c-success: #15803d;
   --c-success-bg: #ecfdf3;
   --c-success-border: #c6f1d6;
   --c-success-ink: #14603a;
-  --c-danger: #b03420;
-  --c-danger-bg: #fbf0ed;
-  --c-danger-border: #edcfc7;
-  --c-danger-ink: #932c1a;
-  --c-danger-hover-bg: #f7e4df;
+  --c-danger: #d92d20;
+  --c-danger-bg: #fef3f2;
+  --c-danger-border: #fecdca;
+  --c-danger-ink: #b42318;
+  --c-danger-hover-bg: #fee4e2;
   --c-warn: #9a6010;
   --c-warn-bg: #fbf3e2;
   --c-warn-border: #ecd9b4;
-  --c-info: #6a5a46;
-  --c-info-bg: #f5f1ea;
-  --c-info-border: #e5dcd0;
+  --c-info: #353638;
+  --c-info-bg: #f1f3f5;
+  --c-info-border: #e1e5ee;
   /* 里程碑与文档状态：中性暖灰，与运行时状态区分开 */
-  --c-mile: #6b6762;
-  --c-mile-bg: #f0ede7;
-  --c-mile-border: #ded9d1;
+  --c-mile: #61666b;
+  --c-mile-bg: #f1f3f5;
+  --c-mile-border: #e1e5ee;
   /* 原文覆盖与高亮标记 */
   --c-highlight: #ffde59;
   --c-highlight-text: #4a3b00;
 
   /* 深色区（截图与覆盖层） */
-  --c-dark-bg: #1c1917;
-  --c-dark-surface: #292524;
-  --c-dark-border: #44403c;
-  --c-dark-text: #e7e5e4;
-  --c-dark-text-2: #a8a29e;
+  --c-dark-bg: #0f1115;
+  --c-dark-surface: #1b1b1c;
+  --c-dark-border: #353638;
+  --c-dark-text: #ebeef2;
+  --c-dark-text-2: #adb2b8;
 
   /* 毛玻璃：只给浮在别的内容之上的表面用（划词弹窗、溢出菜单、覆盖层提示）。
      不透明度留在 0.82 以上，即使系统不支持模糊也不会影响可读性。 */
@@ -80,9 +80,9 @@
   --radius-lg: 8px;
   --radius-xl: 10px;
   --radius-pill: 999px;
-  --shadow-card: 0 10px 26px rgba(28, 25, 23, 0.10);
-  --shadow-pop: 0 14px 34px rgba(28, 25, 23, 0.20);
-  --shadow-float: 0 4px 14px rgba(28, 25, 23, 0.10);
+  --shadow-card: 0 10px 26px rgba(15, 17, 21, 0.08);
+  --shadow-pop: 0 14px 34px rgba(15, 17, 21, 0.18);
+  --shadow-float: 0 4px 14px rgba(15, 17, 21, 0.10);
 
   /* 字体 */
   --font-ui: "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif;

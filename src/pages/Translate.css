@@ -1,7 +1,7 @@
 /* S0.8 翻译页样式（对应设计稿①） */
 
 .translate-page {
-  max-width: 860px;
+  max-width: 980px;
   margin: 0 auto;
   padding: 18px;
   display: flex;

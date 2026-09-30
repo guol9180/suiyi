@@ -5,7 +5,8 @@
   height: 100%;
   min-height: 0;
   position: relative;
-  overflow: auto;
+  /* 只让右内容区滚动，侧边栏固定 */
+  overflow: hidden;
 }
 
 /* ---------- 侧边栏 ---------- */
@@ -49,8 +50,18 @@
   display: flex;
   gap: 14px;
   min-width: 0;
+  /* 窗口拉宽时不再把表单拉成 1300px，超过这个宽度就居中留白 */
+  max-width: 980px;
+  margin: 0 auto;
+  overflow: auto;
 }
-.list-col { width: 340px; flex: none; display: flex; flex-direction: column; }
+.list-col {
+  /* 窄窗口收窄、宽窗口停在 340px，不再固定死 */
+  width: clamp(268px, 34%, 340px);
+  flex: none;
+  display: flex;
+  flex-direction: column;
+}
 .form-col { flex: 1; min-width: 0; }
 
 /* ---------- 服务列表行 ---------- */
@@ -223,6 +234,8 @@ select.inp { appearance: auto; }
   min-width: 0;
   align-self: flex-start;
   max-width: 620px;
+  margin-left: auto;
+  margin-right: auto;
 }
 .hkrow {
   display: flex;
