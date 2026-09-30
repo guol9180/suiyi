@@ -109,6 +109,7 @@ pub fn run() {
             commands::get_settings,
             commands::save_settings,
             commands::translate_text,
+            commands::test_connection,
             screenshot::get_screenshot,
             screenshot::finish_region,
             screenshot::cancel_screenshot,

@@ -38,3 +38,15 @@ export function getSettings(): Promise<GlobalSettings> {
 export function saveSettings(settings: GlobalSettings): Promise<void> {
   return invoke("save_settings", { settings });
 }
+
+export interface ConnectionTest {
+  ok: boolean;
+  elapsedMs: number;
+  models: string[];
+  error: string | null;
+}
+
+/** 探测服务连通性：Key 是否有效、网关是否可达、模型是否可见 */
+export function testConnection(serviceId: string): Promise<ConnectionTest> {
+  return invoke("test_connection", { serviceId });
+}

@@ -10,7 +10,10 @@ import {
   saveService,
   saveSettings,
   setApiKey,
+  testConnection,
+  type ConnectionTest,
 } from "../api";
+import { Icon } from "../components/Icon";
 import {
   DEFAULT_PROMPT,
   EMPTY_SERVICE,
@@ -22,19 +25,27 @@ import {
   type ServicesFile,
 } from "../types";
 
-const SIDEBAR_ITEMS = [
-  "通用",
-  "热键",
-  "服务配置",
-  "生词本",
-  "语音合成",
-  "插件",
-  "历史记录",
-  "关于",
+const SIDEBAR_MAIN = ["通用", "热键", "服务配置"];
+/** 未实现的入口收进「即将推出」分组并带里程碑锁标，不再平铺成一排空壳 */
+const SIDEBAR_SOON: { name: string; milestone: string }[] = [
+  { name: "生词本", milestone: "M3" },
+  { name: "历史记录", milestone: "M4" },
+  { name: "语音合成", milestone: "M4" },
+  { name: "插件", milestone: "M5" },
 ];
+const SIDEBAR_TAIL = ["关于"];
 
 function Toggle(props: { on: boolean; onClick: () => void }) {
-  return <button type="button" className={`tgl${props.on ? "" : " off"}`} onClick={props.onClick} aria-label="toggle" />;
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={props.on}
+      className="tgl"
+      onClick={props.onClick}
+      aria-label="启用开关"
+    />
+  );
 }
 
 export default function SettingsPage() {
@@ -46,6 +57,8 @@ export default function SettingsPage() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [settings, setSettings] = useState({ concurrency: 2, timeoutSecs: 15 });
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<ConnectionTest | null>(null);
 
   const sortServices = (list: ServiceConfig[]) => [...list].sort((a, b) => a.order - b.order);
 
@@ -80,6 +93,7 @@ export default function SettingsPage() {
     }
     setDraft({ ...s });
     setApiKeyInput("");
+    setTestResult(null);
     void getApiKey(s.id, true)
       .then((v) => setHasKey(v !== null))
       .catch(() => setHasKey(false));
@@ -108,6 +122,20 @@ export default function SettingsPage() {
       flash("已保存");
     } catch (e) {
       setError(String(e));
+    }
+  }
+
+  /** 探测服务连通性：确认 Key、网关与模型三件事 */
+  async function handleTest() {
+    if (!draft?.id) return;
+    setTesting(true);
+    setTestResult(null);
+    try {
+      setTestResult(await testConnection(draft.id));
+    } catch (e) {
+      setTestResult({ ok: false, elapsedMs: 0, models: [], error: String(e) });
+    } finally {
+      setTesting(false);
     }
   }
 
@@ -170,15 +198,24 @@ export default function SettingsPage() {
     <div className="set-body">
       {/* ---------- 侧边栏 ---------- */}
       <aside className="side">
-        {SIDEBAR_ITEMS.map((item) => (
+        {SIDEBAR_MAIN.map((item) => (
           <div
             key={item}
             className={`side-item${item === "服务配置" ? " on" : ""}`}
             title={item === "服务配置" ? undefined : "后续里程碑开放"}
-            style={item === "服务配置" ? undefined : { opacity: 0.55 }}
           >
             {item}
           </div>
+        ))}
+        <div className="side-group">即将推出</div>
+        {SIDEBAR_SOON.map(({ name, milestone }) => (
+          <div key={name} className="side-item soon" title={`${milestone} 里程碑开放`}>
+            {name}
+            <span className="lk"><Icon name="lock" size="sm" />{milestone}</span>
+          </div>
+        ))}
+        {SIDEBAR_TAIL.map((item) => (
+          <div key={item} className="side-item">{item}</div>
         ))}
         <div className="side-foot">
           随译 v0.1.0 (dev)
@@ -193,7 +230,7 @@ export default function SettingsPage() {
         <div className="card list-col">
           <div className="card-head">
             <b>翻译服务</b>
-            <span className="m">▲▼ 调整顺序</span>
+            <span className="m">上下调整顺序</span>
             <span style={{ flex: 1 }} />
             <button
               className="btn primary mini"
@@ -204,15 +241,15 @@ export default function SettingsPage() {
                 setHasKey(false);
               }}
             >
-              ＋ 添加服务
+              <Icon name="plus" size="sm" />添加服务
             </button>
           </div>
 
           {services.map((s) => (
             <div key={s.id} className={`svc${draft?.id === s.id ? " on" : ""}`}>
               <span className="arrows">
-                <button className="mini-as-link" onClick={() => void move(s, -1)} title="上移">▲</button>
-                <button className="mini-as-link" onClick={() => void move(s, 1)} title="下移">▼</button>
+                <button className="mini-as-link" onClick={() => void move(s, -1)} title="上移"><Icon name="chev-up" size="sm" /></button>
+                <button className="mini-as-link" onClick={() => void move(s, 1)} title="下移"><Icon name="chev-down" size="sm" /></button>
               </span>
               <Toggle on={s.enabled} onClick={() => void toggleEnabled(s)} />
               <span className="svc-name">
@@ -231,10 +268,11 @@ export default function SettingsPage() {
             </div>
           ))}
           {services.length === 0 && (
-            <div className="empty-hint">还没有服务，点右上角「＋ 添加服务」开始配置。</div>
+            <div className="empty-hint">还没有服务，点右上角的「添加服务」开始配置。</div>
           )}
 
           <div className="fallback">
+            <div className="fallback-head">性能与回退</div>
             <div className="row2" style={{ alignItems: "center" }}>
               <label className="g-label">
                 并发数
@@ -261,7 +299,7 @@ export default function SettingsPage() {
                 />
               </label>
             </div>
-            ↳ 失败自动沿启用顺序回退；OCR / 语音服务在后续里程碑开放
+            失败按启用顺序回退到下一条，并发上限 8。单服务模式在通用设置中切换。
           </div>
         </div>
 
@@ -310,7 +348,9 @@ export default function SettingsPage() {
                 <label>
                   API Key（仅存于系统凭据管理器，不入配置文件）
                   <span className="key-state">
-                    {hasKey ? <span className="chip ok">已保存 ✓</span> : <span className="chip">未设置</span>}
+                    {hasKey
+                      ? <span className="chip ok"><Icon name="check" size="sm" />已保存</span>
+                      : <span className="chip">未设置</span>}
                   </span>
                 </label>
                 <div className="keyrow">
@@ -323,6 +363,37 @@ export default function SettingsPage() {
                 </div>
               </div>
 
+              {/* 测试连接：Key 是否有效、网关是否可达、模型是否可见 */}
+              <div className="testbox">
+                <div className="trow">
+                  <button
+                    className="btn mini"
+                    disabled={testing || !draft.id || !draft.baseUrl.trim()}
+                    onClick={() => void handleTest()}
+                  >
+                    <Icon name="bolt" size="sm" />{testing ? "测试中" : "测试连接"}
+                  </button>
+                  {testing && <span className="spin" />}
+                  {testResult?.ok && (
+                    <>
+                      <span className="chip ok"><Icon name="check" size="sm" />连接正常</span>
+                      <span className="chip mile">{testResult.elapsedMs}ms</span>
+                      <span className="t-cap">
+                        {testResult.models.length === 0
+                          ? "服务未返回模型列表"
+                          : testResult.models.includes(draft.model)
+                            ? `模型 ${draft.model} 可用`
+                            : `返回 ${testResult.models.length} 个模型，未包含 ${draft.model}`}
+                      </span>
+                    </>
+                  )}
+                </div>
+                {testResult && !testResult.ok && testResult.error && (
+                  <div className="terr"><Icon name="alert" size="sm" />{testResult.error}</div>
+                )}
+                {!draft.id && <div className="thint">先保存服务，再测试连接</div>}
+              </div>
+
               <div className="row2">
                 <div className="f">
                   <label>模型（可手填）</label>
@@ -330,7 +401,7 @@ export default function SettingsPage() {
                     onChange={(e) => setDraft({ ...draft, model: e.target.value })}
                     placeholder="deepseek-chat" />
                 </div>
-                <div className="f" style={{ flex: "0 0 44%" }}>
+                <div className="f" style={{ flex: "0 0 50%" }}>
                   <label>结果类型</label>
                   <div className="seg">
                     {(["text", "dictionary"] as ResultType[]).map((t) => (
@@ -365,7 +436,7 @@ export default function SettingsPage() {
 
               <div className="form-foot">
                 <button className="btn primary" onClick={() => void handleSave()}>保存修改</button>
-                <span className="sec-note">🔒 密钥仅存于 Windows 凭据管理器</span>
+                <span className="sec-note"><Icon name="lock" size="sm" />密钥仅存于 Windows 凭据管理器</span>
               </div>
             </>
           )}

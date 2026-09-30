@@ -37,14 +37,14 @@
   margin-top: auto;
   padding: 10px 11px;
   font-size: 10.5px;
-  color: var(--c-text-muted);
+  color: var(--c-caption);
   line-height: 1.7;
 }
 
 /* ---------- 主区两栏 ---------- */
 .main {
   flex: 1;
-  background: var(--c-bg);
+  background: var(--c-app-bg);
   padding: 16px;
   display: flex;
   gap: 14px;
@@ -77,7 +77,7 @@
 .mini-as-link:hover { color: var(--c-primary); }
 .svc-name { flex: 1; min-width: 0; }
 .svc-name b { font-size: 13px; display: block; }
-.svc-name span { font-size: 11px; color: var(--c-text-muted); }
+.svc-name span { font-size: 11.5px; color: var(--c-caption); }
 
 /* ---------- 列表底部全局设置 ---------- */
 .fallback {
@@ -110,9 +110,9 @@
   padding-top: 12px;
   border-top: 1px solid #eef2f7;
 }
-.sec-note { margin-left: auto; font-size: 10.5px; color: var(--c-text-muted); }
+.sec-note { margin-left: auto; font-size: 11px; color: var(--c-caption); }
 .empty-hint {
-  color: var(--c-text-muted);
+  color: var(--c-caption);
   font-size: 12.5px;
   padding: 28px 8px;
   text-align: center;
@@ -142,3 +142,60 @@ select.inp { appearance: auto; }
   color: var(--c-danger);
   border: 1px solid var(--c-danger-border);
 }
+
+/* ---------- 侧边栏分组与未实现项 ---------- */
+.side-group {
+  margin: 14px 10px 6px;
+  font-size: 11px;
+  color: var(--c-caption);
+}
+.side-item.soon {
+  color: #6b7a92;
+  cursor: not-allowed;
+}
+.side-item.soon:hover { background: #f1f4f9; }
+.side-item.soon .lk {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10.5px;
+  color: #9aa7bc;
+}
+
+/* ---------- 性能与回退分组 ---------- */
+.fallback-head {
+  font-size: 11.5px;
+  color: var(--c-caption);
+  margin-bottom: 9px;
+}
+
+/* ---------- 测试连接 ---------- */
+.testbox {
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-md);
+  padding: 11px 12px;
+  background: var(--c-surface-2);
+  margin-bottom: 11px;
+}
+.trow { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
+.spin {
+  width: 13px;
+  height: 13px;
+  border: 2px solid var(--c-primary-border);
+  border-top-color: var(--c-primary-strong);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  flex: none;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.terr {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  font-size: 11.5px;
+  line-height: 1.7;
+  color: #9f1f1f;
+}
+.thint { margin-top: 6px; font-size: 11px; color: var(--c-caption); }

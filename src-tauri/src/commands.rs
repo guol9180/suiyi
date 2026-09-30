@@ -171,3 +171,124 @@ pub async fn translate_text(
         elapsed_ms,
     })
 }
+
+/// 测试连接的结果。字段可直接展示给用户，不含密钥。
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConnectionTest {
+    pub ok: bool,
+    pub elapsed_ms: u64,
+    /// 成功时返回的模型 id 列表（服务未提供则为空）
+    pub models: Vec<String>,
+    /// 失败原因
+    pub error: Option<String>,
+}
+
+/// 探测服务连通性：请求 `{baseUrl}/models`，回答三件事——
+/// Key 是否有效、网关是否可达、模型是否在权限范围内。
+#[tauri::command]
+pub async fn test_connection(
+    app: tauri::AppHandle,
+    service_id: String,
+) -> Result<ConnectionTest, String> {
+    let file = load_services(&config_dir(&app)?)?;
+    let svc = file
+        .services
+        .iter()
+        .find(|s| s.id == service_id)
+        .ok_or_else(|| format!("服务不存在: {service_id}"))?;
+
+    let fail = |ms: u64, msg: String| ConnectionTest {
+        ok: false,
+        elapsed_ms: ms,
+        models: Vec::new(),
+        error: Some(msg),
+    };
+
+    if svc.base_url.trim().is_empty() {
+        return Ok(fail(0, "请先填写 Base URL".into()));
+    }
+    let Some(key) = keyring::get_api_key(&service_id)? else {
+        return Ok(fail(0, "请先设置 API Key".into()));
+    };
+
+    let url = format!("{}/models", svc.base_url.trim_end_matches('/'));
+    let timeout = Duration::from_secs(file.timeout_secs.clamp(3, 120).min(15));
+    let client = reqwest::Client::new();
+    let started = std::time::Instant::now();
+    let resp = tokio::time::timeout(
+        timeout,
+        client
+            .get(&url)
+            .header("Authorization", format!("Bearer {key}"))
+            .send(),
+    )
+    .await;
+    let elapsed_ms = started.elapsed().as_millis() as u64;
+
+    match resp {
+        Err(_) => Ok(fail(
+            elapsed_ms,
+            format!("连接超时（{}s）", timeout.as_secs()),
+        )),
+        Ok(Err(e)) => Ok(fail(elapsed_ms, format!("连接失败: {e}"))),
+        Ok(Ok(r)) => {
+            let status = r.status();
+            let body = r.text().await.unwrap_or_default();
+            if !status.is_success() {
+                let short: String = body.chars().take(200).collect();
+                return Ok(fail(elapsed_ms, format!("服务返回 {status}: {short}")));
+            }
+            Ok(ConnectionTest {
+                ok: true,
+                elapsed_ms,
+                models: parse_model_ids(&body),
+                error: None,
+            })
+        }
+    }
+}
+
+/// 从 /models 响应里挑出模型 id，兼容 `data[].id`、`models[].slug`、`models[].id`
+fn parse_model_ids(body: &str) -> Vec<String> {
+    let Ok(v) = serde_json::from_str::<serde_json::Value>(body) else {
+        return Vec::new();
+    };
+    for key in ["data", "models"] {
+        if let Some(arr) = v[key].as_array() {
+            let ids: Vec<String> = arr
+                .iter()
+                .filter_map(|m| {
+                    ["id", "slug", "name"]
+                        .iter()
+                        .find_map(|k| m[*k].as_str())
+                        .map(String::from)
+                })
+                .collect();
+            if !ids.is_empty() {
+                return ids;
+            }
+        }
+    }
+    Vec::new()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_model_ids;
+
+    #[test]
+    fn parses_openai_and_zai_model_shapes() {
+        let openai = r#"{"object":"list","data":[{"id":"gpt-4o"},{"id":"gpt-4o-mini"}]}"#;
+        assert_eq!(parse_model_ids(openai), vec!["gpt-4o", "gpt-4o-mini"]);
+
+        let zai = r#"{"models":[{"slug":"glm-5.3-flash"},{"slug":"glm-4-flash"}]}"#;
+        assert_eq!(parse_model_ids(zai), vec!["glm-5.3-flash", "glm-4-flash"]);
+    }
+
+    #[test]
+    fn tolerates_unexpected_bodies() {
+        assert!(parse_model_ids("not json").is_empty());
+        assert!(parse_model_ids("{}").is_empty());
+    }
+}
