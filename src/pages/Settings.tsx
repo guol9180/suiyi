@@ -1,5 +1,5 @@
 // S0.6 设置页：服务配置（对应设计稿④）
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import "./Settings.css";
 import {
   ankiStatus,
@@ -25,6 +25,7 @@ import {
   type HotkeyStatus,
 } from "../api";
 import { Icon } from "../components/Icon";
+import { getVersion, lastOf, statusCodeOf, subscribe } from "../lastResult";
 import {
   DEFAULT_PROMPT,
   EMPTY_SERVICE,
@@ -183,6 +184,9 @@ export default function SettingsPage() {
   useEffect(() => {
     if (page === "hotkeys") void loadHotkeys();
   }, [page, loadHotkeys]);
+
+  // 翻译页会把每个服务最近一次结果写进 lastResult，这里跟着刷新
+  useSyncExternalStore(subscribe, getVersion);
 
   const loadPlugins = useCallback(async () => {
     try {
@@ -725,7 +729,15 @@ export default function SettingsPage() {
           </div>
 
           {services.map((s) => (
-            <div key={s.id} className={`svc${draft?.id === s.id ? " on" : ""}`}>
+            // 整行可点即选中编辑，不必每行再挂一个「编辑」按钮
+            <div
+              key={s.id}
+              className={`svc${draft?.id === s.id ? " on" : ""}`}
+              onClick={() => {
+                setDraft({ ...s });
+                setSelectedId(s.id);
+              }}
+            >
               <span className="arrows">
                 {!s.pluginId && (
                   <>
@@ -737,21 +749,21 @@ export default function SettingsPage() {
               <Toggle on={s.enabled} onClick={() => void toggleEnabled(s)} />
               <span className="svc-name">
                 <b>{s.name || "未命名服务"}</b>
-                  <span title={serviceMeta(s)}>{serviceMeta(s)}</span>
+                  <span className="meta">
+                    <span className="model" title={serviceMeta(s)}>{serviceMeta(s)}</span>
+                    {(() => {
+                      const last = lastOf(s.id);
+                      if (last && !last.ok) {
+                        const code = statusCodeOf(last.error);
+                        return (
+                          <span className="chip err mini">上次失败{code ? ` ${code}` : ""}</span>
+                        );
+                      }
+                      return s.enabled ? <span className="chip ok mini">已启用</span> : null;
+                    })()}
+                  </span>
               </span>
-              {s.pluginId ? (
-                <span className="chip acc mini">插件</span>
-              ) : (
-                <button
-                  className="btn mini"
-                  onClick={() => {
-                    setDraft({ ...s });
-                    setSelectedId(s.id);
-                  }}
-                >
-                  编辑
-                </button>
-              )}
+              {s.pluginId && <span className="chip acc mini">插件</span>}
             </div>
           ))}
           {services.length === 0 && (
@@ -833,7 +845,7 @@ export default function SettingsPage() {
 
               <div className="f">
                 <label>
-                  API Key（仅存于系统凭据管理器，不入配置文件）
+                  API Key（仅存于系统凭据管理器）
                   <span className="key-state">
                     {hasKey
                       ? <span className="chip ok"><Icon name="check" size="sm" />已保存</span>

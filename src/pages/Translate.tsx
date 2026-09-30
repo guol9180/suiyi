@@ -4,6 +4,7 @@ import { emit, listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { listServices } from "../api";
+import { recordResult } from "../lastResult";
 import {
   SOURCE_LANGS,
   TARGET_LANGS,
@@ -115,6 +116,7 @@ export default function TranslatePage() {
             "translate_text",
             { serviceId: s.id, text, from, to, kind: "manual" },
           );
+          recordResult(s.id, { ok: true, at: Date.now() });
           setCards((cs) =>
             cs.map((c) =>
               c.id === s.id
@@ -129,8 +131,10 @@ export default function TranslatePage() {
             ),
           );
         } catch (e) {
+          const msg = errText(e);
+          recordResult(s.id, { ok: false, error: msg, at: Date.now() });
           setCards((cs) =>
-            cs.map((c) => (c.id === s.id ? { ...c, status: "error", error: errText(e) } : c)),
+            cs.map((c) => (c.id === s.id ? { ...c, status: "error", error: msg } : c)),
           );
         }
       }),
@@ -156,6 +160,7 @@ export default function TranslatePage() {
           to,
           kind: "manual",
         });
+        recordResult(s.id, { ok: true, at: Date.now() });
         setCards((cs) =>
           cs.map((c) =>
             c.id === serviceId
@@ -164,10 +169,10 @@ export default function TranslatePage() {
           ),
         );
       } catch (e) {
+        const msg = errText(e);
+        recordResult(serviceId, { ok: false, error: msg, at: Date.now() });
         setCards((cs) =>
-          cs.map((c) =>
-            c.id === serviceId ? { ...c, status: "error" as const, error: errText(e) } : c,
-          ),
+          cs.map((c) => (c.id === serviceId ? { ...c, status: "error" as const, error: msg } : c)),
         );
       }
     },
@@ -234,12 +239,6 @@ export default function TranslatePage() {
       <div className="actions">
         <button className="btn primary" disabled={busy || !text.trim()} onClick={() => void doTranslate()}>
           {busy ? "翻译中…" : "翻 译"}
-        </button>
-        <button
-          className="btn"
-          onClick={() => void openTranslatePopup(text.trim() || "The quick brown fox jumps over the lazy dog.")}
-        >
-          弹窗预览
         </button>
         <button className="btn" onClick={() => void invoke("start_screenshot").catch(console.error)}>
           <Icon name="frame" size="sm" />截图识别

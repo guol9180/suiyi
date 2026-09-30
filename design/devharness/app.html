@@ -130,6 +130,30 @@
             return;
           }
 
+          // 先跑一轮会失败的翻译，再切到设置页，用来看服务行的「上次失败」标记
+          if (q.get("demo") === "failservices") {
+            setTimeout(function () {
+              var ta = document.querySelector("textarea");
+              if (!ta) return;
+              var setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value").set;
+              setter.call(ta, "The quick brown fox jumps over the lazy dog.");
+              ta.dispatchEvent(new Event("input", { bubbles: true }));
+              setTimeout(function () {
+                var btn = document.querySelector(".actions .btn.primary");
+                if (btn) btn.click();
+                setTimeout(function () {
+                  var tab = document.querySelectorAll(".tabbar button")[1];
+                  if (tab) tab.click();
+                  setTimeout(function () {
+                    var item = byText(".side-item", "服务配置");
+                    if (item) item.click();
+                  }, 250);
+                }, 1200);
+              }, 600);
+            }, 500);
+            return;
+          }
+
           var want = (location.hash || "").replace("#", "");
           if (!want) return;
           var SIDE = { general: "通用", hotkey: "热键", services: "服务配置", history: "历史记录", plugins: "插件", about: "关于" };

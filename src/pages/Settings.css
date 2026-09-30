@@ -50,7 +50,7 @@
   gap: 14px;
   min-width: 0;
 }
-.list-col { width: 320px; flex: none; display: flex; flex-direction: column; }
+.list-col { width: 340px; flex: none; display: flex; flex-direction: column; }
 .form-col { flex: 1; min-width: 0; }
 
 /* ---------- 服务列表行 ---------- */
@@ -62,7 +62,9 @@
   border: 1.5px solid transparent;
   border-radius: 9px;
   margin-bottom: 4px;
+  cursor: pointer;
 }
+.svc:hover { background: var(--c-surface-2); }
 .svc.on { border-color: var(--c-primary-border); background: var(--c-primary-soft); }
 .arrows { display: flex; flex-direction: column; }
 /* 上下移动：原来只有 9px 文字高，基本点不中，这里给足点击区 */
@@ -84,9 +86,11 @@
 .svc-name { flex: 1; min-width: 0; }
 .svc-name b { font-size: var(--fs-body); display: block; }
 .svc-name span {
-  display: block;
   font-size: var(--fs-sec);
   color: var(--c-caption);
+}
+.svc-name .meta { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.svc-name .model {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
