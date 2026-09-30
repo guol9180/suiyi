@@ -148,7 +148,7 @@ fn capture_selection() -> Option<String> {
 }
 
 /// 确保弹窗存在并定位到光标附近（越界时往屏幕内收）
-fn ensure_popup_at_cursor(app: &AppHandle) -> Result<(), String> {
+pub(crate) fn ensure_popup_at_cursor(app: &AppHandle) -> Result<(), String> {
     let cursor = app.cursor_position().map_err(|e| e.to_string())?;
     let (mut px, mut py) = (cursor.x + 14.0, cursor.y + 14.0);
 

@@ -88,11 +88,15 @@ export default function PopupPage() {
     };
   }, [doTranslate]);
 
-  // Esc 关闭（隐藏窗口，保留内容）；失焦自动隐藏（固定时除外）
+  // Esc 关闭（隐藏窗口，保留内容）；失焦自动隐藏（固定/翻译中除外，延迟复核焦点）
   const pinnedRef = useRef(false);
+  const busyRef = useRef(false);
   useEffect(() => {
     pinnedRef.current = pinned;
   }, [pinned]);
+  useEffect(() => {
+    busyRef.current = busy;
+  }, [busy]);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
@@ -100,9 +104,11 @@ export default function PopupPage() {
       }
     };
     const onBlur = () => {
-      if (!pinnedRef.current) {
-        void getCurrentWindow().hide();
-      }
+      window.setTimeout(() => {
+        if (!pinnedRef.current && !busyRef.current && !document.hasFocus()) {
+          void getCurrentWindow().hide();
+        }
+      }, 350);
     };
     window.addEventListener("keydown", onKey);
     window.addEventListener("blur", onBlur);

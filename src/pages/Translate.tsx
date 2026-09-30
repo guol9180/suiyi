@@ -170,6 +170,9 @@ export default function TranslatePage() {
         >
           弹窗预览
         </button>
+        <button className="btn" onClick={() => void invoke("start_screenshot").catch(console.error)}>
+          截图识别
+        </button>
         <span className="muted">流式输出 · 多服务并发对比 · Ctrl+Enter 翻译</span>
       </div>
 

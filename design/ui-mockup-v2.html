@@ -1,0 +1,1471 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>随译 SuiYi · 全量 UI 设计稿 v0.4（优化版）</title>
+<style>
+/* ==========================================================================
+   随译 SuiYi · v0.4 优化版设计稿
+   单文件 / 零依赖 / 无外部资源 / 断网可开。
+   本稿是提案：不改动在研代码，配色与字阶是否迁入 src/styles/tokens.css 由人工决定。
+   基线：design/ui-mockup.html (v0.3) 的 6 个区块与信息架构保持不变。
+   ========================================================================== */
+
+:root{
+  /* ---- 品牌 ---- */
+  --c-primary:#4C6FFF;          /* 品牌识别色：logo / 进度 / 装饰 */
+  --c-primary-strong:#3B5BFF;   /* 交互主色：主按钮 / 链接 / 选中（白字 5.1:1） */
+  --c-primary-hover:#2F49E0;
+  --c-primary-soft:#EEF2FF;
+  --c-primary-border:#D6DEFF;
+
+  /* ---- 中性 ---- */
+  --c-text:#0F172A;             /* 正文主色（白底 17.9:1） */
+  --c-text-2:#475569;           /* 次级文字（7.6:1） */
+  --c-text-3:#64748B;           /* 弱文字，仅 ≥12px（白底 4.8:1 / 应用底 4.5:1） */
+  --c-caption:#5C6B80;          /* 11px 极小标注（应用底 5.1:1） */
+  --c-icon:#94A3B8;             /* 仅图标与分隔线，不再用于任何文字 */
+  --c-surface:#FFFFFF;
+  --c-surface-2:#FBFCFE;
+  --c-app-bg:#F6F8FB;
+  --c-board-bg:#E7ECF4;
+  --c-border:#E2E8F0;
+  --c-border-strong:#D9E0EC;
+  --c-border-soft:#EDF1F7;
+
+  /* ---- 语义 ---- */
+  --c-success:#15803D; --c-success-bg:#ECFDF3; --c-success-border:#C6F1D6;
+  --c-warn:#B45309;    --c-warn-bg:#FFF7E6;    --c-warn-border:#FDE1B9;
+  --c-danger:#DC2626;  --c-danger-bg:#FFF7F7;  --c-danger-border:#F3C7C7;
+  --c-info:#0369A1;    --c-info-bg:#F0F9FF;    --c-info-border:#BAE6FD;
+  /* 里程碑/文档状态：中性灰蓝，与运行时状态彻底分开 */
+  --c-mile:#52607A;    --c-mile-bg:#EEF1F6;    --c-mile-border:#DFE5EE;
+  --c-highlight:#FFDE59; --c-highlight-text:#4A3B00;   /* 原文覆盖 / 高亮标记 */
+
+  /* ---- 深色区（截图 / 覆盖层） ---- */
+  --c-dark-bg:#0F1626; --c-dark-surface:#18213A; --c-dark-border:#2A3651;
+  --c-dark-text:#E2E8F0; --c-dark-text-2:#B6C2D6;
+
+  /* ---- 形状 ---- */
+  --radius-sm:6px; --radius-md:8px; --radius-lg:11px; --radius-xl:14px; --radius-pill:999px;
+  --shadow-card:0 12px 32px rgba(15,23,42,.10);
+  --shadow-pop:0 16px 40px rgba(15,23,42,.22);
+  --shadow-primary:0 3px 8px rgba(59,91,255,.30);
+  --shadow-float:0 6px 18px rgba(15,23,42,.10);
+
+  /* ---- 字体 ---- */
+  --font-ui:"Segoe UI","Microsoft YaHei","PingFang SC",sans-serif;
+  --font-mono:Consolas,"Microsoft YaHei",monospace;
+
+  /* ---- 间距（4px 基准） ---- */
+  --sp-1:4px; --sp-2:8px; --sp-3:12px; --sp-4:16px; --sp-6:24px; --sp-8:32px;
+
+  /* ---- 组件高度 ---- */
+  --h-btn:30px; --h-btn-mini:26px; --h-inp:32px; --h-row:44px;
+}
+
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--c-board-bg);color:var(--c-text);font-family:var(--font-ui);font-size:13px;line-height:1.75;-webkit-font-smoothing:antialiased}
+:focus-visible{outline:2px solid var(--c-primary-strong);outline-offset:2px;border-radius:4px}
+@media (prefers-reduced-motion:reduce){
+  *{transition:none!important;animation:none!important}
+  html{scroll-behavior:auto}
+}
+
+/* ============================== 版式骨架 ============================== */
+.nav{position:sticky;top:0;z-index:50;display:flex;flex-wrap:wrap;align-items:center;gap:6px;
+  padding:9px 40px;background:rgba(231,236,244,.93);border-bottom:1px solid #D8E0EC;backdrop-filter:blur(8px)}
+.nav .navlab{font-size:11.5px;color:var(--c-caption);margin-right:2px}
+.nav a{font-size:12px;color:var(--c-text-2);text-decoration:none;padding:4px 10px;border-radius:var(--radius-pill);border:1px solid transparent}
+.nav a:hover{background:#fff;border-color:var(--c-border);color:var(--c-text)}
+
+.board{max-width:1360px;margin:0 auto;padding:28px 40px 64px}
+.sec{scroll-margin-top:64px}
+
+.top{display:flex;justify-content:space-between;align-items:flex-start;gap:24px;flex-wrap:wrap}
+.top h1{font-size:23px;font-weight:600;display:flex;align-items:center;gap:11px;letter-spacing:.3px}
+.logo{width:32px;height:32px;border-radius:9px;background:linear-gradient(135deg,#4C6FFF,#8A5CFF);color:#fff;
+  display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;flex:none}
+.ver{font-size:11px;color:var(--c-primary-strong);background:var(--c-primary-soft);border:1px solid var(--c-primary-border);
+  padding:2px 9px;border-radius:var(--radius-pill)}
+.sub{margin-top:9px;font-size:12.5px;color:var(--c-text-3)}
+.stack{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap}
+.stack span{font-size:11px;color:var(--c-text-2);background:#fff;border:1px solid var(--c-border);padding:2px 9px;border-radius:var(--radius-sm)}
+.palette{display:flex;gap:8px;flex-wrap:wrap}
+.sw{width:96px}
+.sw i{display:block;height:34px;border-radius:8px;border:1px solid rgba(15,23,42,.08)}
+.sw em{font-style:normal;display:block;font-size:10.5px;color:var(--c-caption);margin-top:4px;line-height:1.5}
+.sw em b{display:block;font-size:11px;color:var(--c-text-2);font-weight:600}
+
+.sec-head{display:flex;align-items:center;gap:10px;margin:var(--sp-8) 0 var(--sp-3);flex-wrap:wrap}
+.idx{width:22px;height:22px;border-radius:50%;background:var(--c-primary-strong);color:#fff;font-size:12px;font-weight:700;
+  display:flex;align-items:center;justify-content:center;flex:none}
+.sec-head h2{font-size:16.5px;font-weight:600}
+.sec-head .lead{font-size:12px;color:var(--c-text-3)}
+.stage{background:linear-gradient(180deg,#F7F9FC,#F0F4FA);border:1px dashed #C7D2E3;border-radius:var(--radius-xl);padding:var(--sp-6)}
+.stage.dark{background:var(--c-dark-bg);border:1px solid var(--c-dark-border);padding:20px}
+.note{margin-top:10px;font-size:12px;color:var(--c-text-3);line-height:1.85}
+.note b{color:#334155}
+.note code{font-family:var(--font-mono);font-size:11.5px;background:var(--c-mile-bg);border-radius:4px;padding:1px 5px;color:#3C4A60}
+.note .tag{display:inline-block;font-size:11px;color:var(--c-mile);background:var(--c-mile-bg);border:1px solid var(--c-mile-border);
+  border-radius:var(--radius-sm);padding:0 6px;margin-right:6px}
+
+/* ============================== 字阶（6 级，最小 11px） ============================== */
+.t-display{font-size:17px;font-weight:600;letter-spacing:.2px}
+.t-title{font-size:15px;font-weight:600}
+.t-sub{font-size:13.5px;font-weight:600}
+.t-body{font-size:13px;line-height:1.75}
+.t-sec{font-size:12px;line-height:1.7;color:var(--c-text-2)}
+.t-cap{font-size:11px;font-weight:500;line-height:1.6;color:var(--c-caption)}
+
+/* ============================== 组件 ============================== */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:var(--h-btn);padding:0 13px;
+  border-radius:var(--radius-md);border:1px solid var(--c-border-strong);background:var(--c-surface);color:var(--c-text-2);
+  font-family:inherit;font-size:12.5px;cursor:pointer;white-space:nowrap;
+  transition:background .15s,border-color .15s,color .15s}
+.btn:hover{background:var(--c-app-bg);border-color:#C6D2E4;color:var(--c-text)}
+.btn:active{background:#E9EEF6}
+.btn.primary{background:var(--c-primary-strong);border-color:var(--c-primary-strong);color:#fff;box-shadow:var(--shadow-primary)}
+.btn.primary:hover{background:var(--c-primary-hover);border-color:var(--c-primary-hover);color:#fff}
+.btn.primary:active{background:#2740C8;border-color:#2740C8}
+.btn.danger{color:var(--c-danger);border-color:var(--c-danger-border);background:var(--c-danger-bg)}
+.btn.danger:hover{background:#FDECEC;border-color:#EBA9A9;color:#B91C1C}
+.btn.mini{height:var(--h-btn-mini);padding:0 10px;font-size:11.5px;border-radius:var(--radius-sm)}
+.btn.icon{padding:0 9px}
+.btn:disabled,.btn.is-disabled{background:#EDF1F7;border-color:#E2E8F0;color:#7C8AA0;box-shadow:none;cursor:not-allowed}
+.btn.locked{background:#EDF1F7;border-color:#E2E8F0;color:#6B7A92;box-shadow:none;cursor:not-allowed}
+.btn.locked:hover{background:#EDF1F7;border-color:#E2E8F0}
+
+.chip{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:var(--radius-pill);font-size:11.5px;
+  border:1px solid var(--c-border);background:var(--c-surface);color:var(--c-text-2);white-space:nowrap}
+.chip.acc{background:var(--c-primary-soft);border-color:var(--c-primary-border);color:var(--c-primary-strong)}
+.chip.ok{background:var(--c-success-bg);border-color:var(--c-success-border);color:var(--c-success)}
+.chip.warn{background:var(--c-warn-bg);border-color:var(--c-warn-border);color:var(--c-warn)}
+.chip.err{background:var(--c-danger-bg);border-color:var(--c-danger-border);color:var(--c-danger)}
+.chip.info{background:var(--c-info-bg);border-color:var(--c-info-border);color:var(--c-info)}
+.chip.mile{background:var(--c-mile-bg);border-color:var(--c-mile-border);color:var(--c-mile)}
+.chip.mini{font-size:10.5px;padding:1px 8px}
+
+.dot{width:6px;height:6px;border-radius:50%;background:var(--c-success);flex:none}
+.dot.warn{background:#D97706}
+.dot.err{background:var(--c-danger)}
+.dot.idle{background:#C3CDDC}
+
+.tgl{width:34px;height:20px;border-radius:var(--radius-pill);background:var(--c-primary-strong);border:none;
+  position:relative;cursor:pointer;flex:none;transition:background .15s}
+.tgl::after{content:"";position:absolute;width:16px;height:16px;border-radius:50%;background:#fff;top:2px;left:16px;
+  box-shadow:0 1px 2px rgba(0,0,0,.25);transition:left .15s}
+.tgl[aria-checked="false"]{background:#C3CDDC}
+.tgl[aria-checked="false"]::after{left:2px}
+
+.inp{width:100%;height:var(--h-inp);display:flex;align-items:center;border:1px solid var(--c-border-strong);
+  border-radius:var(--radius-md);padding:0 10px;font-family:inherit;font-size:12.5px;color:var(--c-text);
+  background:var(--c-surface);box-shadow:inset 0 1px 2px rgba(15,23,42,.04);transition:border-color .15s,box-shadow .15s}
+.inp:hover{border-color:#C6D2E4}
+.inp.on{border-color:var(--c-primary-strong);box-shadow:0 0 0 3px rgba(59,91,255,.14)}
+.inp.mono{font-family:var(--font-mono);font-size:12px}
+.inp.ghost{color:var(--c-caption)}
+.inp.err{border-color:var(--c-danger-border);box-shadow:0 0 0 3px rgba(220,38,38,.10)}
+textarea.inp{height:auto;min-height:88px;padding:9px 11px;line-height:1.75;display:block;resize:vertical}
+
+.seg{display:inline-flex;border:1px solid var(--c-border-strong);border-radius:var(--radius-md);overflow:hidden;background:#fff}
+.seg span{display:inline-flex;align-items:center;justify-content:center;height:28px;padding:0 12px;font-size:12px;
+  color:var(--c-text-3);cursor:pointer;transition:background .15s,color .15s}
+.seg span+span{border-left:1px solid var(--c-border)}
+.seg span:hover{background:var(--c-app-bg);color:var(--c-text)}
+.seg span.on{background:var(--c-primary-soft);color:var(--c-primary-strong);font-weight:600}
+
+.kbd{font-family:var(--font-mono);font-size:11.5px;background:#F1F5F9;border:1px solid #D6DEE9;border-bottom-width:2px;
+  border-radius:var(--radius-sm);padding:2px 7px;color:var(--c-text-2);white-space:nowrap}
+
+.card{background:var(--c-surface);border:1px solid #E7ECF3;border-radius:var(--radius-lg);padding:14px}
+.card-head{display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap}
+.card-head b{font-size:13.5px;font-weight:600}
+.card-head .m{font-size:11px;color:var(--c-caption)}
+
+.toast{display:flex;align-items:center;gap:9px;border-radius:var(--radius-md);padding:9px 12px;font-size:12px;
+  border:1px solid;max-width:440px}
+.toast.ok{background:var(--c-success-bg);border-color:var(--c-success-border);color:#14603A}
+.toast.info{background:var(--c-info-bg);border-color:var(--c-info-border);color:var(--c-info)}
+.toast.warn{background:var(--c-warn-bg);border-color:var(--c-warn-border);color:var(--c-warn)}
+.toast.err{background:var(--c-danger-bg);border-color:var(--c-danger-border);color:#9F1F1F}
+.toast .x{margin-left:auto;opacity:.55;cursor:pointer}
+
+/* 窗口外框 */
+.win{background:#fff;border:1px solid #E3E8F0;border-radius:var(--radius-xl);box-shadow:var(--shadow-card);overflow:hidden}
+.titlebar{height:38px;display:flex;align-items:center;gap:8px;padding:0 14px;background:var(--c-surface-2);border-bottom:1px solid var(--c-border-soft)}
+.dotr{width:11px;height:11px;border-radius:50%}
+.tname{flex:1;text-align:center;font-size:12px;color:var(--c-caption)}
+.tabbar{display:flex;gap:4px;padding:8px 12px 0;background:var(--c-surface-2);border-bottom:1px solid var(--c-border-soft)}
+.tabbar span{display:inline-block;padding:8px 16px;font-size:13px;color:var(--c-text-3);border-bottom:2px solid transparent;cursor:pointer}
+.tabbar span:hover{color:var(--c-text)}
+.tabbar span.on{color:var(--c-primary-strong);border-color:var(--c-primary-strong);font-weight:600}
+.tabbody{padding:18px;display:flex;flex-direction:column;gap:12px;max-width:860px;margin:0 auto}
+
+/* 表格 */
+.tblwrap{background:#fff;border:1px solid var(--c-border);border-radius:var(--radius-lg);overflow:hidden}
+.tbl{width:100%;border-collapse:collapse;font-size:12px}
+.tbl th{background:var(--c-app-bg);text-align:left;font-weight:600;font-size:11.5px;color:var(--c-caption);
+  padding:9px 12px;border-bottom:1px solid var(--c-border)}
+.tbl td{padding:10px 12px;border-bottom:1px solid var(--c-border-soft);vertical-align:top;line-height:1.7;color:var(--c-text-2)}
+.tbl tr:last-child td{border-bottom:none}
+.tbl td.k{color:var(--c-text);font-weight:600}
+
+/* 变体网格 */
+.varrow{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;margin-top:16px}
+.varcell .varlab{font-size:11.5px;font-weight:600;color:var(--c-caption);margin-bottom:7px;display:flex;align-items:center;gap:6px}
+
+/* ============================== 0 主窗口 · 翻译页 ============================== */
+.langrow{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.lsel{display:inline-flex;align-items:center;gap:8px;height:var(--h-inp);border:1px solid var(--c-border-strong);
+  border-radius:var(--radius-md);padding:0 12px;font-size:12.5px;background:#fff;color:var(--c-text);cursor:pointer}
+.lsel:hover{border-color:#C6D2E4;background:var(--c-app-bg)}
+.lsel .cv{color:var(--c-icon);font-size:10px}
+.swap{width:28px;height:28px;border-radius:var(--radius-pill);border:1px solid var(--c-border-strong);background:#fff;
+  color:var(--c-text-2);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;font-size:12px;flex:none}
+.swap:hover{background:var(--c-primary-soft);border-color:var(--c-primary-border);color:var(--c-primary-strong)}
+.larrow{color:var(--c-icon)}
+.actrow{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.actrow .hint{font-size:11.5px;color:var(--c-caption)}
+
+.rescard{border:1px solid var(--c-border);border-radius:var(--radius-lg);padding:11px 13px;background:#fff;
+  transition:border-color .15s,box-shadow .15s}
+.rescard:hover{border-color:#CBD8EE;box-shadow:var(--shadow-float)}
+.rescard.err{border-color:var(--c-danger-border);background:#FFFCFC}
+.rescard.streaming{border-color:var(--c-primary-border)}
+.rh{display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--c-text-3);margin-bottom:7px;flex-wrap:wrap}
+.rh b{font-size:12.5px;color:var(--c-text);font-weight:600}
+.rt{font-size:13px;line-height:1.8;color:var(--c-text)}
+.rt.err{color:var(--c-danger)}
+.rmeta{margin-top:8px;padding-top:8px;border-top:1px dashed var(--c-border);font-size:11px;color:var(--c-caption);
+  font-family:var(--font-mono);display:flex;gap:14px;flex-wrap:wrap}
+.caret{display:inline-block;width:2px;height:14px;background:var(--c-primary-strong);vertical-align:-2px;margin-left:2px;
+  animation:blink 1.05s steps(2,start) infinite}
+@keyframes blink{50%{opacity:0}}
+
+/* ============================== 1 划词弹窗 ============================== */
+.stageA{display:flex;gap:26px;align-items:flex-start;flex-wrap:wrap}
+.popupbg{flex:1;min-width:320px;background:repeating-conic-gradient(#E4E9F2 0% 25%,#EDF1F7 0% 50%) 50%/42px 42px;
+  border-radius:12px;border:1px solid #D8E0EC;min-height:440px;position:relative;overflow:hidden}
+.deskicon{position:absolute;width:52px;height:52px;border-radius:12px;background:#fff;border:1px solid var(--c-border);
+  display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--c-caption);
+  box-shadow:0 2px 6px rgba(15,23,42,.08);text-align:center;line-height:1.3}
+.sel-demo{position:absolute;left:26px;top:214px;right:140px;font-size:12px;color:var(--c-text-2);line-height:1.9}
+.sel-demo mark{background:var(--c-highlight);padding:1px 0;color:var(--c-highlight-text)}
+
+.popup{width:404px;flex:none;background:#fff;border:1px solid #E5EAF2;border-radius:var(--radius-xl);
+  box-shadow:var(--shadow-pop);overflow:hidden}
+.popup.narrow{width:100%;max-width:340px;box-shadow:var(--shadow-card)}
+.pop-head{display:flex;align-items:center;gap:6px;padding:8px 10px;border-bottom:1px solid var(--c-border-soft);
+  background:var(--c-surface-2);cursor:move}
+.pop-head .grip{color:#B9C3D3;font-size:11px;letter-spacing:2px;margin-right:2px}
+.pop-head .ptitle{font-size:11.5px;color:var(--c-caption)}
+.pop-langrow{display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid var(--c-border-soft)}
+.pop-lang{display:inline-flex;align-items:center;gap:6px;height:28px;border:1px solid var(--c-primary-border);
+  border-radius:var(--radius-pill);padding:0 10px;font-size:11.5px;color:var(--c-primary-strong);background:var(--c-primary-soft);cursor:pointer}
+.pop-lang:hover{background:#E4EAFF}
+.pop-icon{border:none;background:none;color:var(--c-text-3);font-size:12px;width:24px;height:24px;border-radius:var(--radius-sm);
+  cursor:pointer;display:inline-flex;align-items:center;justify-content:center}
+.pop-icon:hover{background:var(--c-mile-bg);color:var(--c-text)}
+.pop-icon.on{background:var(--c-primary-soft);color:var(--c-primary-strong)}
+.pop-src{padding:10px 12px 4px}
+.lab{font-size:11.5px;color:var(--c-caption);margin-bottom:5px}
+.src-text{font-size:12px;line-height:1.75;color:var(--c-text-2);border-left:2px solid var(--c-border);padding-left:9px}
+.pop-cards{padding:4px 0}
+.pop-cards .rescard{margin:6px 12px}
+.pop-actions{display:flex;align-items:center;gap:6px;padding:8px 12px;border-top:1px solid var(--c-border-soft);flex-wrap:wrap}
+.pop-status{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--c-caption);padding:0 12px 10px}
+.more-menu{border:1px solid var(--c-border);border-radius:var(--radius-md);box-shadow:var(--shadow-float);background:#fff;
+  padding:4px;width:186px;margin-top:6px}
+.more-menu div{display:flex;align-items:center;gap:8px;padding:6px 9px;border-radius:var(--radius-sm);font-size:12px;color:var(--c-text-2);cursor:pointer}
+.more-menu div:hover{background:var(--c-app-bg)}
+.more-menu div.lock{color:#6B7A92;cursor:not-allowed}
+.more-menu div.lock:hover{background:var(--c-mile-bg)}
+.more-menu .sep{height:1px;background:var(--c-border-soft);margin:4px 0}
+
+/* ============================== 2 输入框转译 ============================== */
+.stageB{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+.chat{flex:1;min-width:280px;background:#fff;border:1px solid #E3E8F0;border-radius:12px;padding:14px 16px;
+  box-shadow:var(--shadow-float);position:relative}
+.chat-head{display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:12px;color:var(--c-text-2)}
+.avatar{width:22px;height:22px;border-radius:50%;background:#DBE4FF;color:var(--c-primary-strong);
+  display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex:none}
+.inputbox{border:1.5px solid #C9D6EF;border-radius:10px;padding:10px 12px;font-size:13px;line-height:1.75;
+  color:var(--c-text);background:var(--c-surface-2)}
+.inputbox.en{border-color:#B7E2C4;background:#F6FEF9}
+.badge-replaced{position:absolute;top:-11px;right:12px}
+.bigarrow{display:flex;flex-direction:column;align-items:center;gap:4px;color:#7C8DB0;font-size:12px;flex:none;text-align:center}
+.bigarrow .a{font-size:24px;line-height:1}
+.hintrow{display:flex;align-items:center;gap:8px;margin-top:9px;font-size:11.5px;color:var(--c-caption);flex-wrap:wrap}
+
+/* ============================== 3 截图 OCR ============================== */
+.shot{position:relative;height:560px;background:var(--c-dark-surface);border-radius:12px;overflow:hidden;
+  background-image:radial-gradient(circle at 20% 15%,#1F2B4D 0%,var(--c-dark-surface) 46%)}
+.shot.sm{height:248px}
+.fakeapp{position:absolute;left:38px;top:56px;width:296px;background:#F3F5F9;border-radius:8px;
+  box-shadow:0 10px 24px rgba(0,0,0,.45);overflow:hidden}
+.fakeapp .fbar{height:26px;background:#E4E8F0;display:flex;align-items:center;gap:5px;padding:0 9px}
+.fakeapp .fbar i{width:8px;height:8px;border-radius:50%;background:#C3CBD9}
+.fakeapp .fbody{padding:14px 16px}
+.fakeapp h4{font-size:13.5px;color:var(--c-text);margin-bottom:8px}
+.fakeapp p{font-size:11.5px;color:var(--c-text-2);line-height:2}
+.region{position:absolute;border:2px solid #5B8CFF;border-radius:8px;box-shadow:0 0 0 4000px rgba(6,10,22,.62)}
+.hnd{position:absolute;width:9px;height:9px;background:#fff;border:1.5px solid #5B8CFF;border-radius:2px}
+.hnd.tl{left:-5px;top:-5px}.hnd.tr{right:-5px;top:-5px}.hnd.bl{left:-5px;bottom:-5px}.hnd.br{right:-5px;bottom:-5px}
+.sizechip{position:absolute;left:50%;transform:translateX(-50%);bottom:-30px;background:#0B1220;color:var(--c-dark-text-2);
+  font-size:11px;padding:2px 9px;border-radius:5px;font-family:var(--font-mono);border:1px solid var(--c-dark-border);white-space:nowrap}
+.otrans{position:absolute;background:var(--c-highlight);color:var(--c-highlight-text);font-size:11px;font-weight:600;
+  padding:2px 7px;border-radius:4px;box-shadow:0 2px 6px rgba(0,0,0,.35);white-space:nowrap}
+.ocrpanel{position:absolute;right:14px;top:14px;width:330px;background:#fff;border-radius:12px;
+  box-shadow:0 18px 44px rgba(0,0,0,.5);overflow:hidden}
+.ocr-head{display:flex;align-items:center;gap:8px;padding:10px 12px 0}
+.ocr-head b{font-size:13px;font-weight:600}
+.ocr-head .x{margin-left:auto;color:var(--c-text-3);cursor:pointer;font-size:12px}
+.ocr-seg{padding:8px 12px 0}
+.ocr-body{padding:10px 12px}
+.ocr-line{font-size:12.5px;color:var(--c-text);line-height:1.85;font-family:var(--font-mono)}
+.conf{display:flex;gap:6px;margin:7px 0 8px;flex-wrap:wrap}
+.ocr-trans{background:#F5F8FF;border:1px solid #DDE6FF;border-radius:9px;padding:8px 11px}
+.ocr-trans .tt{font-size:12.5px;line-height:1.8;color:var(--c-text)}
+.ocr-actions{display:flex;gap:6px;padding:2px 12px 11px;flex-wrap:wrap}
+.engine{display:flex;align-items:center;gap:6px;border-top:1px solid var(--c-border-soft);padding:8px 12px;
+  font-size:11px;color:var(--c-caption);background:var(--c-surface-2);flex-wrap:wrap}
+.authbar{position:absolute;left:16px;right:16px;bottom:14px;display:flex;align-items:center;gap:10px;
+  background:rgba(15,22,38,.9);border:1px solid var(--c-dark-border);border-radius:10px;padding:9px 12px;
+  color:var(--c-dark-text);font-size:11.5px;flex-wrap:wrap;backdrop-filter:blur(6px)}
+.authbar .lnk{color:#8FB8FF;cursor:pointer;text-decoration:underline}
+.minibar{position:absolute;right:14px;bottom:14px;display:flex;align-items:center;gap:8px;background:rgba(15,22,38,.9);
+  border:1px solid var(--c-dark-border);border-radius:999px;padding:6px 13px;color:var(--c-dark-text);font-size:11.5px;cursor:pointer}
+
+/* ============================== 4 设置 ============================== */
+.set-body{display:flex;min-height:640px}
+.side{width:190px;flex:none;border-right:1px solid var(--c-border-soft);padding:12px 10px;background:#FAFBFD;
+  display:flex;flex-direction:column}
+.side-item{display:flex;align-items:center;gap:8px;height:34px;padding:0 11px;border-radius:var(--radius-md);
+  font-size:12.5px;color:var(--c-text-2);cursor:pointer}
+.side-item:hover{background:#F1F4F9}
+.side-item.on{background:var(--c-primary-soft);color:var(--c-primary-strong);font-weight:600}
+.side-group{margin:14px 11px 6px;font-size:11px;color:var(--c-caption);display:flex;align-items:center;gap:6px}
+.side-item.soon{color:#6B7A92;cursor:not-allowed}
+.side-item.soon:hover{background:#F1F4F9}
+.side-item.soon .lk{margin-left:auto;font-size:10px;color:#9AA7BC}
+.side-foot{margin-top:auto;padding:10px 11px;font-size:11px;color:var(--c-caption);line-height:1.7}
+.main{flex:1;min-width:0;background:var(--c-app-bg);padding:16px;display:flex;gap:14px}
+.list-col{width:46%;flex:none;display:flex;flex-direction:column;min-width:0}
+.form-col{flex:1;min-width:0}
+.svc{display:flex;align-items:center;gap:10px;min-height:var(--h-row);padding:8px 11px;border:1.5px solid transparent;
+  border-radius:9px;margin-bottom:4px;cursor:pointer;transition:background .15s,border-color .15s}
+.svc:hover{background:#F7F9FD}
+.svc.on{border-color:#C9D6FF;background:#F4F7FF}
+.arrows{display:flex;flex-direction:column;gap:1px;flex:none}
+.arr{border:none;background:none;font-size:9px;color:#A8B4C8;line-height:1.1;padding:0 2px;cursor:pointer}
+.arr:hover{color:var(--c-primary-strong)}
+.svc-name{flex:1;min-width:0}
+.svc-name b{font-size:13px;display:block;font-weight:600}
+.svc-name span{font-size:11.5px;color:var(--c-caption)}
+.ok-t{font-size:11px;color:var(--c-success);white-space:nowrap}
+.group{background:var(--c-surface-2);border:1px solid var(--c-border);border-radius:9px;padding:11px 12px;margin-top:12px}
+.group .ghead{display:flex;align-items:center;gap:7px;font-size:11.5px;color:var(--c-caption);margin-bottom:9px}
+.group .gnote{margin-top:9px;font-size:11px;color:var(--c-caption);line-height:1.7}
+.gnote code,.statecard code{font-family:var(--font-mono);font-size:11px;background:#EEF1F6;border-radius:4px;padding:1px 5px;color:#3C4A60}
+.glabel{display:flex;flex-direction:column;gap:5px;font-size:11.5px;color:var(--c-text-2)}
+.glabel .inp{width:76px;justify-content:center}
+.f{margin-bottom:11px}
+.f>label{display:block;font-size:11.5px;color:var(--c-text-2);margin-bottom:5px}
+.row2{display:flex;gap:10px}
+.row2>.f{flex:1;min-width:0}
+.keyrow{display:flex;gap:8px;align-items:center}
+.keyrow .inp{flex:1}
+.key-state{margin-left:8px}
+.form-foot{display:flex;align-items:center;gap:8px;margin-top:14px;padding-top:12px;border-top:1px solid var(--c-border-soft);flex-wrap:wrap}
+.form-foot .sec-note{margin-left:auto;font-size:11px;color:var(--c-caption)}
+.testbox{border:1px solid var(--c-border);border-radius:var(--radius-md);padding:11px 12px;background:var(--c-surface-2);margin-bottom:11px}
+.testbox .trow{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.spin{width:13px;height:13px;border:2px solid var(--c-primary-border);border-top-color:var(--c-primary-strong);
+  border-radius:50%;animation:spin .8s linear infinite;flex:none}
+@keyframes spin{to{transform:rotate(360deg)}}
+.codebox{border:1px solid var(--c-border-strong);border-radius:var(--radius-md);background:#F8FAFC;padding:9px 11px;
+  font-family:var(--font-mono);font-size:11.5px;line-height:1.9;color:var(--c-text-2);white-space:pre-wrap}
+.hl{color:var(--c-primary-strong);background:var(--c-primary-soft);border-radius:4px;padding:0 3px}
+.confirm{border:1px solid var(--c-danger-border);background:#fff;border-radius:var(--radius-lg);
+  box-shadow:var(--shadow-pop);overflow:hidden;max-width:400px}
+.confirm .ch{padding:12px 14px 0;font-size:13.5px;font-weight:600}
+.confirm .cb{padding:8px 14px 12px;font-size:12px;color:var(--c-text-2);line-height:1.75}
+.confirm .cf{padding:10px 14px;background:var(--c-surface-2);display:flex;gap:8px;justify-content:flex-end;border-top:1px solid var(--c-border-soft)}
+
+/* ============================== 5 热键 ============================== */
+.hk{display:flex;align-items:center;gap:10px;padding:11px 14px;border-bottom:1px solid var(--c-border-soft);flex-wrap:wrap}
+.hk:last-child{border-bottom:none}
+.hk .nm{flex:1;min-width:170px}
+.hk .nm b{font-size:12.5px;display:block;font-weight:600}
+.hk .nm span{font-size:11.5px;color:var(--c-caption)}
+.hk.conflict{background:#FFFBF5}
+.hk .warnline{flex-basis:100%;font-size:11.5px;color:var(--c-warn);margin-top:2px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.rec{border:1px dashed var(--c-primary-border);background:var(--c-primary-soft);border-radius:var(--radius-sm);
+  padding:2px 9px;font-size:11.5px;color:var(--c-primary-strong);font-family:var(--font-mono)}
+
+/* ============================== 6/7 路线图 ============================== */
+.hist{display:flex;min-height:430px}
+.hist-list{flex:1;min-width:0;border-right:1px solid var(--c-border-soft)}
+.hist-tools{display:flex;align-items:center;gap:8px;padding:11px 12px;border-bottom:1px solid var(--c-border-soft);flex-wrap:wrap}
+.hist-tools .inp{width:180px;height:28px;font-size:12px}
+.hrow{padding:10px 12px;border-bottom:1px solid var(--c-border-soft);cursor:pointer}
+.hrow:hover{background:var(--c-surface-2)}
+.hrow.on{background:var(--c-primary-soft);box-shadow:inset 2px 0 0 var(--c-primary-strong)}
+.hrow .hl1{font-size:12.5px;color:var(--c-text);display:flex;align-items:center;gap:8px}
+.hrow .hl1 .t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hrow .hl2{font-size:11.5px;color:var(--c-caption);margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hist-detail{width:340px;flex:none;padding:14px;background:var(--c-surface-2);display:flex;flex-direction:column;gap:10px}
+.dict .w{font-size:19px;font-weight:600}
+.dict .ph{font-family:var(--font-mono);font-size:12px;color:var(--c-caption);margin-left:8px}
+.sense{padding:9px 0;border-top:1px dashed var(--c-border)}
+.sense .def{font-size:13px;color:var(--c-text)}
+.sense .eg{font-size:12px;color:var(--c-text-3);margin-top:3px}
+.pos{display:inline-flex;font-size:11px;color:var(--c-info);background:var(--c-info-bg);border:1px solid var(--c-info-border);
+  border-radius:var(--radius-sm);padding:1px 7px;font-family:var(--font-mono)}
+.tts{display:flex;align-items:center;gap:11px;border:1px solid var(--c-border);border-radius:var(--radius-lg);
+  background:#fff;padding:10px 13px;flex-wrap:wrap}
+.tts .play{width:32px;height:32px;border-radius:50%;border:none;background:var(--c-primary-strong);color:#fff;
+  font-size:13px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;flex:none}
+.tts .track{flex:1;min-width:110px;height:6px;border-radius:999px;background:#DCE3EE;overflow:hidden}
+.tts .track i{display:block;height:100%;width:38%;background:var(--c-primary-strong)}
+.anki-row{display:flex;align-items:center;gap:10px;padding:9px 11px;border-bottom:1px solid var(--c-border-soft);font-size:12.5px}
+.anki-row:last-child{border-bottom:none}
+.anki-row .w{flex:1;min-width:0;font-weight:600}
+.anki-row .m{font-size:11.5px;color:var(--c-caption)}
+
+/* ============================== 附录 A 状态矩阵 ============================== */
+.matrix{width:100%;border-collapse:collapse;font-size:11.5px;background:#fff}
+.matrix th,.matrix td{padding:9px 8px;border-bottom:1px solid var(--c-border-soft);border-left:1px solid var(--c-border-soft);
+  text-align:center;vertical-align:middle}
+.matrix th:first-child,.matrix td:first-child{border-left:none;text-align:left;white-space:nowrap;color:var(--c-text-2)}
+.matrix thead th{background:var(--c-app-bg);color:var(--c-caption);font-weight:600;border-bottom:1px solid var(--c-border)}
+.matrix tr:last-child td{border-bottom:none}
+.matrix td .cell{display:flex;justify-content:center}
+.stategrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:14px}
+.statecard{background:#fff;border:1px solid var(--c-border);border-radius:var(--radius-lg);padding:12px}
+.statecard .sh{display:flex;align-items:center;gap:8px;margin-bottom:9px}
+.statecard .sh b{font-size:12.5px;font-weight:600}
+.emptybox{border:1px dashed var(--c-border-strong);border-radius:var(--radius-md);padding:22px 14px;text-align:center;
+  color:var(--c-caption);font-size:12px;background:var(--c-surface-2);line-height:1.8}
+.skl{height:9px;border-radius:5px;background:linear-gradient(90deg,#EDF1F7,#DFE6EF,#EDF1F7);
+  background-size:200% 100%;animation:skl 1.4s linear infinite;margin:7px 0}
+@keyframes skl{to{background-position:-200% 0}}
+.swatch{display:inline-block;width:16px;height:16px;border-radius:5px;border:1px solid rgba(15,23,42,.12);
+  vertical-align:-3px;margin-right:7px}
+
+/* ============================== footer ============================== */
+.board-foot{margin-top:38px;background:var(--c-text);border-radius:var(--radius-xl);padding:22px 26px;color:#CBD5E1}
+.board-foot h3{font-size:14px;color:#fff;margin-bottom:12px;font-weight:600}
+.board-foot ul{list-style:none;display:grid;grid-template-columns:1fr 1fr;gap:8px 26px}
+.board-foot li{font-size:12px;line-height:1.8;color:var(--c-dark-text-2);padding-left:16px;position:relative}
+.board-foot li::before{content:"";position:absolute;left:2px;top:9px;width:5px;height:5px;border-radius:50%;background:var(--c-primary)}
+.next{margin-top:16px;padding-top:14px;border-top:1px solid #1E293B;font-size:12.5px;color:#E2E8F0;
+  display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.next .chip{background:#1E293B;border-color:#334155;color:#CBD5E1}
+@media (max-width:1100px){
+  .board{padding:24px 20px 48px}
+  .nav{padding:9px 20px}
+  .main{flex-direction:column}
+  .list-col{width:100%}
+  .hist{flex-direction:column}
+  .hist-detail{width:100%}
+}
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <span class="navlab">跳转</span>
+  <a href="#changes">变更清单</a>
+  <a href="#s0">0 主窗口</a>
+  <a href="#s1">1 划词弹窗</a>
+  <a href="#s2">2 输入框转译</a>
+  <a href="#s3">3 截图 OCR</a>
+  <a href="#s4">4 设置</a>
+  <a href="#s5">5 热键</a>
+  <a href="#s6">6 历史与词典</a>
+  <a href="#s7">7 朗读与生词本</a>
+  <a href="#appA">A 状态矩阵</a>
+  <a href="#appB">B Token / 对比度</a>
+</nav>
+
+<div class="board">
+
+  <!-- ================= header ================= -->
+  <div class="top">
+    <div>
+      <h1><span class="logo">译</span>随译 SuiYi <span class="ver">全量 UI 设计稿 v0.4 · 优化版</span></h1>
+      <div class="sub">桌面 AI 翻译助手 · 划词翻译 / 截图 OCR / 输入框转译 / 多 AI 服务灵活配置</div>
+      <div class="stack">
+        <span>Tauri 2</span><span>Rust 后端</span><span>React + TS 前端</span>
+        <span>M0 ✅</span><span>M1 划词 ✅</span><span>M2 截图 🔜</span><span>M3 写回 🔜</span><span>M4 词典/TTS/历史 🔜</span>
+      </div>
+      <div class="sub" style="margin-top:12px;max-width:760px">
+        本稿在 <b style="color:var(--c-text-2)">v0.3</b> 的 6 个区块与信息架构上做<b style="color:var(--c-text-2)">视觉与可用性打磨</b>，
+        并补画 M3/M4 目标界面。所有结论只改这一份文件，<b style="color:var(--c-text-2)">未改动任何在研代码</b>。
+        Hover / 焦点 / 禁用态都是真实 CSS，可以直接“摸”。
+      </div>
+    </div>
+    <div class="palette">
+      <div class="sw"><i style="background:#4C6FFF"></i><em><b>品牌</b>#4C6FFF 识别色</em></div>
+      <div class="sw"><i style="background:#3B5BFF"></i><em><b>交互</b>#3B5BFF 5.1:1</em></div>
+      <div class="sw"><i style="background:#0F172A"></i><em><b>文字</b>#0F172A 17.9:1</em></div>
+      <div class="sw"><i style="background:#F6F8FB"></i><em><b>背景</b>#F6F8FB</em></div>
+      <div class="sw"><i style="background:#52607A"></i><em><b>里程碑</b>#52607A 5.6:1</em></div>
+      <div class="sw"><i style="background:#FFDE59"></i><em><b>高亮</b>#FFDE59 覆盖标记</em></div>
+    </div>
+  </div>
+
+  <!-- ================= 变更清单 ================= -->
+  <section class="sec" id="changes">
+    <div class="sec-head"><span class="idx">✎</span><h2>本稿相对 v0.3 的变更清单</h2>
+      <p class="lead">问题 → 改法 → 理由。带 <span class="tag">视觉</span><span class="tag">可用性</span><span class="tag">可交付</span> 标签，便于按需取舍。</p></div>
+    <div class="tblwrap">
+      <table class="tbl">
+        <thead><tr><th style="width:34px">#</th><th style="width:30%">v0.3 的问题</th><th style="width:37%">v0.4 的改法</th><th>理由</th></tr></thead>
+        <tbody>
+          <tr><td class="k">1</td><td>次要文字 <code>#94A3B8</code> 在浅底上约 2.4:1</td><td>文字层级改为 <code>#475569</code> / <code>#64748B</code>（≥12px）/ <code>#5C6B80</code>（11px）；<code>#94A3B8</code> 只留图标与分隔线</td><td>可访问性：正文需 ≥4.5:1</td></tr>
+          <tr><td class="k">2</td><td>主按钮白字落在 <code>#4C6FFF</code> 上约 4.2:1</td><td>交互主色改 <code>#3B5BFF</code>（5.1:1），把 <code>#4C6FFF</code> 留给品牌识别</td><td>可访问性 + 品牌/交互职责分离</td></tr>
+          <tr><td class="k">3</td><td>三种绿色共用同一观感：里程碑「已实现」、运行时健康、成功完成</td><td>里程碑改中性灰蓝徽章 <code>#52607A</code>；运行时用圆点；成功用绿底 chip</td><td>消除语义误读，文档态与运行态分开</td></tr>
+          <tr><td class="k">4</td><td><code>.lab</code> 用 10px 大写 + 字距（原文 / 译文）</td><td>改为 11.5px 中文小标签；全站最小字号 11px</td><td>中文在 10px 下不可读，英文排版习惯不适用</td></tr>
+          <tr><td class="k">5</td><td>弹窗语言选择器放在拖拽标题栏内</td><td>移出标题栏独立成行，并新增「⇄ 互换方向」</td><td>消除点击 select 与拖动窗口的冲突；补齐翻译产品标准动作</td></tr>
+          <tr><td class="k">6</td><td>动作条 7 个按钮在 404px 宽弹窗里折行</td><td>主动作只留「复制」「替换原文」，其余收进「⋯ 更多」菜单</td><td>降低决策成本，弹窗高度可控</td></tr>
+          <tr><td class="k">7</td><td>未开放动作仅降低透明度</td><td>改为灰底 + 锁图标 + 里程碑 tooltip</td><td>让“还不能用”是明确的信息，而不是视觉噪声</td></tr>
+          <tr><td class="k">8</td><td>截图结果面板与黄色「原图翻译」标签在同一区域互相遮挡</td><td>改为互斥双模式，用分段控件切换（面板 / 原图覆盖）</td><td>同一时刻只有一个答案，避免用户不知道该看哪</td></tr>
+          <tr><td class="k">9</td><td>缺「测试连接」（v0.2 有，v0.3 删除）</td><td>补回，并画出 4 种状态：未配置 / 测试中 / 成功含延迟 / 失败含原因与建议</td><td>配置类产品最关键的信心来源；本次开发中的 403 就是缺它才拖到翻译阶段才发现</td></tr>
+          <tr><td class="k">10</td><td>结果卡只显示耗时</td><td>增加 tokens 用量与费用估算行</td><td>多服务并发会同时消耗多个 Key 额度，需要成本感知</td></tr>
+          <tr><td class="k">11</td><td>几乎没有空 / 失败 / 超时状态</td><td>新增附录 A：组件 7 态 + 页面 6 态</td><td>工程师实现时不必猜；这是 v0.3 最大的交付缺口</td></tr>
+          <tr><td class="k">12</td><td>无焦点环、无键盘可达说明</td><td>全组件 <code>:focus-visible</code> 焦点环、开关补 <code>aria-checked</code>、支持 <code>prefers-reduced-motion</code></td><td>Windows 桌面用户大量依赖键盘</td></tr>
+          <tr><td class="k">13</td><td>区块 0 漏画实现里已有的「截图识别」按钮</td><td>补齐，与 <code>Translate.tsx</code> 对齐</td><td>稿实一致，否则评审会得出错误结论</td></tr>
+          <tr><td class="k">14</td><td>危险动作（删除服务、替换原文）无确认与撤销</td><td>删除服务加二次确认弹层；替换原文加「撤销」toast</td><td>误操作防护</td></tr>
+          <tr><td class="k">15</td><td>热键页没有冲突态与录制态</td><td>新增「已被占用」提示与「按下组合键…」录制态</td><td>Alt+D / Alt+S / Alt+T 都是高频键位，冲突是必然事件</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ================= 0 主窗口 · 翻译页 ================= -->
+  <section class="sec" id="s0">
+    <div class="sec-head"><span class="idx">0</span><h2>主窗口 · 翻译页</h2>
+      <span class="chip mile">✓ 已实现</span>
+      <p class="lead">双标签 · 语言方向可互换 · 多服务并发卡 · 结果卡带 tokens 与耗时 · 与 Translate.tsx 对齐</p></div>
+    <div class="stage">
+      <div class="win">
+        <div class="tabbar"><span class="on">翻译</span><span>设置</span></div>
+        <div class="tabbody">
+          <div class="langrow">
+            <span class="lsel">自动检测 <span class="cv">▾</span></span>
+            <button class="swap" title="互换语言方向" aria-label="互换语言方向">⇄</button>
+            <span class="lsel">简体中文 <span class="cv">▾</span></span>
+            <span style="flex:1"></span>
+            <span class="chip warn"><span class="dot warn"></span>1 / 2 服务成功</span>
+            <button class="btn mini">↻ 刷新服务</button>
+          </div>
+          <textarea class="inp" style="min-height:96px" readonly>The quick brown fox jumps over the lazy dog.</textarea>
+          <div class="actrow">
+            <button class="btn primary">翻 译</button>
+            <button class="btn">弹窗预览</button>
+            <button class="btn">截图识别</button>
+            <span class="hint">流式输出 · 多服务并发对比 · Ctrl+Enter 翻译</span>
+          </div>
+          <div class="rescard">
+            <div class="rh"><span class="dot"></span><b>ZAI</b><span>0.9s</span>
+              <span style="flex:1"></span><button class="btn mini">⧉ 复制</button></div>
+            <div class="rt">敏捷的棕色狐狸跳过了那只懒狗。</div>
+            <div class="rmeta"><span>输入 12 tok</span><span>输出 15 tok</span><span>≈ ¥0.0001</span></div>
+          </div>
+          <div class="rescard err">
+            <div class="rh"><span class="dot err"></span><b>智谱 GLM</b><span>0.3s</span>
+              <span style="flex:1"></span><button class="btn mini">重试</button></div>
+            <div class="rt err">服务返回 429：当前分组上游负载已饱和，请稍后再试</div>
+            <div class="rmeta"><span>配额 / 限流</span><span>可在设置中测试连接排查</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="note"><span class="tag">⓪</span>
+      <b>补齐了漂移：</b>实现里已有「截图识别」按钮，v0.3 漏画，本稿补上。<b>新增成本感知：</b>结果卡第二行给 tokens 与费用估算，
+      多服务并发时用户才知道自己在同时烧几份额度。<b>头部状态：</b>「1 / 2 服务成功」是<b>部分成功</b>态（附录 A），
+      比全绿或全红都更接近真实使用。</div>
+  </section>
+
+  <!-- ================= 1 划词弹窗 ================= -->
+  <section class="sec" id="s1">
+    <div class="sec-head"><span class="idx">1</span><h2>划词翻译弹窗</h2>
+      <span class="chip mile">✓ 已实现</span>
+      <p class="lead">Alt+D 取词 → 光标处弹出 · 语言行独立 · 动作条分层 · 失焦隐藏可固定</p></div>
+    <div class="stage">
+      <div class="stageA">
+        <div class="popupbg">
+          <span class="deskicon" style="left:30px;top:26px">此电脑</span>
+          <span class="deskicon" style="left:30px;top:100px">回收站</span>
+          <span class="deskicon" style="left:30px;top:174px">浏览器</span>
+          <div class="sel-demo">Linguists have long debated whether <mark>transformers still struggle with long-context reasoning</mark> — a question this paper revisits with controlled ablations across six benchmark suites.</div>
+        </div>
+        <div class="popup">
+          <div class="pop-head">
+            <span class="grip">⣿</span>
+            <span class="ptitle">随译 · 划词翻译</span>
+            <span style="flex:1"></span>
+            <button class="pop-icon on" title="固定窗口（固定后失焦不隐藏）" aria-label="固定窗口">📌</button>
+            <button class="pop-icon" title="关闭 (Esc)" aria-label="关闭">✕</button>
+          </div>
+          <div class="pop-langrow">
+            <span class="pop-lang">自动检测 ▾</span>
+            <button class="swap" title="互换语言方向" aria-label="互换语言方向">⇄</button>
+            <span class="pop-lang">简体中文 ▾</span>
+            <span style="flex:1"></span>
+            <span class="chip ok mini"><span class="dot"></span>2 服务并发</span>
+          </div>
+          <div class="pop-src">
+            <div class="lab">原文</div>
+            <div class="src-text">Despite their success, transformers still struggle with long-context reasoning and efficient retrieval.</div>
+          </div>
+          <div class="pop-cards">
+            <div class="rescard">
+              <div class="rh"><span class="dot"></span><b>ZAI</b><span>1.8s</span>
+                <span style="flex:1"></span><button class="btn mini">⧉</button></div>
+              <div class="rt">尽管取得了成功，Transformer 在长上下文推理和高效检索方面仍然存在困难。<span class="caret"></span></div>
+            </div>
+            <div class="rescard">
+              <div class="rh"><span class="dot" style="background:#D97706"></span><b>Gemini</b><span>1.4s</span>
+                <span style="flex:1"></span><button class="btn mini">⧉</button></div>
+              <div class="rt" style="color:var(--c-text-2)">虽然成果显著，Transformer 依然难以进行长上下文推理与高效检索。</div>
+            </div>
+          </div>
+          <div class="pop-actions">
+            <button class="btn primary mini">⧉ 复制</button>
+            <button class="btn mini">⇄ 替换原文</button>
+            <span style="flex:1"></span>
+            <button class="btn mini" title="更多动作">⋯ 更多</button>
+          </div>
+          <div class="pop-status"><span class="dot"></span>就绪 · Esc 关闭 · 拖动标题栏移动</div>
+        </div>
+      </div>
+    </div>
+    <div class="note"><span class="tag">①</span>
+      <b>修掉两个交互冲突：</b>语言选择器从拖拽标题栏移出（原来点 select 与拖窗口会打架），并补上「⇄ 互换方向」这个翻译产品的标准动作。
+      <b>动作条分层：</b>主动作只剩「复制 / 替换原文」，其余收进「⋯ 更多」，弹窗高度不再随按钮数量增长。</div>
+
+    <div class="varrow">
+      <div class="varcell">
+        <div class="varlab"><span class="chip err mini">异常</span>取词失败</div>
+        <div class="popup narrow">
+          <div class="pop-head"><span class="grip">⣿</span><span class="ptitle">随译 · 划词翻译</span><span style="flex:1"></span>
+            <button class="pop-icon" aria-label="关闭">✕</button></div>
+          <div class="pop-langrow"><span class="pop-lang">自动检测 ▾</span>
+            <button class="swap" aria-label="互换语言方向">⇄</button>
+            <span class="pop-lang">简体中文 ▾</span></div>
+          <div style="padding:16px 14px 6px">
+            <div class="emptybox" style="padding:18px 12px">
+              <b style="color:var(--c-text)">没有取到选中的文字</b><br>
+              目标程序可能未响应复制，或当前没有选中内容。
+            </div>
+          </div>
+          <div style="padding:8px 14px;display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn mini">↻ 重新取词</button>
+            <button class="btn mini">🖼 改用截图识别</button>
+            <button class="btn mini locked" title="M3 里程碑开放">🔒 手动输入</button>
+          </div>
+          <div class="pop-status"><span class="dot err"></span>取词失败 · 剪贴板无变化</div>
+        </div>
+      </div>
+
+      <div class="varcell">
+        <div class="varlab"><span class="chip err mini">异常</span>全部服务失败</div>
+        <div class="popup narrow">
+          <div class="pop-head"><span class="grip">⣿</span><span class="ptitle">随译 · 划词翻译</span><span style="flex:1"></span>
+            <button class="pop-icon" aria-label="关闭">✕</button></div>
+          <div class="pop-langrow"><span class="pop-lang">自动检测 ▾</span>
+            <button class="swap" aria-label="互换语言方向">⇄</button>
+            <span class="pop-lang">简体中文 ▾</span>
+            <span style="flex:1"></span><span class="chip err mini">0 / 2 成功</span></div>
+          <div class="pop-src"><div class="lab">原文</div>
+            <div class="src-text">transformers still struggle with long-context reasoning</div></div>
+          <div class="pop-cards">
+            <div class="rescard err">
+              <div class="rh"><span class="dot err"></span><b>ZAI</b><span style="flex:1"></span><button class="btn mini">重试</button></div>
+              <div class="rt err">连接失败：请求超时（15s）</div>
+            </div>
+            <div class="rescard err">
+              <div class="rh"><span class="dot err"></span><b>Gemini</b><span style="flex:1"></span><button class="btn mini">重试</button></div>
+              <div class="rt err">服务返回 401：API Key 无效或已过期</div>
+            </div>
+          </div>
+          <div class="pop-actions">
+            <button class="btn mini">↻ 全部重试</button>
+            <button class="btn mini">⚙ 打开设置</button>
+            <span style="flex:1"></span>
+            <button class="btn mini">⋯ 更多</button>
+          </div>
+          <div class="pop-status"><span class="dot err"></span>全部服务失败 · 可到设置页测试连接</div>
+        </div>
+      </div>
+
+      <div class="varcell">
+        <div class="varlab"><span class="chip mile mini">固定</span>⋯ 更多 菜单展开</div>
+        <div class="popup narrow">
+          <div class="pop-head"><span class="grip">⣿</span><span class="ptitle">随译 · 划词翻译</span><span style="flex:1"></span>
+            <button class="pop-icon on" title="已固定" aria-label="固定窗口">📌</button>
+            <button class="pop-icon" aria-label="关闭">✕</button></div>
+          <div class="pop-langrow"><span class="pop-lang">自动检测 ▾</span>
+            <button class="swap" aria-label="互换语言方向">⇄</button>
+            <span class="pop-lang">简体中文 ▾</span></div>
+          <div class="pop-src"><div class="lab">原文</div>
+            <div class="src-text">transformers still struggle with long-context reasoning</div></div>
+          <div class="pop-actions" style="border-top:none;padding-bottom:2px">
+            <button class="btn primary mini">⧉ 复制</button>
+            <button class="btn mini">⇄ 替换原文</button>
+            <span style="flex:1"></span>
+            <button class="btn mini" style="background:var(--c-primary-soft);border-color:var(--c-primary-border);color:var(--c-primary-strong)">⋯ 更多</button>
+          </div>
+          <div style="padding:0 12px 12px;display:flex;justify-content:flex-end">
+            <div class="more-menu">
+              <div>🔊 朗读<span style="flex:1"></span><span class="chip lock mini" style="border:none;background:none;color:#6B7A92">🔒 M4</span></div>
+              <div>＋ 生词本<span style="flex:1"></span><span class="chip mini" style="border:none;background:none;color:#6B7A92">🔒 M3</span></div>
+              <div class="sep"></div>
+              <div>🔍 搜索选中文本</div>
+              <div>🌐 在浏览器打开</div>
+              <div>↻ 重新翻译</div>
+            </div>
+          </div>
+          <div class="pop-status"><span class="dot"></span>已固定 · 失焦不隐藏</div>
+        </div>
+      </div>
+    </div>
+    <div class="note"><span class="tag">①＋</span>
+      <b>补齐三种真实态：</b>取词失败（debug.log 里 Alt+D 有触发但取不到词，这是高频路径）、全部服务失败、固定窗口 + 溢出菜单。
+      <b>未开放动作改为「灰底 + 锁 + 里程碑」</b>，而不是单纯降低透明度——用户应该明确知道这是"还没有"，不是"你点错了"。</div>
+  </section>
+
+  <!-- ================= 2 输入框转译 ================= -->
+  <section class="sec" id="s2">
+    <div class="sec-head"><span class="idx">2</span><h2>输入框转译（写回替换）</h2>
+      <span class="chip warn">M3 规划</span>
+      <p class="lead">任意输入框写中文 → Alt+T → 整体替换为目标语言；写回失败自动降级为复制 + 通知</p></div>
+    <div class="stage">
+      <div class="stageB">
+        <div class="chat">
+          <div class="chat-head"><span class="avatar">友</span>微信 · 文件传输助手</div>
+          <div class="inputbox">这份报告我明天上午发给你，先看第三部分的结论，有问题随时找我。▏</div>
+          <div class="hintrow">正在输入 · 光标在输入框内 <span class="kbd">Alt</span>+<span class="kbd">T</span> 触发转译</div>
+        </div>
+        <div class="bigarrow"><span class="a">⟶</span><span>EN → 简中<br>反向亦可选</span></div>
+        <div class="chat">
+          <span class="badge-replaced chip ok"><span class="dot"></span>✓ 已替换原文</span>
+          <div class="chat-head"><span class="avatar">友</span>微信 · 文件传输助手</div>
+          <div class="inputbox en">I'll send you the report tomorrow morning — please read the conclusions in Section 3 first, and feel free to ping me with any questions.</div>
+          <div class="hintrow">替换前对选区做快照校验 · 失败自动回退为「复制 + 通知」</div>
+        </div>
+      </div>
+
+      <div class="varrow">
+        <div class="varcell">
+          <div class="varlab"><span class="chip ok mini">成功</span>替换后可撤销</div>
+          <div class="toast ok"><span>✓</span><span>已替换输入框内容（1 处）</span><span class="x">撤销</span></div>
+          <div class="t-cap" style="margin-top:8px">撤销窗口 8s 内有效；撤销后恢复原中文，不影响光标位置。</div>
+        </div>
+        <div class="varcell">
+          <div class="varlab"><span class="chip warn mini">降级</span>写回失败 → 复制 + 通知</div>
+          <div class="toast warn"><span>⚠</span><span>目标输入框已失焦，译文已复制到剪贴板</span><span class="x">✕</span></div>
+          <div class="t-cap" style="margin-top:8px">快照校验不通过时绝不盲写，改为复制并提示；这是 M3 的安全底线。</div>
+        </div>
+        <div class="varcell">
+          <div class="varlab"><span class="chip mile mini">安全</span>写入范围与许可</div>
+          <div class="card" style="padding:12px">
+            <div class="t-sec">只写入<b>当前聚焦的可编辑控件</b>；写入前比对焦点与文本快照，不一致则中止。</div>
+            <div class="hintrow" style="margin-top:8px">
+              <span class="chip acc mini">仅本地判断</span>
+              <span class="chip mini">内容会发送到所选服务</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="note"><span class="tag">②</span>
+      v0.3 只画了成功路径。本稿补上<b>撤销</b>与<b>降级为复制</b>两条分支——写进别人的输入框是高风险动作，
+      没有撤销和降级的写回功能不该上线。</div>
+  </section>
+
+  <!-- ================= 3 截图 OCR ================= -->
+  <section class="sec" id="s3">
+    <div class="sec-head"><span class="idx">3</span><h2>截图识别 · 原图翻译</h2>
+      <span class="chip warn">M2 开发中</span>
+      <p class="lead">Alt+S 冻结屏幕 → 框选 → Windows.Media.OCR 离线识别 → 弹窗翻译；结果面板与原图覆盖互斥</p></div>
+    <div class="stage dark">
+      <div class="shot">
+        <div class="fakeapp">
+          <div class="fbar"><i></i><i></i><i></i></div>
+          <div class="fbody">
+            <h4>Order Confirmation</h4>
+            <p>Thank you for your purchase!<br>Total: $129.00<br>Shipping: 2–3 business days<br>Questions? support@example.com</p>
+          </div>
+        </div>
+        <div class="region" style="left:26px;top:44px;width:320px;height:238px">
+          <span class="hnd tl"></span><span class="hnd tr"></span><span class="hnd bl"></span><span class="hnd br"></span>
+          <span class="sizechip">320 × 238</span>
+        </div>
+        <div class="ocrpanel">
+          <div class="ocr-head"><b>截图识别</b><span class="chip mile mini">2.4s</span><span class="x">✕</span></div>
+          <div class="ocr-seg">
+            <div class="seg" style="width:100%">
+              <span class="on" style="flex:1">结果面板</span>
+              <span style="flex:1">原图覆盖</span>
+            </div>
+          </div>
+          <div class="ocr-body">
+            <div class="ocr-line">Order Confirmation<br>Thank you for your purchase!<br>Total: $129.00<br>Shipping: 2–3 business days</div>
+            <div class="conf"><span class="chip acc">英文</span><span class="chip ok">✓ 平均置信度 98%</span><span class="chip">可编辑</span></div>
+            <div class="ocr-trans">
+              <div class="lab">译文 → 简体中文</div>
+              <div class="tt">订单确认<br>感谢您的购买！<br>总计：$129.00<br>配送：2–3 个工作日</div>
+            </div>
+          </div>
+          <div class="ocr-actions"><button class="btn primary mini">⧉ 复制</button><button class="btn mini">💾 保存</button><button class="btn mini">↻ 重新识别</button></div>
+          <div class="engine">引擎：<b style="color:var(--c-text-2)">Windows.Media.OCR</b> ▾ · 本地离线识别<span style="flex:1"></span>
+            <span class="chip ok mini">已在本机完成</span></div>
+        </div>
+        <div class="authbar">
+          <span class="chip info mini">隐私</span>
+          <span>识别默认在本机离线完成，截图不上传。仅当勾选“AI 视觉兜底”时，才会把选区发送到所选服务。</span>
+          <span style="flex:1"></span>
+          <button class="tgl" role="switch" aria-checked="false" aria-label="AI 视觉兜底"></button>
+          <span class="t-cap" style="color:var(--c-dark-text-2)">AI 视觉兜底</span>
+        </div>
+      </div>
+    </div>
+    <div class="note"><span class="tag">③</span>
+      <b>修掉遮挡：</b>v0.3 里结果面板与黄色覆盖标签同屏，互相压住。本稿把它们变成<b>互斥双模式</b>，由分段控件切换，同一时刻只有一个答案。
+      <b>新增授权条：</b>OCR 涉及屏幕内容，「失败自动切 AI 视觉」意味着上传，必须是显式开关而不是默认行为。</div>
+
+    <div class="varrow">
+      <div class="varcell">
+        <div class="varlab"><span class="chip mile mini">模式二</span>原图覆盖（面板收起）</div>
+        <div class="shot sm" style="border-radius:12px">
+          <div class="fakeapp" style="left:22px;top:24px;width:190px">
+            <div class="fbar"><i></i><i></i><i></i></div>
+            <div class="fbody" style="padding:10px 12px">
+              <h4 style="font-size:12px;margin-bottom:6px">Order Confirmation</h4>
+              <p style="font-size:10.5px;line-height:1.9">Thank you for your purchase!<br>Total: $129.00<br>Shipping: 2–3 business days</p>
+            </div>
+          </div>
+          <div class="region" style="left:14px;top:16px;width:206px;height:152px"></div>
+          <span class="otrans" style="left:22px;top:26px">订单确认</span>
+          <span class="otrans" style="left:22px;top:56px">感谢您的购买！</span>
+          <span class="otrans" style="left:22px;top:86px">总计：$129.00</span>
+          <span class="otrans" style="left:22px;top:116px">配送：2–3 个工作日</span>
+          <div class="minibar">▤ 收起面板中 · 点此展开结果</div>
+        </div>
+      </div>
+      <div class="varcell">
+        <div class="varlab"><span class="chip err mini">异常</span>OCR 未识别到文字</div>
+        <div class="shot sm" style="border-radius:12px">
+          <div class="fakeapp" style="left:22px;top:24px;width:190px">
+            <div class="fbar"><i></i><i></i><i></i></div>
+            <div class="fbody" style="padding:10px 12px">
+              <h4 style="font-size:12px;margin-bottom:6px">纯图片区域</h4>
+              <p style="font-size:10.5px;line-height:1.9">（无文本内容）</p>
+            </div>
+          </div>
+          <div class="region" style="left:14px;top:16px;width:206px;height:120px"></div>
+          <div class="ocrpanel" style="right:12px;top:12px;width:190px">
+            <div class="ocr-head"><b style="font-size:12px">截图识别</b><span class="x">✕</span></div>
+            <div class="ocr-body" style="padding-top:6px">
+              <div class="toast err" style="padding:8px 10px;font-size:11.5px">未识别到文字，选区可能不含文本</div>
+              <div style="display:flex;gap:6px;margin-top:9px;flex-wrap:wrap">
+                <button class="btn mini">重新框选</button>
+                <button class="btn mini">切 AI 视觉</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 4 设置 ================= -->
+  <section class="sec" id="s4">
+    <div class="sec-head"><span class="idx">4</span><h2>设置 · 服务配置（核心页）</h2>
+      <span class="chip mile">✓ 已实现</span>
+      <p class="lead">列表 ▲▼ 排序 / 启停 · 表单编辑 · 密钥状态徽标 · 测试连接 · 性能与回退</p></div>
+    <div class="win">
+      <div class="titlebar"><span class="dotr" style="background:#FF5F57"></span><span class="dotr" style="background:#FEBC2E"></span><span class="dotr" style="background:#28C840"></span><span class="tname">随译 · 设置 — 服务配置</span></div>
+      <div class="set-body">
+        <div class="side">
+          <div class="side-item">通用</div>
+          <div class="side-item">热键</div>
+          <div class="side-item on">服务配置</div>
+          <div class="side-group">即将推出<span style="flex:1"></span><span class="chip mile mini">按里程碑</span></div>
+          <div class="side-item soon">生词本<span class="lk">🔒 M3</span></div>
+          <div class="side-item soon">历史记录<span class="lk">🔒 M4</span></div>
+          <div class="side-item soon">语音合成<span class="lk">🔒 M4</span></div>
+          <div class="side-item soon">插件<span class="lk">🔒 M5</span></div>
+          <div class="side-item">关于</div>
+          <div class="side-foot">随译 v0.1.0 (dev)<br>Tauri 2 · Rust + WebView</div>
+        </div>
+        <div class="main">
+          <div class="card list-col">
+            <div class="card-head"><b>翻译服务</b><span class="m">▲▼ 调整顺序</span><span style="flex:1"></span><button class="btn primary mini">＋ 添加服务</button></div>
+            <div class="svc on">
+              <span class="arrows"><button class="arr">▲</button><button class="arr">▼</button></span>
+              <button class="tgl" role="switch" aria-checked="true" aria-label="启用 ZAI"></button>
+              <span class="svc-name"><b>ZAI</b><span>OpenAI 兼容 · glm-5.3-flash</span></span>
+              <span class="ok-t">✓ 已启用</span><button class="btn mini">编辑</button>
+            </div>
+            <div class="svc">
+              <span class="arrows"><button class="arr">▲</button><button class="arr">▼</button></span>
+              <button class="tgl" role="switch" aria-checked="false" aria-label="启用 DeepSeek"></button>
+              <span class="svc-name"><b>DeepSeek</b><span>OpenAI 兼容 · deepseek-chat</span></span>
+              <button class="btn mini">编辑</button>
+            </div>
+            <div class="svc">
+              <span class="arrows"><button class="arr">▲</button><button class="arr">▼</button></span>
+              <button class="tgl" role="switch" aria-checked="false" aria-label="启用 智谱 GLM"></button>
+              <span class="svc-name"><b>智谱 GLM</b><span>OpenAI 兼容 · glm-4-flash</span></span>
+              <span class="chip warn mini">上次失败 429</span><button class="btn mini">编辑</button>
+            </div>
+            <div class="group">
+              <div class="ghead">性能与回退</div>
+              <div class="row2" style="align-items:center">
+                <label class="glabel">并发数<input class="inp" value="2" readonly></label>
+                <label class="glabel">单服超时（秒）<input class="inp" value="15" readonly></label>
+              </div>
+              <div class="gnote">↳ 失败按启用顺序自动回退到下一条；并发数上限 8。回退链与单服务模式在 <b>通用</b> 中切换。</div>
+            </div>
+          </div>
+
+          <div class="card form-col">
+            <div class="card-head"><b>编辑服务 · ZAI</b><span class="chip acc">OpenAI 兼容</span><span style="flex:1"></span>
+              <button class="btn danger mini">删除</button></div>
+            <div class="row2">
+              <div class="f"><label>名称</label><div class="inp">ZAI</div></div>
+              <div class="f"><label>协议</label><div class="inp">OpenAI 兼容 (/v1/chat/completions)</div></div>
+            </div>
+            <div class="f"><label>Base URL</label><div class="inp mono">https://api.z.ai/api/paas/v4</div></div>
+            <div class="f">
+              <label>API Key（仅存于系统凭据管理器，不入配置文件）<span class="key-state"><span class="chip ok">已保存 ✓</span></span></label>
+              <div class="keyrow"><div class="inp mono ghost">已保存，留空则不修改</div><button class="btn mini">清除</button></div>
+            </div>
+            <div class="testbox">
+              <div class="trow">
+                <button class="btn mini">⚡ 测试连接</button>
+                <span class="chip ok">✓ 连接正常</span>
+                <span class="chip mile">342ms</span>
+                <span class="t-cap">模型 glm-5.3-flash 可用</span>
+              </div>
+            </div>
+            <div class="row2">
+              <div class="f"><label>模型（可手填）</label><div class="inp mono">glm-5.3-flash</div></div>
+              <div class="f" style="flex:0 0 44%"><label>结果类型</label>
+                <div class="seg" style="width:100%"><span class="on" style="flex:1">纯文本</span><span style="flex:1">词典结构</span></div></div>
+            </div>
+            <div class="f"><label>Prompt 模板 · 变量自动注入</label>
+              <div class="codebox">你是专业翻译引擎。将<span class="hl">{{from}}</span>翻译为<span class="hl">{{to}}</span>，只输出译文：
+<span class="hl">{{text}}</span></div></div>
+            <div class="row2">
+              <div class="f"><label>Temperature：0.3</label>
+                <div style="display:flex;align-items:center;gap:10px">
+                  <div style="flex:1;height:6px;border-radius:999px;background:#DCE3EE;overflow:hidden">
+                    <i style="display:block;height:100%;width:30%;background:var(--c-primary-strong)"></i></div>
+                  <span class="t-cap" style="font-family:var(--font-mono)">0.3</span>
+                </div></div>
+              <div class="f"><label>流式输出 (SSE)</label>
+                <button class="tgl" role="switch" aria-checked="true" aria-label="流式输出"></button></div>
+            </div>
+            <div class="form-foot"><button class="btn primary">保存修改</button>
+              <span class="sec-note">🔒 密钥仅存于 Windows 凭据管理器</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="note"><span class="tag">④</span>
+      <b>补回「测试连接」：</b>v0.2 有、v0.3 删除，这是本次最重要的回归补齐——Key 是否有效、网关是否可达、模型是否存在，应该在设置页当场回答。
+      <b>新增分组：</b>并发数与超时归入「性能与回退」，与单个服务的字段分开。
+      <b>侧边栏：</b>未实现项收进「即将推出」分组并带里程碑锁标，不再平铺成 6 个空壳。</div>
+
+    <div class="varrow">
+      <div class="varcell">
+        <div class="varlab"><span class="chip mile mini">状态 1</span>未配置 / 未填 Key</div>
+        <div class="card">
+          <div class="testbox" style="margin:0">
+            <div class="trow"><button class="btn mini" disabled>⚡ 测试连接</button>
+              <span class="t-cap">请先填写 Base URL 与 API Key</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="varcell">
+        <div class="varlab"><span class="chip acc mini">状态 2</span>测试中</div>
+        <div class="card">
+          <div class="testbox" style="margin:0">
+            <div class="trow"><button class="btn mini is-disabled">⚡ 测试连接</button>
+              <span class="spin"></span><span class="chip acc">正在连接…</span>
+              <span class="t-cap">最多等待 8s</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="varcell">
+        <div class="varlab"><span class="chip ok mini">状态 3</span>成功（含延迟）</div>
+        <div class="card">
+          <div class="testbox" style="margin:0">
+            <div class="trow"><button class="btn mini">⚡ 再次测试</button>
+              <span class="chip ok">✓ 连接正常</span><span class="chip mile">342ms</span></div>
+            <div class="gnote"><code>GET /models</code> 请求成功 · 返回 6 个模型 · 当前模型 glm-5.3-flash 在列表中</div>
+          </div>
+        </div>
+      </div>
+      <div class="varcell">
+        <div class="varlab"><span class="chip err mini">状态 4</span>失败（含原因与建议）</div>
+        <div class="card">
+          <div class="testbox" style="margin:0;border-color:var(--c-danger-border);background:var(--c-danger-bg)">
+            <div class="trow"><button class="btn mini">⚡ 重试</button>
+              <span class="chip err">✕ 403 model_access_denied</span></div>
+            <div class="gnote">Key 有效，但该模型不在当前账号权限内。建议：换成 <b>glm-4-flash</b>，或确认网关地址
+              （Z.ai 用 <code>https://api.z.ai/api/paas/v4</code>，bigmodel.cn 不通用）。</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="varrow" style="margin-top:20px">
+      <div class="varcell">
+        <div class="varlab"><span class="chip err mini">危险动作</span>删除服务 · 二次确认</div>
+        <div class="confirm">
+          <div class="ch">删除服务「ZAI」？</div>
+          <div class="cb">将同时清除 Windows 凭据管理器中保存的 API Key，此操作不可撤销。<br>建议先导出配置以便恢复。</div>
+          <div class="cf"><button class="btn mini">取消</button><button class="btn danger mini">确认删除</button></div>
+        </div>
+      </div>
+      <div class="varcell">
+        <div class="varlab"><span class="chip mile mini">空态</span>还没有任何服务</div>
+        <div class="card">
+          <div class="emptybox">
+            <b style="color:var(--c-text)">还没有配置服务</b><br>
+            添加一个 OpenAI 兼容服务即可开始翻译。<br>
+            <span style="display:inline-flex;gap:6px;margin-top:10px">
+              <button class="btn primary mini">＋ 添加服务</button>
+              <button class="btn mini">使用预置模板</button>
+            </span>
+          </div>
+        </div>
+      </div>
+      <div class="varcell">
+        <div class="varlab"><span class="chip mile mini">错误态</span>字段校验</div>
+        <div class="row2" style="gap:10px">
+          <div class="f"><label>名称</label><div class="inp err">（空）</div>
+            <div class="t-cap" style="color:var(--c-danger);margin-top:4px">名称不能为空</div></div>
+          <div class="f"><label>Base URL</label><div class="inp err mono">api.z.ai</div>
+            <div class="t-cap" style="color:var(--c-danger);margin-top:4px">需以 http(s):// 开头</div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 5 热键 ================= -->
+  <section class="sec" id="s5">
+    <div class="sec-head"><span class="idx">5</span><h2>热键设置</h2>
+      <span class="chip warn">部分实现</span>
+      <p class="lead">Alt+D / Alt+S 已在代码中注册；本页补冲突态、录制态与恢复默认</p></div>
+    <div class="stage">
+      <div class="stageA" style="gap:16px">
+        <div class="win" style="flex:1;min-width:320px">
+          <div class="hk">
+            <span class="nm"><b>划词翻译</b><span>取选中文字 → 弹窗</span></span>
+            <span class="chip mile mini">✓ 已实现</span>
+            <span class="kbd">Alt</span><span style="color:var(--c-icon)">+</span><span class="kbd">D</span>
+            <button class="btn mini">录制</button>
+          </div>
+          <div class="hk">
+            <span class="nm"><b>输入翻译</b><span>呼出主窗口手动输入</span></span>
+            <span class="kbd">Alt</span><span style="color:var(--c-icon)">+</span><span class="kbd">E</span>
+            <button class="btn mini">录制</button>
+          </div>
+          <div class="hk conflict">
+            <span class="nm"><b>输入框转译</b><span>当前输入框整体替换</span></span>
+            <span class="chip warn mini">M3 规划</span>
+            <span class="kbd">Alt</span><span style="color:var(--c-icon)">+</span><span class="kbd">T</span>
+            <button class="btn mini">录制</button>
+            <div class="warnline">⚠ 该组合已被「某截图工具」占用，可能无法生效。建议改用
+              <span class="kbd">Ctrl</span>+<span class="kbd">Alt</span>+<span class="kbd">T</span>
+              <button class="btn mini">采用建议</button></div>
+          </div>
+        </div>
+        <div class="win" style="flex:1;min-width:320px">
+          <div class="hk">
+            <span class="nm"><b>截图 OCR / 翻译</b><span>框选识别，或识别并翻译</span></span>
+            <span class="chip warn mini">M2 开发中</span>
+            <span class="kbd">Alt</span><span style="color:var(--c-icon)">+</span><span class="kbd">S</span>
+            <button class="btn mini">录制</button>
+          </div>
+          <div class="hk">
+            <span class="nm"><b>朗读选中文字</b><span>用系统语音播报</span></span>
+            <span class="chip mile mini">M4 规划</span>
+            <span class="kbd">Alt</span><span style="color:var(--c-icon)">+</span><span class="kbd">R</span>
+            <button class="btn mini locked" title="M4 里程碑开放">🔒 录制</button>
+          </div>
+          <div class="hk" style="background:var(--c-primary-soft)">
+            <span class="nm"><b>录制中 · 划词翻译</b><span>请按下新的组合键，Esc 取消</span></span>
+            <span class="rec">等待按键…</span>
+            <button class="btn mini">取消</button>
+          </div>
+          <div class="hk" style="justify-content:flex-end">
+            <span class="t-cap" style="flex:1">已修改过的热键可随时恢复</span>
+            <button class="btn mini">恢复默认热键</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="note"><span class="tag">⑤</span>
+      Alt+D / Alt+S / Alt+T / Alt+R 全是高频键位，<b>冲突是必然事件而不是异常</b>。本稿补三种态：已被占用（含建议替代键）、录制中、恢复默认。</div>
+  </section>
+
+  <!-- ================= 6 历史记录与词典 ================= -->
+  <section class="sec" id="s6">
+    <div class="sec-head"><span class="idx">6</span><h2>历史记录 · 词典结构化结果</h2>
+      <span class="chip mile">M4 规划</span>
+      <p class="lead">翻译结果需要沉淀才有复利；词典结构是「查词」场景的正确形态</p></div>
+    <div class="stage">
+      <div class="win">
+        <div class="titlebar"><span class="dotr" style="background:#FF5F57"></span><span class="dotr" style="background:#FEBC2E"></span><span class="dotr" style="background:#28C840"></span><span class="tname">随译 · 历史记录</span></div>
+        <div class="hist">
+          <div class="hist-list">
+            <div class="hist-tools">
+              <span class="inp ghost">🔍 搜索原文或译文…</span>
+              <span class="chip acc">全部</span><span class="chip">ZAI</span><span class="chip">DeepSeek</span>
+              <span style="flex:1"></span>
+              <span class="chip mile">近 7 天</span>
+            </div>
+            <div class="hrow on">
+              <div class="hl1"><span class="dot"></span><span class="t">Despite their success, transformers…</span>
+                <span class="chip acc mini">ZAI</span></div>
+              <div class="hl2">尽管取得了成功，Transformer 在长上下文推理… · 今天 14:22 · 1.8s</div>
+            </div>
+            <div class="hrow">
+              <div class="hl1"><span class="dot warn"></span><span class="t">Order Confirmation</span>
+                <span class="chip mile mini">OCR</span><span class="chip acc mini">ZAI</span></div>
+              <div class="hl2">订单确认 · 今天 14:05 · 2.4s · 截图识别</div>
+            </div>
+            <div class="hrow">
+              <div class="hl1"><span class="dot"></span><span class="t">The quick brown fox jumps over the lazy dog.</span>
+                <span class="chip acc mini">DeepSeek</span></div>
+              <div class="hl2">敏捷的棕色狐狸跳过了那只懒狗。 · 昨天 21:40 · 1.1s</div>
+            </div>
+            <div class="hrow">
+              <div class="hl1"><span class="dot err"></span><span class="t">（失败）请稍后再试</span>
+                <span class="chip err mini">智谱 GLM</span></div>
+              <div class="hl2">429 限流 · 昨天 21:39 · 0.3s</div>
+            </div>
+            <div class="hrow">
+              <div class="hl1"><span class="dot"></span><span class="t">这份报告我明天上午发给你…</span>
+                <span class="chip mile mini">输入转译</span></div>
+              <div class="hl2">I'll send you the report tomorrow morning… · 昨天 18:12 · 2.0s</div>
+            </div>
+          </div>
+          <div class="hist-detail">
+            <div class="lab">原文</div>
+            <div class="card" style="padding:11px 12px">
+              <div class="t-body">Despite their success, transformers still struggle with long-context reasoning and efficient retrieval.</div>
+            </div>
+            <div class="lab">译文 · ZAI</div>
+            <div class="card" style="padding:11px 12px">
+              <div class="t-body">尽管取得了成功，Transformer 在长上下文推理和高效检索方面仍然存在困难。</div>
+            </div>
+            <div class="rmeta" style="border-top:none;padding-top:0">输入 18 tok · 输出 22 tok · 1.8s · 今天 14:22</div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:auto">
+              <button class="btn primary mini">⧉ 复制译文</button>
+              <button class="btn mini">＋ 生词本</button>
+              <button class="btn mini">🔊 朗读</button>
+              <button class="btn mini">↻ 换服务重译</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="note"><span class="tag">⑥</span>
+      v0.3 把历史留到 M4 且没有任何界面。本稿补出形态：<b>左侧列表 + 右侧详情</b>，失败记录也保留（带红点与原因），
+      因为「哪条服务总是失败」本身就是用户最需要的决策信息。筛选按<b>服务</b>切分，直接服务「多服务对比哪个更准」这个核心卖点。</div>
+
+    <div class="varrow">
+      <div class="varcell">
+        <div class="varlab"><span class="chip mile mini">M4</span>词典结构化结果卡</div>
+        <div class="card dict">
+          <div><span class="w">retrieval</span><span class="ph">/rɪˈtriːvl/</span></div>
+          <div style="margin-top:6px"><span class="pos">n.</span></div>
+          <div class="sense" style="border-top:none">
+            <div class="def">检索；找回；取回</div>
+            <div class="eg">efficient retrieval of long documents — 长文档的高效检索</div>
+          </div>
+          <div class="sense">
+            <div class="def">（计算机）数据读取</div>
+            <div class="eg">information retrieval — 信息检索</div>
+          </div>
+          <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap">
+            <button class="btn primary mini">⧉ 复制</button>
+            <button class="btn mini">🔊 朗读</button>
+            <button class="btn mini">＋ 生词本</button>
+          </div>
+        </div>
+      </div>
+      <div class="varcell">
+        <div class="varlab"><span class="chip mile mini">M4</span>词典结构 vs 纯文本（设置里切换）</div>
+        <div class="card">
+          <div class="f"><label>结果类型（服务级开关）</label>
+            <div class="seg" style="width:100%"><span style="flex:1">纯文本</span><span class="on" style="flex:1">词典结构</span></div></div>
+          <div class="t-sec">选择「词典结构」后，服务需返回结构化 JSON；解析失败时<b>自动回退为纯文本</b>并保留原始输出，不会直接报错。</div>
+          <div class="gnote" style="margin-top:9px">适用场景：单词 / 短语查询。整句翻译请用纯文本，结构化解码会浪费额度。</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 7 朗读与生词本 ================= -->
+  <section class="sec" id="s7">
+    <div class="sec-head"><span class="idx">7</span><h2>朗读 · 生词本</h2>
+      <span class="chip mile">M4 / M3 规划</span>
+      <p class="lead">结果处置的最后一段：听得见、存得住</p></div>
+    <div class="stage">
+      <div class="stageA" style="gap:16px">
+        <div style="flex:1;min-width:320px;display:flex;flex-direction:column;gap:12px">
+          <div class="varlab" style="font-size:11.5px;font-weight:600;color:var(--c-caption)">TTS 朗读条（贴在结果卡底部）</div>
+          <div class="tts">
+            <button class="play" aria-label="播放">▶</button>
+            <div class="track"><i></i></div>
+            <span class="t-cap" style="font-family:var(--font-mono)">0:03 / 0:08</span>
+            <span class="seg"><span>0.8×</span><span class="on">1.0×</span><span>1.5×</span></span>
+          </div>
+          <div class="tts">
+            <button class="play" aria-label="播放">⏸</button>
+            <div class="track"><i style="width:62%"></i></div>
+            <span class="t-cap" style="font-family:var(--font-mono)">0:05 / 0:08</span>
+            <span class="chip acc mini">中文·晓晓</span>
+            <button class="btn mini">切换音色</button>
+          </div>
+          <div class="card">
+            <div class="t-sec"><b>引擎选择：</b>优先 Windows 本地语音（离线、零成本）；需要更自然音色时切到所选服务的 TTS。
+              朗读<b>不经过翻译链路</b>，不会消耗翻译额度。</div>
+          </div>
+        </div>
+        <div style="flex:1;min-width:320px;display:flex;flex-direction:column;gap:12px">
+          <div class="varlab" style="font-size:11.5px;font-weight:600;color:var(--c-caption)">生词本（Anki Connect 同步）</div>
+          <div class="card" style="padding:0;overflow:hidden">
+            <div class="card-head" style="padding:12px 13px 0;margin-bottom:8px"><b>生词本</b>
+              <span class="chip ok mini">Anki 已连接</span><span style="flex:1"></span>
+              <button class="btn mini">同步</button></div>
+            <div class="anki-row"><span class="dot"></span><span class="w">retrieval</span>
+              <span class="m">检索 · 今天 14:22</span><span class="chip ok mini">已同步</span></div>
+            <div class="anki-row"><span class="dot warn"></span><span class="w">ablations</span>
+              <span class="m">消融实验 · 今天 14:22</span><span class="chip warn mini">待同步</span></div>
+            <div class="anki-row"><span class="dot"></span><span class="w">lazy dog</span>
+              <span class="m">懒狗 · 昨天 21:40</span><span class="chip ok mini">已同步</span></div>
+            <div style="padding:10px 13px;background:var(--c-surface-2);display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+              <span class="chip mile mini">1 张待同步</span>
+              <span style="flex:1"></span>
+              <button class="btn primary mini">＋ 手动添加词条</button>
+            </div>
+          </div>
+          <div class="toast info"><span>ℹ</span><span>Anki 未启动时自动排队，下次连接后批量补发，不丢词条。</span><span class="x">✕</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="note"><span class="tag">⑦</span>
+      结果处置是当前产品最薄的一环：翻译完只能复制，没有沉淀。本稿把 <b>TTS 与生词本</b>画到与既有区块同等的完成度，
+      并明确「本地优先、离线可用、不烧额度」的成本策略。</div>
+  </section>
+
+  <!-- ================= 附录 A 状态矩阵 ================= -->
+  <section class="sec" id="appA">
+    <div class="sec-head"><span class="idx">A</span><h2>附录 · 状态矩阵</h2>
+      <p class="lead">v0.3 完全没有状态设计；这一节是给实现者的交付清单</p></div>
+
+    <div class="varlab" style="font-size:12px;font-weight:600;color:var(--c-caption);margin-bottom:8px">A1 · 基础组件 7 态</div>
+    <div class="tblwrap">
+      <table class="matrix">
+        <thead><tr>
+          <th style="width:110px">组件</th><th>Normal</th><th>Hover</th><th>Active</th><th>Focus</th><th>Disabled</th><th>Loading</th><th>Error</th>
+        </tr></thead>
+        <tbody>
+          <tr>
+            <td>主按钮</td>
+            <td><span class="cell"><button class="btn primary mini">翻译</button></span></td>
+            <td><span class="cell"><button class="btn primary mini" style="background:var(--c-primary-hover);border-color:var(--c-primary-hover)">翻译</button></span></td>
+            <td><span class="cell"><button class="btn primary mini" style="background:#2740C8;border-color:#2740C8">翻译</button></span></td>
+            <td><span class="cell"><button class="btn primary mini" style="outline:2px solid var(--c-primary-strong);outline-offset:2px">翻译</button></span></td>
+            <td><span class="cell"><button class="btn primary mini is-disabled">翻译</button></span></td>
+            <td><span class="cell"><button class="btn primary mini is-disabled"><span class="spin" style="border-color:rgba(255,255,255,.4);border-top-color:#fff"></span>翻译中</button></span></td>
+            <td><span class="cell"><button class="btn primary mini">↻ 重试</button></span></td>
+          </tr>
+          <tr>
+            <td>次级按钮</td>
+            <td><span class="cell"><button class="btn mini">弹窗预览</button></span></td>
+            <td><span class="cell"><button class="btn mini" style="background:var(--c-app-bg);border-color:#C6D2E4;color:var(--c-text)">弹窗预览</button></span></td>
+            <td><span class="cell"><button class="btn mini" style="background:#E9EEF6">弹窗预览</button></span></td>
+            <td><span class="cell"><button class="btn mini" style="outline:2px solid var(--c-primary-strong);outline-offset:2px">弹窗预览</button></span></td>
+            <td><span class="cell"><button class="btn mini is-disabled">弹窗预览</button></span></td>
+            <td><span class="cell"><button class="btn mini is-disabled"><span class="spin"></span>加载</button></span></td>
+            <td><span class="cell t-cap">—</span></td>
+          </tr>
+          <tr>
+            <td>危险按钮</td>
+            <td><span class="cell"><button class="btn danger mini">删除</button></span></td>
+            <td><span class="cell"><button class="btn danger mini" style="background:#FDECEC;border-color:#EBA9A9">删除</button></span></td>
+            <td><span class="cell"><button class="btn danger mini" style="background:#FBDCDC;border-color:#E29A9A">删除</button></span></td>
+            <td><span class="cell"><button class="btn danger mini" style="outline:2px solid var(--c-danger);outline-offset:2px">删除</button></span></td>
+            <td><span class="cell"><button class="btn danger mini is-disabled">删除</button></span></td>
+            <td><span class="cell t-cap">—</span></td>
+            <td><span class="cell"><span class="chip err mini">✕ 删除失败，请重试</span></span></td>
+          </tr>
+          <tr>
+            <td>输入框</td>
+            <td><span class="cell" style="width:150px"><span class="inp" style="height:28px;font-size:12px">deepseek-chat</span></span></td>
+            <td><span class="cell" style="width:150px"><span class="inp" style="height:28px;font-size:12px;border-color:#C6D2E4">deepseek-chat</span></span></td>
+            <td><span class="cell" style="width:150px"><span class="inp" style="height:28px;font-size:12px;border-color:#B9C8E2">deepseek-chat</span></span></td>
+            <td><span class="cell" style="width:150px"><span class="inp" style="height:28px;font-size:12px;border-color:var(--c-primary-strong);box-shadow:0 0 0 3px rgba(59,91,255,.14)">deepseek-chat</span></span></td>
+            <td><span class="cell" style="width:150px"><span class="inp" style="height:28px;font-size:12px;background:#F4F6FA;color:#7C8AA0">只读</span></span></td>
+            <td><span class="cell" style="width:150px"><span class="inp" style="height:28px;font-size:12px;color:var(--c-caption)">校验中…</span></span></td>
+            <td><span class="cell" style="width:150px"><span class="inp err" style="height:28px;font-size:12px">api.z.ai</span></span></td>
+          </tr>
+          <tr>
+            <td>开关</td>
+            <td><span class="cell"><button class="tgl" role="switch" aria-checked="true" aria-label="开"></button></span></td>
+            <td><span class="cell"><button class="tgl" role="switch" aria-checked="true" style="background:var(--c-primary-hover)" aria-label="开 hover"></button></span></td>
+            <td><span class="cell"><button class="tgl" role="switch" aria-checked="true" style="background:#2740C8" aria-label="开 active"></button></span></td>
+            <td><span class="cell"><button class="tgl" role="switch" aria-checked="true" style="outline:2px solid var(--c-primary-strong);outline-offset:2px" aria-label="开 focus"></button></span></td>
+            <td><span class="cell"><button class="tgl" role="switch" aria-checked="false" style="background:#DCE3EE;cursor:not-allowed" aria-label="禁用"></button></span></td>
+            <td><span class="cell"><span class="spin"></span></span></td>
+            <td><span class="cell t-cap">—</span></td>
+          </tr>
+          <tr>
+            <td>分段控件</td>
+            <td><span class="cell"><span class="seg" style="height:28px"><span style="height:28px">纯文本</span><span class="on" style="height:28px">词典</span></span></span></td>
+            <td><span class="cell"><span class="seg" style="height:28px"><span style="height:28px;background:var(--c-app-bg)">纯文本</span><span class="on" style="height:28px">词典</span></span></span></td>
+            <td><span class="cell"><span class="seg" style="height:28px"><span style="height:28px;background:#E9EEF6">纯文本</span><span class="on" style="height:28px">词典</span></span></span></td>
+            <td><span class="cell"><span class="seg" style="height:28px;outline:2px solid var(--c-primary-strong);outline-offset:2px"><span style="height:28px">纯文本</span><span class="on" style="height:28px">词典</span></span></span></td>
+            <td><span class="cell"><span class="seg" style="height:28px;opacity:.6"><span style="height:28px">纯文本</span><span class="on" style="height:28px">词典</span></span></span></td>
+            <td><span class="cell t-cap">—</span></td>
+            <td><span class="cell t-cap">—</span></td>
+          </tr>
+          <tr>
+            <td>结果卡</td>
+            <td><span class="cell" style="width:160px"><span class="rescard" style="padding:7px 9px"><span class="rh" style="margin-bottom:3px;font-size:10.5px"><span class="dot"></span><b style="font-size:11px">ZAI</b></span><span class="rt" style="font-size:11px">译文内容…</span></span></span></td>
+            <td><span class="cell" style="width:160px"><span class="rescard" style="padding:7px 9px;border-color:#CBD8EE;box-shadow:var(--shadow-float)"><span class="rh" style="margin-bottom:3px;font-size:10.5px"><span class="dot"></span><b style="font-size:11px">ZAI</b></span><span class="rt" style="font-size:11px">译文内容…</span></span></span></td>
+            <td><span class="cell" style="width:160px"><span class="rescard" style="padding:7px 9px;background:var(--c-surface-2)"><span class="rh" style="margin-bottom:3px;font-size:10.5px"><span class="dot"></span><b style="font-size:11px">ZAI</b></span><span class="rt" style="font-size:11px">译文内容…</span></span></span></td>
+            <td><span class="cell" style="width:160px"><span class="rescard" style="padding:7px 9px;outline:2px solid var(--c-primary-strong);outline-offset:2px"><span class="rh" style="margin-bottom:3px;font-size:10.5px"><span class="dot"></span><b style="font-size:11px">ZAI</b></span><span class="rt" style="font-size:11px">译文内容…</span></span></span></td>
+            <td><span class="cell" style="width:160px"><span class="rescard" style="padding:7px 9px;opacity:.55"><span class="rh" style="margin-bottom:3px;font-size:10.5px"><span class="dot idle"></span><b style="font-size:11px">ZAI</b></span><span class="rt" style="font-size:11px">服务已停用</span></span></span></td>
+            <td><span class="cell" style="width:160px"><span class="rescard streaming" style="padding:7px 9px"><span class="rh" style="margin-bottom:3px;font-size:10.5px"><span class="dot"></span><b style="font-size:11px">ZAI</b></span><span class="rt" style="font-size:11px">流式生成中<span class="caret"></span></span></span></span></td>
+            <td><span class="cell" style="width:160px"><span class="rescard err" style="padding:7px 9px"><span class="rh" style="margin-bottom:3px;font-size:10.5px"><span class="dot err"></span><b style="font-size:11px">ZAI</b></span><span class="rt err" style="font-size:11px">429 限流</span></span></span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="note">焦点环统一为 <code>2px</code> 实心 <code>--c-primary-strong</code> + <code>2px</code> 偏移，仅在键盘导航时出现（<code>:focus-visible</code>）。
+      禁用态文字对比度低于 4.5:1 属 WCAG 明确豁免，但本稿仍把禁用文字提到 <code>#7C8AA0</code> 以保证可读。</div>
+
+    <div class="varlab" style="font-size:12px;font-weight:600;color:var(--c-caption);margin:24px 0 8px">A2 · 页面级 6 态</div>
+    <div class="stategrid">
+      <div class="statecard">
+        <div class="sh"><span class="chip mile mini">空</span><b>没有任何记录</b></div>
+        <div class="emptybox"><b style="color:var(--c-text)">还没有翻译记录</b><br>按 Alt+D 划词翻译，结果会自动出现在这里。</div>
+      </div>
+      <div class="statecard">
+        <div class="sh"><span class="chip acc mini">加载</span><b>列表骨架屏</b></div>
+        <div><div class="skl" style="width:88%"></div><div class="skl" style="width:64%"></div><div class="skl" style="width:76%"></div>
+          <div class="t-cap" style="margin-top:6px">超过 300ms 才显示骨架，避免闪烁</div></div>
+      </div>
+      <div class="statecard">
+        <div class="sh"><span class="chip warn mini">部分成功</span><b>1/2 服务返回</b></div>
+        <div class="rescard" style="padding:8px 10px;margin-bottom:6px"><div class="rh" style="margin-bottom:3px"><span class="dot"></span><b>ZAI</b><span>0.9s</span></div>
+          <div class="rt" style="font-size:12px">敏捷的棕色狐狸跳过了那只懒狗。</div></div>
+        <div class="rescard err" style="padding:8px 10px"><div class="rh" style="margin-bottom:3px"><span class="dot err"></span><b>智谱 GLM</b><button class="btn mini" style="margin-left:auto">重试</button></div>
+          <div class="rt err" style="font-size:12px">429 限流</div></div>
+      </div>
+      <div class="statecard">
+        <div class="sh"><span class="chip err mini">全部失败</span><b>0/2 服务返回</b></div>
+        <div class="emptybox" style="border-style:solid;background:var(--c-danger-bg);border-color:var(--c-danger-border);color:#9F1F1F">
+          <b>全部服务失败</b><br>超时 1 个 · Key 无效 1 个<br>
+          <span style="display:inline-flex;gap:6px;margin-top:10px"><button class="btn mini">全部重试</button><button class="btn mini">打开设置</button></span>
+        </div>
+      </div>
+      <div class="statecard">
+        <div class="sh"><span class="chip warn mini">超时</span><b>单服务超时</b></div>
+        <div class="rescard err" style="padding:8px 10px">
+          <div class="rh" style="margin-bottom:3px"><span class="dot err"></span><b>ZAI</b><span>15.0s</span><span style="flex:1"></span><button class="btn mini">重试</button></div>
+          <div class="rt err" style="font-size:12px">请求超时（15s，可在设置 → 性能与回退中调整）</div>
+        </div>
+        <div class="t-cap" style="margin-top:8px">超时是配置问题而不是故障，文案里要给出可执行的下一步。</div>
+      </div>
+      <div class="statecard">
+        <div class="sh"><span class="chip mile mini">无服务</span><b>未配置任何服务</b></div>
+        <div class="emptybox">
+          <b style="color:var(--c-text)">还没有可用的翻译服务</b><br>
+          请到「设置 → 服务配置」启用并填好 API Key。
+          <span style="display:inline-flex;gap:6px;margin-top:10px"><button class="btn primary mini">打开设置</button></span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 附录 B Token 与对比度 ================= -->
+  <section class="sec" id="appB">
+    <div class="sec-head"><span class="idx">B</span><h2>附录 · 提案 Token 与对比度实测</h2>
+      <p class="lead">变量名与现有 tokens.css 对齐，可直接搬运；对比度为 WCAG 2.1 公式实算结果</p></div>
+
+    <div class="tblwrap">
+      <table class="tbl">
+        <thead><tr><th style="width:24%">变量</th><th style="width:14%">值</th><th style="width:30%">用途</th><th style="width:16%">对比度（实测）</th><th>判定</th></tr></thead>
+        <tbody>
+          <tr><td class="k"><span class="swatch" style="background:#0F172A"></span>--c-text</td><td class="k">#0F172A</td><td>正文主色</td><td>17.9:1 ／ 白底</td><td>✓ AAA</td></tr>
+          <tr><td class="k"><span class="swatch" style="background:#475569"></span>--c-text-2</td><td class="k">#475569</td><td>次级文字、按钮文字</td><td>7.6:1 ／ 白底</td><td>✓ AAA</td></tr>
+          <tr><td class="k"><span class="swatch" style="background:#64748B"></span>--c-text-3</td><td class="k">#64748B</td><td>弱文字，<b>仅限 ≥12px</b></td><td>4.5:1 ／ 应用底</td><td>✓ AA（临界）</td></tr>
+          <tr><td class="k"><span class="swatch" style="background:#5C6B80"></span>--c-caption</td><td class="k">#5C6B80</td><td>11px 极小标注（新增）</td><td>5.1:1 ／ 应用底</td><td>✓ AA</td></tr>
+          <tr><td class="k"><span class="swatch" style="background:#94A3B8"></span>--c-icon</td><td class="k">#94A3B8</td><td><b>仅图标与分隔线</b>，不用于文字</td><td>2.4:1 ／ 应用底</td><td>✗ 装饰专用</td></tr>
+          <tr><td class="k"><span class="swatch" style="background:#3B5BFF"></span>--c-primary-strong</td><td class="k">#3B5BFF</td><td>主按钮 / 链接 / 选中（新增）</td><td>5.1:1 ／ 白底</td><td>✓ AA</td></tr>
+          <tr><td class="k"><span class="swatch" style="background:#4C6FFF"></span>--c-primary</td><td class="k">#4C6FFF</td><td>品牌识别、图形、进度</td><td>4.2:1 ／ 白底</td><td>△ 仅图形 / 大字</td></tr>
+          <tr><td class="k"><span class="swatch" style="background:#15803D"></span>--c-success</td><td class="k">#15803D</td><td>成功文字</td><td>4.8:1 ／ #ECFDF3</td><td>✓ AA</td></tr>
+          <tr><td class="k"><span class="swatch" style="background:#B45309"></span>--c-warn</td><td class="k">#B45309</td><td>警告文字</td><td>4.7:1 ／ #FFF7E6</td><td>✓ AA</td></tr>
+          <tr><td class="k"><span class="swatch" style="background:#DC2626"></span>--c-danger</td><td class="k">#DC2626</td><td>错误 / 危险文字</td><td>4.6:1 ／ #FFF7F7</td><td>✓ AA</td></tr>
+          <tr><td class="k"><span class="swatch" style="background:#0369A1"></span>--c-info</td><td class="k">#0369A1</td><td>信息提示（新增，与品牌蓝区分）</td><td>5.6:1 ／ #F0F9FF</td><td>✓ AA</td></tr>
+          <tr><td class="k"><span class="swatch" style="background:#52607A"></span>--c-mile</td><td class="k">#52607A</td><td>里程碑 / 文档状态（新增）</td><td>5.6:1 ／ #EEF1F6</td><td>✓ AA</td></tr>
+          <tr><td class="k"><span class="swatch" style="background:#FFDE59"></span>--c-highlight</td><td class="k">#FFDE59</td><td>原文覆盖标签底色</td><td>配 #4A3B00 为 8.3:1</td><td>✓ AAA</td></tr>
+          <tr><td class="k"><span class="swatch" style="background:#EDF1F7"></span>禁用文字</td><td class="k">#7C8AA0</td><td>禁用控件文字</td><td>2.6:1 ／ #EDF1F7</td><td>△ WCAG 豁免</td></tr>
+          <tr><td class="k"><span class="swatch" style="background:#0F1626"></span>--c-dark-bg</td><td class="k">#0F1626</td><td>截图 / 覆盖层底色（新增）</td><td>配 #E2E8F0 为 14.6:1</td><td>✓ AAA</td></tr>
+          <tr><td class="k"><span class="swatch" style="background:#18213A"></span>--c-dark-surface</td><td class="k">#18213A</td><td>深色区面板（新增）</td><td>配 #E2E8F0 为 12.6:1</td><td>✓ AAA</td></tr>
+          <tr><td class="k"><span class="swatch" style="background:#B6C2D6"></span>--c-dark-text-2</td><td class="k">#B6C2D6</td><td>深色区次级文字（新增）</td><td>10.0:1 ／ 深色底</td><td>✓ AAA</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="note">
+      <b>字阶（6 级，最小 11px）：</b>display 17/600 · title 15/600 · subtitle 13.5/600 · body 13/1.75 · secondary 12/1.7 · caption 11/500。
+      取消 v0.3 的 10px 大写 + 字距标签写法。<br>
+      <b>尺寸：</b>按钮 30px（mini 26px）· 输入 32px · 列表行 44px · 卡片内距 14/16 · 圆角沿用 6/8/11/14/999 · 间距 4px 基准（4/8/12/16/24/32）。<br>
+      <b>深色模式：</b>本稿只交付上表的深色 token（<code>--c-dark-*</code>），不出完整深色界面——避免与在研代码冲突，等代码侧空闲后再单独提案。<br>
+      <b>注意：</b>以上为提案值。现有 <code>src/styles/tokens.css</code> 未被修改，是否迁入由人工决定。
+    </div>
+  </section>
+
+  <!-- ================= footer ================= -->
+  <div class="board-foot">
+    <h3>实现状态总览</h3>
+    <ul>
+      <li>M0 ✅ 内核闭环：服务配置 / 凭据管理器 / 流式翻译（真实验收通过）</li>
+      <li>M1 ✅ 划词翻译：Alt+D / 剪贴板取词 / 光标处弹窗 / 失焦隐藏</li>
+      <li>M2 🔜 截图 OCR：Alt+S 冻结框选 → Windows.Media.OCR → 弹窗翻译；原图覆盖为可选模式</li>
+      <li>M3 🔜 输入框转译（快照校验写回 + 撤销）+ 划词替换 + Anki 生词本</li>
+      <li>M4 🔜 词典结构化 / TTS 朗读 / 历史记录</li>
+      <li>M5 🔜 插件系统 · M6 🔜 macOS / Linux 移植</li>
+    </ul>
+    <div class="next">审阅方式 →
+      <b>本稿</b>直接双击打开即可，Hover / 焦点 / 禁用态都是真实 CSS；
+      <b>原稿</b>见同目录 <code style="font-family:var(--font-mono)">ui-mockup.html</code>（v0.3，未修改）；
+      注意 <code style="font-family:var(--font-mono)">ui-mockup.png</code> 是 v0.2 的旧导出，已过期、不可作为依据。
+      <span class="chip">本稿未改动任何在研代码</span>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>
+
+
+

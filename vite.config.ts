@@ -8,12 +8,13 @@ const host = process.env.TAURI_DEV_HOST;
 export default defineConfig(() => ({
   plugins: [react()],
 
-  // 多页面入口：主窗口 index.html + 划词弹窗 popup.html
+  // 多页面入口：主窗口 index.html + 划词弹窗 popup.html + 截图覆盖层 overlay.html
   build: {
     rollupOptions: {
       input: {
         main: "index.html",
         popup: "popup.html",
+        overlay: "overlay.html",
       },
     },
   },
