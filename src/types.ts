@@ -60,3 +60,15 @@ export function serviceMeta(s: ServiceConfig): string {
   const proto = PROTOCOL_LABELS[s.protocol];
   return s.model ? `${proto} · ${s.model}` : proto;
 }
+
+/**
+ * 语言方向选项。目标语言不含「自动检测」，其余与来源一致，
+ * 这样互换方向后两边的取值永远合法。
+ */
+export const SOURCE_LANGS = ["自动检测", "中文", "简体中文", "English", "日本語"];
+export const TARGET_LANGS = ["中文", "简体中文", "English", "日本語"];
+
+/** 互换语言方向。来源是「自动检测」时无法反过来，目标语退到 English。 */
+export function swapLanguages(from: string, to: string): { from: string; to: string } {
+  return { from: to, to: from === "自动检测" ? "English" : from };
+}

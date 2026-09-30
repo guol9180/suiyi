@@ -13,8 +13,29 @@
 
 .lang-row { display: flex; align-items: center; gap: 10px; }
 .lang-row select.inp { width: auto; min-width: 120px; }
-.lang-row .arrow { color: var(--c-text-muted); }
-.muted { font-size: 11.5px; color: var(--c-text-muted); }
+.lang-row .arrow { color: var(--c-icon); }
+.muted { font-size: 11.5px; color: var(--c-caption); }
+
+/* 互换语言方向 */
+.swap {
+  width: 28px;
+  height: 28px;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--c-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--c-surface);
+  color: var(--c-text-2);
+  cursor: pointer;
+  transition: background 0.14s, border-color 0.14s, color 0.14s;
+}
+.swap:hover {
+  background: var(--c-primary-soft);
+  border-color: var(--c-primary-border);
+  color: var(--c-primary-strong);
+}
 
 .src-area { min-height: 110px; resize: vertical; }
 

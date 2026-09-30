@@ -1,26 +1,29 @@
 /*
  * 随译 SuiYi · 设计 token
- * 来源：design/ui-mockup.html v0.2（色板/圆角/阴影/字体）
- * 所有界面样式只允许引用这里的变量，不写魔法值。
+ * 来源：design/ui-mockup.html（v0.4）
+ * 界面样式只引用这里的变量，不写魔法值。
  */
 
 :root {
-  /* 主色 */
-  --c-primary: #4c6fff;
-  --c-primary-strong: #3b5bff;
+  /* 品牌与交互 */
+  --c-primary: #4c6fff;          /* 品牌识别：logo、图形、进度 */
+  --c-primary-strong: #3b5bff;   /* 交互主色：主按钮、链接、选中（白字 5.1:1） */
+  --c-primary-hover: #2f49e0;
   --c-primary-soft: #eef2ff;
   --c-primary-border: #d6deff;
 
   /* 中性色 */
-  --c-text: #0f172a;
-  --c-text-2: #475569;
-  --c-text-3: #64748b;
-  --c-text-muted: #94a3b8;
-  --c-bg: #f6f8fb;
+  --c-text: #0f172a;             /* 正文主色（白底 17.9:1） */
+  --c-text-2: #475569;           /* 次级文字（7.6:1） */
+  --c-text-3: #64748b;           /* 弱文字，仅用于 12px 及以上（4.5:1） */
+  --c-caption: #5c6b80;          /* 11px 小字标注（5.1:1） */
+  --c-icon: #94a3b8;             /* 图标与分隔线，不用于文字 */
   --c-surface: #ffffff;
   --c-surface-2: #fbfcfe;
+  --c-app-bg: #f6f8fb;
   --c-border: #e2e8f0;
   --c-border-strong: #d9e0ec;
+  --c-border-soft: #e9edf3;
 
   /* 语义色 */
   --c-success: #15803d;
@@ -29,22 +32,60 @@
   --c-danger: #dc2626;
   --c-danger-bg: #fff7f7;
   --c-danger-border: #f3c7c7;
-  --c-warn: #f59e0b;
-  --c-accent: #ffde59;
+  --c-warn: #b45309;
+  --c-warn-bg: #fff7e6;
+  --c-warn-border: #fde1b9;
+  --c-info: #0369a1;
+  --c-info-bg: #f0f9ff;
+  --c-info-border: #bae6fd;
+  /* 里程碑与文档状态：中性灰蓝，与运行时状态区分开 */
+  --c-mile: #52607a;
+  --c-mile-bg: #eef1f6;
+  --c-mile-border: #dfe5ee;
+  /* 原文覆盖与高亮标记 */
+  --c-highlight: #ffde59;
+  --c-highlight-text: #4a3b00;
 
-  /* 圆角 */
-  --radius-sm: 6px;
-  --radius-md: 8px;
-  --radius-lg: 11px;
-  --radius-xl: 14px;
+  /* 深色区（截图与覆盖层） */
+  --c-dark-bg: #0f1626;
+  --c-dark-surface: #18213a;
+  --c-dark-border: #2a3651;
+  --c-dark-text: #e2e8f0;
+  --c-dark-text-2: #b6c2d6;
+
+  /* 形状 */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 10px;
   --radius-pill: 999px;
-
-  /* 阴影 */
-  --shadow-card: 0 12px 32px rgba(15, 23, 42, 0.1);
-  --shadow-pop: 0 16px 40px rgba(15, 23, 42, 0.16);
-  --shadow-primary: 0 3px 8px rgba(76, 111, 255, 0.35);
+  --shadow-card: 0 10px 26px rgba(15, 23, 42, 0.09);
+  --shadow-pop: 0 14px 34px rgba(15, 23, 42, 0.2);
+  --shadow-float: 0 4px 14px rgba(15, 23, 42, 0.1);
 
   /* 字体 */
   --font-ui: "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif;
   --font-mono: Consolas, "Microsoft YaHei", monospace;
+
+  /* 字阶：最小 11px */
+  --fs-display: 17px;
+  --fs-title: 15px;
+  --fs-sub: 13.5px;
+  --fs-body: 13px;
+  --fs-sec: 12px;
+  --fs-cap: 11px;
+
+  /* 间距：4px 基准 */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+
+  /* 组件尺寸 */
+  --h-btn: 30px;
+  --h-btn-mini: 26px;
+  --h-inp: 32px;
+  --h-row: 44px;
 }

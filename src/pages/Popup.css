@@ -11,6 +11,8 @@ html, body, #root { height: 100%; }
 
 .popup-card {
   height: 100%;
+  width: 100%;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   background: var(--c-surface);
@@ -26,41 +28,78 @@ html, body, #root { height: 100%; }
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 9px 10px;
-  border-bottom: 1px solid #eef2f7;
-  background: #fbfcfe;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--c-border-soft);
+  background: var(--c-surface-2);
   flex: none;
   user-select: none;
 }
+.pop-head .grip { color: #b9c3d3; display: inline-flex; cursor: move; }
+.pop-head .pop-title { font-size: 11.5px; color: var(--c-caption); }
+
+/* ---------- 语言方向（独立成行，不参与拖动） ---------- */
+.pop-langrow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--c-border-soft);
+  flex: none;
+  min-width: 0;
+  overflow: hidden;
+}
 .pop-lang {
+  /* 固定宽度：交给浏览器按选项内容自适应会把这一行撑破卡片 */
+  flex: none;
+  width: 104px;
+  height: 28px;
   border: 1px solid var(--c-border-strong);
-  border-radius: var(--radius-pill);
-  padding: 2px 8px;
+  border-radius: var(--radius-md);
+  padding: 0 8px;
   font-size: 11.5px;
   font-family: inherit;
-  color: var(--c-primary-strong);
-  background: var(--c-primary-soft);
+  color: var(--c-text);
+  background: var(--c-surface);
   outline: none;
+  cursor: pointer;
 }
-.arrow { color: var(--c-text-muted); font-size: 12px; }
+.pop-lang:hover { border-color: #bfcbe0; }
+.swap {
+  width: 28px;
+  height: 28px;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--c-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--c-surface);
+  color: var(--c-text-2);
+  cursor: pointer;
+  transition: background 0.14s, border-color 0.14s, color 0.14s;
+}
+.swap:hover {
+  background: var(--c-primary-soft);
+  border-color: var(--c-primary-border);
+  color: var(--c-primary-strong);
+}
 .pop-icon {
   border: none;
   background: none;
   font-size: 12px;
-  color: var(--c-text-muted);
+  color: var(--c-text-3);
   cursor: pointer;
   padding: 2px 4px;
   border-radius: 6px;
 }
-.pop-icon:hover { background: var(--c-bg); }
+.pop-icon:hover { background: var(--c-mile-bg); color: var(--c-text); }
 .pop-icon.pin-on { background: var(--c-primary-soft); }
 
 /* ---------- 原文 ---------- */
 .pop-src { padding: 10px 12px 6px; flex: none; }
 .lab {
-  font-size: 10px;
-  color: var(--c-text-muted);
-  letter-spacing: 1px;
+  font-size: 11.5px;
+  color: var(--c-caption);
   margin-bottom: 4px;
 }
 .src-text {
@@ -84,7 +123,7 @@ html, body, #root { height: 100%; }
   gap: 8px;
 }
 .pop-empty {
-  color: var(--c-text-muted);
+  color: var(--c-caption);
   font-size: 12px;
   text-align: center;
   padding: 30px 10px;
@@ -123,18 +162,54 @@ html, body, #root { height: 100%; }
 /* ---------- 动作条与状态 ---------- */
 .pop-actions {
   display: flex;
-  flex-wrap: wrap;
+  align-items: center;
   gap: 6px;
-  padding: 8px 12px 4px;
+  padding: 8px 12px;
+  border-top: 1px solid var(--c-border-soft);
   flex: none;
 }
-.pop-actions .btn.disabled-soon { opacity: 0.45; cursor: not-allowed; }
+.pop-actions .btn.open {
+  background: var(--c-primary-soft);
+  border-color: var(--c-primary-border);
+  color: var(--c-primary-strong);
+}
+
+/* ---------- 溢出菜单 ---------- */
+.more-menu {
+  margin: 0 12px 10px;
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-float);
+  background: var(--c-surface);
+  padding: 4px;
+  flex: none;
+}
+.more-menu .mi {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 9px;
+  border: none;
+  background: none;
+  border-radius: var(--radius-sm);
+  font-family: inherit;
+  font-size: 12px;
+  color: var(--c-text-2);
+  cursor: pointer;
+  text-align: left;
+}
+.more-menu .mi:hover { background: var(--c-app-bg); }
+.more-menu .mi:disabled { color: #6b7a92; cursor: not-allowed; }
+.more-menu .mi:disabled:hover { background: var(--c-mile-bg); }
+.more-menu .soon { margin-left: auto; font-size: 10.5px; color: #6b7a92; }
+.more-menu .sep { height: 1px; background: var(--c-border-soft); margin: 4px 0; }
 .pop-status {
   display: flex;
   align-items: center;
   gap: 6px;
   font-size: 10.5px;
-  color: var(--c-text-muted);
+  color: var(--c-caption);
   padding: 2px 13px 10px;
   flex: none;
 }

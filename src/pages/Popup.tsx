@@ -5,7 +5,8 @@ import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { listServices } from "../api";
-import type { ServiceConfig } from "../types";
+import { SOURCE_LANGS, TARGET_LANGS, swapLanguages, type ServiceConfig } from "../types";
+import { Icon } from "../components/Icon";
 import "./Popup.css";
 
 interface CardState {
@@ -17,9 +18,6 @@ interface CardState {
   error?: string;
 }
 
-const FROM_LANGS = ["自动检测", "中文", "English", "日本語"];
-const TO_LANGS = ["简体中文", "English", "日本語"];
-
 export default function PopupPage() {
   const [source, setSource] = useState("");
   const [from, setFrom] = useState("自动检测");
@@ -28,6 +26,7 @@ export default function PopupPage() {
   const [cards, setCards] = useState<CardState[]>([]);
   const [busy, setBusy] = useState(false);
   const [pinned, setPinned] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
 
   const refreshServices = useCallback(async () => {
     try {
@@ -153,33 +152,57 @@ export default function PopupPage() {
   return (
     <div className="popup-root">
       <div className="popup-card">
-        {/* 头部：语言方向 + 状态 + 拖拽区 */}
+        {/* 头部：只剩拖拽把手与窗口按钮，语言选择移到下一行避免与拖动冲突 */}
         <div className="pop-head" data-tauri-drag-region>
+          <span className="grip"><Icon name="grip" size="sm" /></span>
+          <span className="pop-title">随译 · 划词翻译</span>
+          <span style={{ flex: 1 }} />
+          <button
+            className={`pop-icon${pinned ? " pin-on" : ""}`}
+            title={pinned ? "取消固定" : "固定窗口"}
+            aria-label={pinned ? "取消固定" : "固定窗口"}
+            onClick={() => void togglePin()}
+          >
+            <Icon name="pin" size="sm" />
+          </button>
+          <button
+            className="pop-icon"
+            title="关闭 (Esc)"
+            aria-label="关闭"
+            onClick={() => void getCurrentWindow().hide()}
+          >
+            <Icon name="close" size="sm" />
+          </button>
+        </div>
+
+        {/* 语言方向 */}
+        <div className="pop-langrow">
           <select className="pop-lang" value={from} onChange={(e) => setFrom(e.target.value)}>
-            {FROM_LANGS.map((l) => (
+            {SOURCE_LANGS.map((l) => (
               <option key={l} value={l}>{l}</option>
             ))}
           </select>
-          <span className="arrow">→</span>
+          <button
+            className="swap"
+            title="互换语言方向"
+            aria-label="互换语言方向"
+            onClick={() => {
+              const next = swapLanguages(from, to);
+              setFrom(next.from);
+              setTo(next.to);
+            }}
+          >
+            <Icon name="swap" size="sm" />
+          </button>
           <select className="pop-lang" value={to} onChange={(e) => setTo(e.target.value)}>
-            {TO_LANGS.map((l) => (
+            {TARGET_LANGS.map((l) => (
               <option key={l} value={l}>{l}</option>
             ))}
           </select>
           <span style={{ flex: 1 }} />
           {services.length > 0 && (
-            <span className="chip ok mini">{services.length} 服务并发</span>
+            <span className="chip ok mini"><span className="dot" />{services.length} 服务并发</span>
           )}
-          <button
-            className={`pop-icon${pinned ? " pin-on" : ""}`}
-            title={pinned ? "取消固定" : "固定窗口"}
-            onClick={() => void togglePin()}
-          >
-            📌
-          </button>
-          <button className="pop-icon" title="关闭 (Esc)" onClick={() => void getCurrentWindow().hide()}>
-            ✕
-          </button>
         </div>
 
         {/* 原文 */}
@@ -208,8 +231,12 @@ export default function PopupPage() {
                 {c.status === "streaming" && <span>流式生成中…</span>}
                 <span style={{ flex: 1 }} />
                 {c.text && (
-                  <button className="btn mini" onClick={() => void navigator.clipboard.writeText(c.text)}>
-                    ⧉
+                  <button
+                    className="btn mini"
+                    title="复制这条译文"
+                    onClick={() => void navigator.clipboard.writeText(c.text)}
+                  >
+                    <Icon name="copy" size="sm" />
                   </button>
                 )}
               </div>
@@ -228,21 +255,44 @@ export default function PopupPage() {
         {/* 底部动作条 */}
         <div className="pop-actions">
           <button className="btn primary mini" onClick={copyResult} disabled={!cards.some((c) => c.text)}>
-            ⧉ 复制
+            <Icon name="copy" size="sm" />复制
           </button>
-          <button className="btn mini disabled-soon" title="M3 里程碑开放">⇄ 替换原文</button>
-          <button className="btn mini disabled-soon" title="M4 里程碑开放">🔊 朗读</button>
-          <button className="btn mini disabled-soon" title="M3 里程碑开放">＋ 生词本</button>
-          <button className="btn mini" title="必应搜索选中文本" onClick={searchWeb}>🔍 搜索</button>
-          <button className="btn mini" title="文本是网址则直接打开" onClick={openInBrowser}>🌐 浏览器</button>
+          <button className="btn mini locked" title="M3 里程碑开放" disabled>
+            <Icon name="lock" size="sm" />替换原文
+          </button>
+          <span style={{ flex: 1 }} />
           <button
-            className="btn mini"
-            disabled={busy || !source}
-            onClick={() => void doTranslate(source)}
+            className={`btn mini${moreOpen ? " open" : ""}`}
+            aria-expanded={moreOpen}
+            onClick={() => setMoreOpen((v) => !v)}
           >
-            ↻ 重译
+            <Icon name="more" size="sm" />更多
           </button>
         </div>
+        {moreOpen && (
+          <div className="more-menu">
+            <button className="mi locked" disabled title="M4 里程碑开放">
+              <Icon name="speaker" size="sm" />朗读<span className="soon">M4</span>
+            </button>
+            <button className="mi locked" disabled title="M3 里程碑开放">
+              <Icon name="bookmark" size="sm" />生词本<span className="soon">M3</span>
+            </button>
+            <div className="sep" />
+            <button className="mi" onClick={() => { setMoreOpen(false); searchWeb(); }}>
+              <Icon name="search" size="sm" />搜索选中文本
+            </button>
+            <button className="mi" onClick={() => { setMoreOpen(false); openInBrowser(); }}>
+              <Icon name="globe" size="sm" />在浏览器打开
+            </button>
+            <button
+              className="mi"
+              disabled={busy || !source}
+              onClick={() => { setMoreOpen(false); void doTranslate(source); }}
+            >
+              <Icon name="refresh" size="sm" />重新翻译
+            </button>
+          </div>
+        )}
         <div className="pop-status">
           <span className="dot" />
           {busy ? "流式输出中" : "就绪"} · Esc 关闭 · 拖动标题栏移动

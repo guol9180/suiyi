@@ -4,7 +4,8 @@ import { emit, listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { listServices } from "../api";
-import type { ServiceConfig } from "../types";
+import { SOURCE_LANGS, TARGET_LANGS, swapLanguages, type ServiceConfig } from "../types";
+import { Icon } from "../components/Icon";
 import "./Translate.css";
 
 /** 打开划词弹窗并投递文本（M1 将由取词服务自动调用） */
@@ -41,18 +42,6 @@ interface CardState {
   elapsedMs?: number;
   error?: string;
 }
-
-const FROM_LANGS = [
-  { value: "自动检测", label: "自动检测" },
-  { value: "中文", label: "中文" },
-  { value: "English", label: "English" },
-  { value: "日本語", label: "日本語" },
-];
-const TO_LANGS = [
-  { value: "简体中文", label: "简体中文" },
-  { value: "English", label: "English" },
-  { value: "日本語", label: "日本語" },
-];
 
 export default function TranslatePage() {
   const [services, setServices] = useState<ServiceConfig[]>([]);
@@ -133,21 +122,32 @@ export default function TranslatePage() {
     <div className="translate-page">
       <div className="lang-row">
         <select className="inp" value={from} onChange={(e) => setFrom(e.target.value)}>
-          {FROM_LANGS.map((l) => (
-            <option key={l.value} value={l.value}>{l.label}</option>
+          {SOURCE_LANGS.map((l) => (
+            <option key={l} value={l}>{l}</option>
           ))}
         </select>
-        <span className="arrow">→</span>
+        <button
+          className="swap"
+          title="互换语言方向"
+          aria-label="互换语言方向"
+          onClick={() => {
+            const next = swapLanguages(from, to);
+            setFrom(next.from);
+            setTo(next.to);
+          }}
+        >
+          <Icon name="swap" size="sm" />
+        </button>
         <select className="inp" value={to} onChange={(e) => setTo(e.target.value)}>
-          {TO_LANGS.map((l) => (
-            <option key={l.value} value={l.value}>{l.label}</option>
+          {TARGET_LANGS.map((l) => (
+            <option key={l} value={l}>{l}</option>
           ))}
         </select>
         <span style={{ flex: 1 }} />
         {services.length > 0 && <span className="chip ok">{services.length} 个服务并发</span>}
         <button className="btn mini" onClick={() => void listServices().then((f) =>
           setServices(f.services.filter((s) => s.enabled && s.kind === "translation").sort((a, b) => a.order - b.order)),
-        )}>↻ 刷新服务</button>
+        )}><Icon name="refresh" size="sm" />刷新服务</button>
       </div>
 
       <textarea
@@ -171,7 +171,7 @@ export default function TranslatePage() {
           弹窗预览
         </button>
         <button className="btn" onClick={() => void invoke("start_screenshot").catch(console.error)}>
-          截图识别
+          <Icon name="frame" size="sm" />截图识别
         </button>
         <span className="muted">流式输出 · 多服务并发对比 · Ctrl+Enter 翻译</span>
       </div>
@@ -187,7 +187,7 @@ export default function TranslatePage() {
               <span style={{ flex: 1 }} />
               {c.text && (
                 <button className="btn mini" onClick={() => void navigator.clipboard.writeText(c.text)}>
-                  ⧉ 复制
+                  <Icon name="copy" size="sm" />复制
                 </button>
               )}
             </div>
