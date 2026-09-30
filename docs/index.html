@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>随译 SuiYi · Windows 桌面翻译工具</title>
 <meta name="description" content="选中文字按 Alt+D、框选屏幕按 Alt+S、输入框按 Alt+T。翻译使用你自己的 API Key。">
+<link rel="icon" href="img/icon.svg" type="image/svg+xml">
 <style>
 /*
  * 下载页。单文件，图片是应用真实界面的渲染结果（docs/img）。
@@ -97,13 +98,13 @@ h1{
 }
 
 /* 首屏右侧：划词弹窗 */
-.stage{position:relative;justify-self:center}
+.stage{position:relative;justify-self:center;width:100%;max-width:430px}
 .stage::before{
-  content:"";position:absolute;inset:-28px -34px -22px -30px;border-radius:22px;
-  background:radial-gradient(120% 100% at 30% 0%, #e6ecfb 0%, rgba(230,236,251,0) 70%);
+  content:"";position:absolute;inset:-74px -96px -64px -96px;border-radius:50%;
+  background:radial-gradient(closest-side,#e7ecfb 0%,rgba(231,236,251,.5) 58%,rgba(231,236,251,0) 100%);
 }
 .stage img{
-  position:relative;width:430px;border-radius:12px;border:1px solid var(--hair);
+  position:relative;width:100%;border-radius:12px;border:1px solid var(--hair);
   box-shadow:var(--shadow);background:#fff;
 }
 
@@ -195,9 +196,23 @@ footer .sp{flex:1}
 @media (max-width:900px){
   .hero{grid-template-columns:1fr;gap:40px;padding:44px 0 48px}
   .stage{justify-self:start}
+  .stage::before{inset:-18px -14px -16px -14px}
   h1{font-size:32px}
   .entry{grid-template-columns:1fr;gap:8px}
   .wrap,.bar .in{padding-left:22px;padding-right:22px}
+}
+
+@media (max-width:640px){
+  .bar .in{height:auto;flex-wrap:wrap;row-gap:8px;padding-top:11px;padding-bottom:11px}
+  .bar nav{flex:1 1 100%;gap:16px;font-size:13px}
+  .hero{padding:30px 0 38px;gap:32px}
+  h1{font-size:26px;letter-spacing:-.2px}
+  .hero .lead{font-size:15px}
+  .spec{gap:8px 16px}
+  .head{display:block}
+  .head .note{display:block;margin-left:0;margin-top:3px}
+  .step{grid-template-columns:26px 1fr;gap:12px}
+  section{padding:40px 0 0}
 }
 </style>
 </head>
@@ -249,7 +264,7 @@ footer .sp{flex:1}
 
       <div class="spec">
         <span>Windows 10 1809+ · x64</span>
-        <span>8.9 MB</span>
+        <span>安装包 3.1 MB</span>
         <span>未签名</span>
         <span>需要自己的 API Key</span>
       </div>
