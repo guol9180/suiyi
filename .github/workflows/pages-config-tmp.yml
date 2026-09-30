@@ -1,0 +1,48 @@
+name: pages-config-tmp
+
+# 临时工作流：尝试用仓库令牌把 Pages 的发布目录从 / 改成 /docs。
+# 跑完即删，不长期保留。
+on:
+  push:
+    paths:
+      - ".github/workflows/pages-config-tmp.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 读取当前 Pages 配置
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -x
+          curl -sS -o before.json -w 'GET before -> %{http_code}\n' \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "$GITHUB_API_URL/repos/${{ github.repository }}/pages" || true
+          cat before.json || true
+
+      - name: 尝试把发布目录改成 /docs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          code=$(curl -sS -o after.json -w '%{http_code}' -X PUT \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "$GITHUB_API_URL/repos/${{ github.repository }}/pages" \
+            -d '{"build_type":"legacy","source":{"branch":"main","path":"/docs"}}')
+          echo "PUT -> $code"
+          cat after.json || true
+          if [ "$code" = "204" ] || [ "$code" = "200" ]; then
+            echo "::notice::PUT pages OK ($code)"
+          else
+            echo "::error::PUT pages FAILED HTTP $code $(head -c 400 after.json)"
+          fi
