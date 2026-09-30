@@ -292,7 +292,7 @@ export default function SettingsPage() {
                   <label>协议</label>
                   <select className="inp" value={draft.protocol}
                     onChange={(e) => setDraft({ ...draft, protocol: e.target.value as Protocol })}>
-                    <option value="openai_compatible">OpenAI 兼容 (/v1/chat/completions)</option>
+                    <option value="open_ai_compatible">OpenAI 兼容 (/v1/chat/completions)</option>
                     <option value="anthropic" disabled>Anthropic（S0.7 开放）</option>
                     <option value="gemini" disabled>Gemini（S0.7 开放）</option>
                   </select>

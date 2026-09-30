@@ -1,6 +1,7 @@
 // 与 src-tauri/src/config.rs 的 serde camelCase 输出一一对应
 export type ServiceKind = "translation" | "ocr" | "speech";
-export type Protocol = "openai_compatible" | "anthropic" | "gemini";
+// 注意：Rust 端 Protocol::OpenAiCompatible 的 snake_case 是 open_ai_compatible
+export type Protocol = "open_ai_compatible" | "anthropic" | "gemini";
 export type ResultType = "text" | "dictionary";
 
 export interface ServiceConfig {
@@ -37,7 +38,7 @@ export const EMPTY_SERVICE: ServiceConfig = {
   id: "",
   name: "",
   kind: "translation",
-  protocol: "openai_compatible",
+  protocol: "open_ai_compatible",
   enabled: false,
   baseUrl: "",
   model: "",
@@ -49,7 +50,7 @@ export const EMPTY_SERVICE: ServiceConfig = {
 };
 
 export const PROTOCOL_LABELS: Record<Protocol, string> = {
-  openai_compatible: "OpenAI 兼容",
+  open_ai_compatible: "OpenAI 兼容",
   anthropic: "Anthropic",
   gemini: "Gemini",
 };
