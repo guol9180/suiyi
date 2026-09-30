@@ -4,6 +4,7 @@ pub mod keyring;
 pub mod screenshot;
 pub mod selection;
 pub mod translator;
+pub mod writeback;
 
 use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
 use tauri_plugin_global_shortcut::ShortcutState;
@@ -13,6 +14,7 @@ pub fn run() {
     // 热键比对用的目标定义
     let hk_d: tauri_plugin_global_shortcut::Shortcut = "alt+d".parse().expect("解析 alt+d");
     let hk_s: tauri_plugin_global_shortcut::Shortcut = "alt+s".parse().expect("解析 alt+s");
+    let hk_t: tauri_plugin_global_shortcut::Shortcut = "alt+t".parse().expect("解析 alt+t");
 
     let hotkey = tauri_plugin_global_shortcut::Builder::new()
         .with_handler(move |app, shortcut, event| {
@@ -23,9 +25,11 @@ pub fn run() {
                 selection::trigger_selection_translate(app.clone());
             } else if *shortcut == hk_s {
                 screenshot::trigger_screenshot(app.clone());
+            } else if *shortcut == hk_t {
+                writeback::trigger_input_translate(app.clone());
             }
         })
-        .with_shortcuts(["alt+d", "alt+s"]);
+        .with_shortcuts(["alt+d", "alt+s", "alt+t"]);
 
     let mut builder = tauri::Builder::default()
         // 单实例守护必须是第一个注册的插件：重复启动时聚焦已有窗口
@@ -49,6 +53,7 @@ pub fn run() {
             let handle = app.handle().clone();
             let hk_d = hk_d.clone();
             let hk_s = hk_s.clone();
+            let hk_t = hk_t.clone();
 
             // 预创建划词弹窗（隐藏）：首次 Alt+D 免去 webview 冷启动，秒出
             WebviewWindowBuilder::new(&handle, "popup", WebviewUrl::App("popup.html".into()))
@@ -68,7 +73,11 @@ pub fn run() {
                 let handle = handle.clone();
                 std::thread::spawn(move || {
                     use tauri_plugin_global_shortcut::GlobalShortcutExt;
-                    for (name, hk) in [("alt+d", hk_d.clone()), ("alt+s", hk_s.clone())] {
+                    for (name, hk) in [
+                        ("alt+d", hk_d.clone()),
+                        ("alt+s", hk_s.clone()),
+                        ("alt+t", hk_t.clone()),
+                    ] {
                         let already = handle.global_shortcut().is_registered(hk.clone());
                         if already {
                             continue;

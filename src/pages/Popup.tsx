@@ -27,6 +27,7 @@ export default function PopupPage() {
   const [busy, setBusy] = useState(false);
   const [pinned, setPinned] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
+  const [notice, setNotice] = useState("");
 
   const refreshServices = useCallback(async () => {
     try {
@@ -77,6 +78,7 @@ export default function PopupPage() {
     const un = listen<{ text: string; autoTranslate?: boolean }>("popup-set-source", (e) => {
       setSource(e.payload.text);
       setCards([]);
+      setNotice("");
       if (e.payload.autoTranslate !== false) {
         // 等服务列表就绪后自动翻译
         window.setTimeout(() => void doTranslate(e.payload.text), 120);
@@ -86,6 +88,28 @@ export default function PopupPage() {
       void un.then((f) => f());
     };
   }, [doTranslate]);
+
+  // 输入框转译写回失败：主进程把译文降级为复制，并把结果投递到这里告知用户
+  useEffect(() => {
+    const un = listen<{ original: string; translated: string; reason: string }>(
+      "popup-writeback-fallback",
+      (e) => {
+        setSource(e.payload.original);
+        setCards([
+          {
+            id: "__writeback",
+            name: "输入框转译",
+            text: e.payload.translated,
+            status: "done",
+          },
+        ]);
+        setNotice(`${e.payload.reason}，译文已复制到剪贴板`);
+      },
+    );
+    return () => {
+      void un.then((f) => f());
+    };
+  }, []);
 
   // Esc 关闭（隐藏窗口，保留内容）；失焦自动隐藏（固定/翻译中除外，延迟复核焦点）
   const pinnedRef = useRef(false);
@@ -204,6 +228,13 @@ export default function PopupPage() {
             <span className="chip ok mini"><span className="dot" />{services.length} 服务并发</span>
           )}
         </div>
+
+        {notice && (
+          <div className="pop-notice">
+            <Icon name="alert" size="sm" />
+            <span>{notice}</span>
+          </div>
+        )}
 
         {/* 原文 */}
         {source && (

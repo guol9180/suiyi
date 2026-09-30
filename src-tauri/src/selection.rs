@@ -62,13 +62,13 @@ pub fn trigger_selection_translate(app: AppHandle) {
     });
 }
 
-/// 模拟 Ctrl+C：用 SendInput 发送真实虚拟键码（Unicode 注入无法触发快捷键）
+/// 模拟 Ctrl + 某个虚拟键。用 SendInput 发送真实虚拟键码，
+/// Unicode 注入（KEYEVENTF_UNICODE）不会触发目标程序的快捷键。
 #[cfg(windows)]
-fn simulate_ctrl_c() -> Result<(), String> {
+fn simulate_ctrl_key(key: u16, name: &str) -> Result<(), String> {
     use windows::Win32::UI::Input::KeyboardAndMouse::{
         SendInput, INPUT, INPUT_KEYBOARD, KEYBDINPUT, KEYEVENTF_KEYUP, VK_CONTROL,
     };
-    const VK_C: u16 = 0x43; // 字母 C 的虚拟键码
     let make = |vk: u16, keyup: bool| INPUT {
         r#type: INPUT_KEYBOARD,
         Anonymous: windows::Win32::UI::Input::KeyboardAndMouse::INPUT_0 {
@@ -83,8 +83,8 @@ fn simulate_ctrl_c() -> Result<(), String> {
     };
     let seq: [(u16, bool); 4] = [
         (VK_CONTROL.0, false),
-        (VK_C, false),
-        (VK_C, true),
+        (key, false),
+        (key, true),
         (VK_CONTROL.0, true),
     ];
     unsafe {
@@ -92,12 +92,33 @@ fn simulate_ctrl_c() -> Result<(), String> {
             let input = make(vk, up);
             let sent = SendInput(&[input], std::mem::size_of::<INPUT>() as i32);
             if sent != 1 {
-                return Err(format!("SendInput 发送失败: {sent}"));
+                return Err(format!("Ctrl+{name} 发送失败: {sent}"));
             }
             std::thread::sleep(Duration::from_millis(25));
         }
     }
     Ok(())
+}
+
+const VK_A: u16 = 0x41;
+const VK_C: u16 = 0x43;
+const VK_V: u16 = 0x56;
+
+/// 全选：抓取与写回输入框内容时都用它
+#[cfg(windows)]
+pub(crate) fn simulate_ctrl_a() -> Result<(), String> {
+    simulate_ctrl_key(VK_A, "A")
+}
+
+#[cfg(windows)]
+pub(crate) fn simulate_ctrl_c() -> Result<(), String> {
+    simulate_ctrl_key(VK_C, "C")
+}
+
+/// 粘贴：写回译文时用
+#[cfg(windows)]
+pub(crate) fn simulate_ctrl_v() -> Result<(), String> {
+    simulate_ctrl_key(VK_V, "V")
 }
 
 /// 剪贴板法抓取选中文本
