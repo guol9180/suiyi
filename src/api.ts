@@ -49,6 +49,26 @@ export interface ConnectionTest {
   error: string | null;
 }
 
+/** 一个全局热键的注册状态 */
+export interface HotkeyStatus {
+  id: string;
+  label: string;
+  accelerator: string;
+  registered: boolean;
+  /** 注册失败的原因，成功时为 null */
+  error: string | null;
+}
+
+/** 三个全局热键当前的注册状态 */
+export function hotkeyStatus(): Promise<HotkeyStatus[]> {
+  return invoke("hotkey_status");
+}
+
+/** 重新尝试注册尚未成功的热键 */
+export function retryHotkeys(): Promise<HotkeyStatus[]> {
+  return invoke("retry_hotkeys");
+}
+
 /** 探测服务连通性：Key 是否有效、网关是否可达、模型是否可见 */
 export function testConnection(serviceId: string): Promise<ConnectionTest> {
   return invoke("test_connection", { serviceId });

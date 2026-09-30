@@ -571,6 +571,23 @@ fn parse_model_ids(body: &str) -> Vec<String> {
     Vec::new()
 }
 
+/// 三个全局热键当前的注册状态，界面据此显示「已启用 / 已被占用」
+#[tauri::command]
+pub fn hotkey_status(
+    state: tauri::State<'_, crate::hotkeys::HotkeyState>,
+) -> Vec<crate::hotkeys::HotkeyStatus> {
+    // 启动瞬间可能还没写入，返回空数组由界面自行兜底
+    state.snapshot()
+}
+
+/// 重新尝试注册尚未成功的热键，返回最新状态
+#[tauri::command]
+pub fn retry_hotkeys(app: tauri::AppHandle) -> Vec<crate::hotkeys::HotkeyStatus> {
+    let list = crate::hotkeys::register_all(&app);
+    app.state::<crate::hotkeys::HotkeyState>().store(list.clone());
+    list
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

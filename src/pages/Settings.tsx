@@ -9,17 +9,20 @@ import {
   deleteApiKey,
   deleteService,
   getApiKey,
+  hotkeyStatus,
   listHistory,
   listPlugins,
   listServices,
   pluginsDirPath,
   reorderServices,
+  retryHotkeys,
   saveService,
   saveSettings,
   setApiKey,
   setPluginEnabled,
   testConnection,
   type ConnectionTest,
+  type HotkeyStatus,
 } from "../api";
 import { Icon } from "../components/Icon";
 import {
@@ -51,11 +54,11 @@ const SIDEBAR_PAGES: Record<string, Page> = {
   插件: "plugins",
 };
 
-/** 已注册的全局热键，与 src-tauri/src/lib.rs 的 with_shortcuts 一一对应 */
-const HOTKEYS: { name: string; key: string; desc: string }[] = [
-  { name: "划词翻译", key: "D", desc: "取选中文字并在光标处弹出翻译窗" },
-  { name: "截图识别", key: "S", desc: "冻结鼠标所在显示器，框选后离线识别" },
-  { name: "输入框转译", key: "T", desc: "翻译当前输入框内容并原位写回" },
+/** 三个入口的热键，id 与 src-tauri/src/hotkeys.rs 的 ENTRIES 一一对应 */
+const HOTKEYS: { id: string; name: string; key: string; desc: string }[] = [
+  { id: "selection", name: "划词翻译", key: "D", desc: "取选中文字并在光标处弹出翻译窗" },
+  { id: "screenshot", name: "截图识别", key: "S", desc: "冻结鼠标所在显示器，框选后离线识别" },
+  { id: "input", name: "输入框转译", key: "T", desc: "翻译当前输入框内容并原位写回" },
 ];
 /** 未实现的入口收进「即将推出」分组并带里程碑锁标，不再平铺成一排空壳 */
 const SIDEBAR_SOON: { name: string; milestone: string }[] = [
@@ -116,6 +119,8 @@ export default function SettingsPage() {
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<ConnectionTest | null>(null);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
+  /** 三个全局热键的注册状态，切到热键页时刷新 */
+  const [hotkeys, setHotkeys] = useState<HotkeyStatus[]>([]);
   const [histQuery, setHistQuery] = useState("");
   const [histKind, setHistKind] = useState<HistoryKind | "">("");
   const [histId, setHistId] = useState<number | null>(null);
@@ -166,6 +171,18 @@ export default function SettingsPage() {
   useEffect(() => {
     if (page === "history") void loadHistory();
   }, [page, loadHistory]);
+
+  const loadHotkeys = useCallback(async () => {
+    try {
+      setHotkeys(await hotkeyStatus());
+    } catch {
+      // 读不到状态时不显示徽标，不影响其余设置项
+    }
+  }, []);
+
+  useEffect(() => {
+    if (page === "hotkeys") void loadHotkeys();
+  }, [page, loadHotkeys]);
 
   const loadPlugins = useCallback(async () => {
     try {
@@ -473,16 +490,44 @@ export default function SettingsPage() {
               <span className="hname">全局热键</span>
               <span className="m">自定义录制后续开放</span>
             </div>
-            {HOTKEYS.map((h) => (
-              <div className="hkrow" key={h.name}>
-                <span className="n">{h.name}</span>
-                <span className="m">{h.desc}</span>
-                <span className="key"><span className="kbd">Alt</span><span className="kbd">{h.key}</span></span>
+
+            {hotkeys.some((h) => !h.registered) && (
+              <div className="hkwarn">
+                <Icon name="alert" size="sm" />
+                <span>
+                  {hotkeys
+                    .filter((h) => !h.registered)
+                    .map((h) => h.label)
+                    .join("、")}
+                  的组合已被其他程序占用，按下去不会生效。关掉占用它的程序后点右侧重试。
+                </span>
+                <button
+                  className="btn mini"
+                  onClick={() => void retryHotkeys().then(setHotkeys)}
+                >
+                  <Icon name="refresh" size="sm" />重试注册
+                </button>
               </div>
-            ))}
+            )}
+
+            {HOTKEYS.map((h) => {
+              const st = hotkeys.find((x) => x.id === h.id);
+              return (
+                <div className="hkrow" key={h.id}>
+                  <span className="n">{h.name}</span>
+                  <span className="m">{h.desc}</span>
+                  {st && (
+                    <span className={`chip mini ${st.registered ? "ok" : "warn"}`}>
+                      {st.registered ? "已启用" : "已被占用"}
+                    </span>
+                  )}
+                  <span className="key"><span className="kbd">Alt</span><span className="kbd">{h.key}</span></span>
+                </div>
+              );
+            })}
+
             <div className="thint">
-              热键在应用启动时注册；被其他程序占用时会后台重试。想排查可查看
-              %APPDATA%/com.suiyi.dev/debug.log。
+              热键在应用启动时逐个注册，被占用的会在后台补注册。这里显示的是当前状态。
             </div>
           </div>
         )}

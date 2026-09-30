@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>随译 · 界面渲染桩</title>
+    <script>
+      /*
+       * 界面验收用的本地渲染桩，不参与打包、不影响应用运行。
+       *
+       * 用法：pnpm exec vite --port 4181 --strictPort
+       *      浏览器打开 http://localhost:4181/dist/app.html
+       *
+       * 参数：
+       *   ?win=main|popup   渲染主窗口（默认）或划词弹窗
+       *   #services #history #plugins #hotkey #general #about   直接跳到某页
+       *   ?demo=translate   主窗口填入原文并触发一次翻译
+       *   ?conflict=1       让「截图识别」显示为被占用，用来看冲突提示
+       */
+      (function () {
+        var q = new URLSearchParams(location.search);
+        var isPopup = q.get("win") === "popup";
+        var conflict = q.get("conflict") === "1";
+
+        var SERVICES = {
+          version: 1, concurrency: 2, timeoutSecs: 15, inputTargetLang: "中文",
+          ankiUrl: "http://127.0.0.1:8765", ankiDeck: "随译生词",
+          services: [
+            { id: "zai", name: "ZAI", kind: "translation", protocol: "open_ai_compatible", enabled: true,
+              baseUrl: "https://api.z.ai/api/paas/v4", model: "glm-5.3-flash", promptTemplate: null,
+              temperature: 0.3, stream: true, resultType: "text", order: 0 },
+            { id: "deepseek", name: "DeepSeek", kind: "translation", protocol: "open_ai_compatible", enabled: true,
+              baseUrl: "https://api.deepseek.com/v1", model: "deepseek-chat", promptTemplate: null,
+              temperature: 0.3, stream: true, resultType: "text", order: 1 },
+            { id: "glm", name: "智谱 GLM", kind: "translation", protocol: "open_ai_compatible", enabled: false,
+              baseUrl: "https://open.bigmodel.cn/api/paas/v4", model: "glm-4-flash", promptTemplate: null,
+              temperature: 0.3, stream: true, resultType: "text", order: 2 },
+          ],
+        };
+        var TRANSLATED = {
+          zai: { text: "敏捷的棕色狐狸跳过了那只懒狗。", elapsedMs: 900 },
+          deepseek: { text: "那只敏捷的棕色狐狸一跃而过懒狗。", elapsedMs: 1100 },
+        };
+        var HISTORY = [
+          { id: 1, createdAt: 1790770000, kind: "selection", source: "Despite their success, transformers still struggle with long-context reasoning.", translated: "尽管取得了成功，Transformer 在处理长上下文推理时仍显吃力。", serviceName: "ZAI", elapsedMs: 900, ok: true },
+          { id: 2, createdAt: 1790769000, kind: "screenshot", source: "The quick brown fox jumps over the lazy dog.", translated: "敏捷的棕色狐狸跳过了那只懒狗。", serviceName: "DeepSeek", elapsedMs: 1100, ok: true },
+          { id: 3, createdAt: 1790768000, kind: "input", source: "请把这句话翻译成英文，谢谢。", translated: "", serviceName: "智谱 GLM", elapsedMs: 15000, ok: false, error: "请求超时：15 秒内没有响应" },
+          { id: 4, createdAt: 1790767000, kind: "manual", source: "Streaming responses reduce perceived latency.", translated: "流式响应会降低用户感知到的延迟。", serviceName: "ZAI", elapsedMs: 780, ok: true },
+        ];
+        var PLUGINS = [
+          { id: "local-glossary", name: "术语表优先", version: "0.1.0", description: "命中自定义术语表时直接返回译文。", author: "随译", kind: "translation", permissions: ["clipboard:read"], dir: "C:\\Users\\PC\\AppData\\Roaming\\com.suiyi.dev\\plugins\\local-glossary", main: "main.js", enabled: true, ok: true, error: null },
+          { id: "copy-markdown", name: "复制为 Markdown", version: "0.1.0", description: "把原文与译文拼成 Markdown 引用块放进剪贴板。", author: "随译", kind: "action", permissions: ["clipboard:write"], dir: "C:\\Users\\PC\\AppData\\Roaming\\com.suiyi.dev\\plugins\\copy-markdown", main: "main.js", enabled: false, ok: true, error: null },
+        ];
+        var HOTKEYS = [
+          { id: "selection", label: "划词翻译", accelerator: "alt+d", registered: true, error: null },
+          { id: "screenshot", label: "截图识别", accelerator: "alt+s",
+            registered: !conflict, error: conflict ? "该组合已被其他程序占用" : null },
+          { id: "input", label: "输入框转译", accelerator: "alt+t", registered: true, error: null },
+        ];
+
+        var MOCK = {
+          list_services: function () { return SERVICES; },
+          get_settings: function () { return { concurrency: 2, timeoutSecs: 15, inputTargetLang: "中文", ankiUrl: "http://127.0.0.1:8765", ankiDeck: "随译生词" }; },
+          get_api_key: function () { return "sk-xxxxxxxxxxxxxxxxxxxx"; },
+          list_plugins: function () { return PLUGINS; },
+          plugins_dir_path: function () { return "C:\\Users\\PC\\AppData\\Roaming\\com.suiyi.dev\\plugins"; },
+          list_history: function () { return HISTORY; },
+          anki_status: function () { return { available: true, version: 6, deckExists: true, error: null }; },
+          hotkey_status: function () { return HOTKEYS; },
+          retry_hotkeys: function () { return HOTKEYS; },
+          test_connection: function () { return { ok: true, elapsedMs: 412, models: ["glm-5.3-flash"], error: null }; },
+          translate_text: function (args) {
+            var o = TRANSLATED[args.serviceId] || { text: "（无模拟结果）", elapsedMs: 500 };
+            return { serviceId: args.serviceId, text: o.text, elapsedMs: o.elapsedMs };
+          },
+        };
+
+        var callbacks = {};
+        var seq = 0;
+        window.__TAURI_INTERNALS__ = {
+          invoke: async function (cmd, args) {
+            if (cmd === "plugin:event|listen") return 1;
+            if (cmd === "plugin:event|unlisten") return null;
+            if (cmd.indexOf("plugin:") === 0) return null;
+            if (Object.prototype.hasOwnProperty.call(MOCK, cmd)) return MOCK[cmd](args);
+            console.warn("[stub] 未模拟的命令:", cmd, args);
+            return null;
+          },
+          transformCallback: function (fn) { seq += 1; callbacks[seq] = fn; return seq; },
+          convertFileSrc: function (p) { return p; },
+          metadata: { currentWindow: { label: "main" }, currentWebview: { label: "main" } },
+        };
+
+        function byText(sel, text) {
+          return Array.prototype.slice.call(document.querySelectorAll(sel))
+            .filter(function (e) { return (e.textContent || "").indexOf(text) >= 0; })[0];
+        }
+
+        window.addEventListener("load", function () {
+          if (isPopup) {
+            setTimeout(function () {
+              Object.keys(callbacks).forEach(function (id) {
+                try {
+                  callbacks[id]({
+                    event: "popup-set-source", id: Number(id),
+                    payload: { text: "The quick brown fox jumps over the lazy dog.", autoTranslate: true, kind: "selection" },
+                  });
+                } catch (e) { console.warn(e); }
+              });
+            }, 400);
+            return;
+          }
+
+          if (q.get("demo") === "translate") {
+            setTimeout(function () {
+              var ta = document.querySelector("textarea");
+              if (!ta) return;
+              var setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value").set;
+              setter.call(ta, "The quick brown fox jumps over the lazy dog.");
+              ta.dispatchEvent(new Event("input", { bubbles: true }));
+              setTimeout(function () {
+                var btn = document.querySelector(".actions .btn.primary");
+                if (btn) btn.click();
+              }, 900);
+            }, 600);
+            return;
+          }
+
+          var want = (location.hash || "").replace("#", "");
+          if (!want) return;
+          var SIDE = { general: "通用", hotkey: "热键", services: "服务配置", history: "历史记录", plugins: "插件", about: "关于" };
+          setTimeout(function () {
+            var t = document.querySelectorAll(".tabbar button")[1];
+            if (t) t.click();
+            setTimeout(function () {
+              var label = SIDE[want];
+              if (label) { var item = byText(".side-item", label); if (item) item.click(); }
+            }, 150);
+          }, 200);
+        });
+
+        // 无头浏览器有最小视口宽度，把弹窗钉回真实窗口宽度 430px
+        if (isPopup) {
+          var st = document.createElement("style");
+          st.textContent = "html,body{background:#fff;margin:0;padding:0;overflow:hidden}" +
+            ".popup-root{width:430px !important;height:540px !important}";
+          document.head.appendChild(st);
+        }
+
+        var scr = document.createElement("script");
+        scr.type = "module";
+        scr.src = isPopup ? "/src/popup-main.tsx" : "/src/main.tsx";
+        document.addEventListener("DOMContentLoaded", function () { document.body.appendChild(scr); });
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>
