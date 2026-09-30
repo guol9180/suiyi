@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>随译 SuiYi · Windows 桌面 AI 翻译助手</title>
+<meta name="description" content="划词翻译、截图识别、输入框转译，翻译引擎可自由配置的 Windows 桌面工具。">
+<style>
+:root{
+  --c-primary:#4c6fff;
+  --c-primary-strong:#3b5bff;
+  --c-primary-hover:#2f49e0;
+  --c-primary-soft:#eef2ff;
+  --c-primary-border:#d6deff;
+  --c-text:#0f172a;
+  --c-text-2:#475569;
+  --c-text-3:#64748b;
+  --c-caption:#5c6b80;
+  --c-surface:#ffffff;
+  --c-app-bg:#f6f8fb;
+  --c-border:#e2e8f0;
+  --c-border-strong:#d9e0ec;
+  --c-mile:#52607a;
+  --c-mile-bg:#eef1f6;
+  --radius-sm:4px; --radius-md:6px; --radius-lg:8px; --radius-xl:10px;
+  --font-ui:"Segoe UI","Microsoft YaHei","PingFang SC",sans-serif;
+  --font-mono:Consolas,"Microsoft YaHei",monospace;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{
+  font-family:var(--font-ui);
+  color:var(--c-text);
+  background:var(--c-app-bg);
+  font-size:14px;
+  line-height:1.75;
+  -webkit-font-smoothing:antialiased;
+}
+a{color:var(--c-primary-strong);text-decoration:none}
+a:hover{text-decoration:underline}
+:focus-visible{outline:2px solid var(--c-primary-strong);outline-offset:2px}
+
+.wrap{max-width:960px;margin:0 auto;padding:0 24px}
+
+header{border-bottom:1px solid var(--c-border);background:var(--c-surface)}
+header .inner{display:flex;align-items:center;gap:12px;height:60px}
+.mark{
+  width:32px;height:32px;border-radius:8px;background:var(--c-primary);color:#fff;
+  display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:600;flex:none;
+}
+.brand{font-size:16px;font-weight:600}
+.ver{font-size:11.5px;color:var(--c-mile);background:var(--c-mile-bg);
+  border:1px solid #dfe5ee;border-radius:var(--radius-sm);padding:1px 7px}
+header nav{margin-left:auto;display:flex;gap:16px;font-size:13px}
+header nav a{color:var(--c-text-2)}
+
+.hero{padding:56px 0 40px}
+.hero h1{font-size:34px;line-height:1.35;font-weight:600;letter-spacing:.2px}
+.hero p{margin-top:14px;font-size:15px;color:var(--c-text-2);max-width:640px}
+
+.dl{margin-top:28px;display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.btn{
+  display:inline-flex;align-items:center;gap:8px;height:44px;padding:0 20px;
+  border-radius:var(--radius-lg);border:1px solid var(--c-border-strong);
+  background:var(--c-surface);color:var(--c-text-2);font-size:14px;cursor:pointer;
+  transition:background .14s,border-color .14s,color .14s;
+}
+.btn:hover{background:var(--c-app-bg);border-color:#bfcbe0;color:var(--c-text);text-decoration:none}
+.btn.primary{background:var(--c-primary-strong);border-color:var(--c-primary-strong);color:#fff;font-weight:600}
+.btn.primary:hover{background:var(--c-primary-hover);border-color:var(--c-primary-hover);color:#fff}
+.btn .size{font-size:12px;color:inherit;opacity:.75;font-weight:400}
+.meta{margin-top:14px;font-size:12.5px;color:var(--c-caption)}
+
+section{padding:36px 0;border-top:1px solid var(--c-border)}
+h2{font-size:19px;font-weight:600;margin-bottom:18px}
+
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}
+.card{background:var(--c-surface);border:1px solid var(--c-border);border-radius:var(--radius-xl);padding:16px}
+.card h3{font-size:14.5px;font-weight:600;margin-bottom:6px;display:flex;align-items:center;gap:7px}
+.card p{font-size:13px;color:var(--c-text-2)}
+.dot{width:6px;height:6px;border-radius:50%;background:var(--c-success,#15803d);flex:none}
+
+table{width:100%;border-collapse:collapse;background:var(--c-surface);
+  border:1px solid var(--c-border);border-radius:var(--radius-xl);overflow:hidden;font-size:13px}
+th,td{padding:10px 14px;text-align:left;border-bottom:1px solid #edf1f7}
+th{background:var(--c-app-bg);font-size:12px;color:var(--c-caption);font-weight:600}
+tr:last-child td{border-bottom:none}
+kbd{
+  font-family:var(--font-mono);font-size:12px;background:#f1f5f9;border:1px solid #d6dee9;
+  border-bottom-width:2px;border-radius:var(--radius-sm);padding:1px 6px;color:var(--c-text-2);
+}
+code{font-family:var(--font-mono);font-size:12.5px;background:var(--c-mile-bg);
+  border-radius:3px;padding:1px 5px;color:#3c4a60}
+
+.note{
+  background:#fff7e6;border:1px solid #fde1b9;border-radius:var(--radius-xl);
+  padding:14px 16px;font-size:13px;color:#b45309;
+}
+.note b{color:#92400e}
+ul{margin:8px 0 0 18px}
+li{font-size:13px;color:var(--c-text-2);margin:4px 0}
+
+footer{padding:28px 0 44px;border-top:1px solid var(--c-border);font-size:12.5px;color:var(--c-caption)}
+footer .inner{display:flex;gap:14px;flex-wrap:wrap;align-items:center}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap inner">
+    <span class="mark">译</span>
+    <span class="brand">随译 SuiYi</span>
+    <span class="ver">v0.1.0 · Windows x64</span>
+    <nav>
+      <a href="#features">功能</a>
+      <a href="#install">安装</a>
+      <a href="https://github.com/guol9180/suiyi">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+  <div class="hero">
+    <h1>划词就译，截屏也译。<br>翻译引擎由你定。</h1>
+    <p>
+      随译是 Windows 上的桌面翻译助手：在任何应用里选中文字按 <kbd>Alt</kbd>+<kbd>D</kbd> 出译文，
+      框选屏幕按 <kbd>Alt</kbd>+<kbd>S</kbd> 识别并翻译，
+      输入框里写完中文按 <kbd>Alt</kbd>+<kbd>T</kbd> 直接换成目标语言。
+      翻译服务可以是 DeepSeek、智谱、Kimi、Ollama 或任何 OpenAI 兼容的端点，多个服务同时出结果做对比。
+    </p>
+
+    <div class="dl">
+      <a class="btn primary" href="https://github.com/guol9180/suiyi/releases/latest/download/SuiYi-Setup-x64.exe">
+        下载安装程序 <span class="size">.exe</span>
+      </a>
+      <a class="btn" href="https://github.com/guol9180/suiyi/releases/latest/download/SuiYi-Setup-x64.msi">
+        MSI 安装包
+      </a>
+      <a class="btn" href="https://github.com/guol9180/suiyi/releases/latest/download/SuiYi-Portable-x64.zip">
+        免安装版 <span class="size">.zip</span>
+      </a>
+    </div>
+    <div class="meta">
+      下载链接始终指向最新发布版本。安装包未做代码签名，首次运行会有 SmartScreen 提示，属预期情况。
+      <a href="https://github.com/guol9180/suiyi/releases">查看全部版本</a>
+    </div>
+  </div>
+
+  <section id="features">
+    <h2>能做什么</h2>
+    <div class="grid">
+      <div class="card">
+        <h3><span class="dot"></span>多服务并发对比</h3>
+        <p>把几个 AI 服务都配上，一次翻译同时出几份译文，哪家更准一眼看得出来。服务可启停、可排序。</p>
+      </div>
+      <div class="card">
+        <h3><span class="dot"></span>划词翻译</h3>
+        <p>任意应用里选中文字按 Alt+D，弹窗出现在光标旁边，流式出稿，失焦自动隐藏，也可以钉住。</p>
+      </div>
+      <div class="card">
+        <h3><span class="dot"></span>截图识别</h3>
+        <p>Alt+S 冻结鼠标所在的那块屏幕，框选后离线 OCR 识别。识别在本机完成，截图不上传。</p>
+      </div>
+      <div class="card">
+        <h3><span class="dot"></span>输入框转译</h3>
+        <p>Alt+T 把当前输入框的中文整体换成目标语言。切换窗口时会自动放弃写回，改成复制到剪贴板。</p>
+      </div>
+      <div class="card">
+        <h3><span class="dot"></span>词典、朗读与历史</h3>
+        <p>单词可出音标与义项；本地语音离线朗读；翻译历史可搜索、按来源筛选，失败记录也会留下。</p>
+      </div>
+      <div class="card">
+        <h3><span class="dot"></span>插件系统</h3>
+        <p>放一个目录就能加插件，支持翻译、OCR、语音、动作四类扩展点，跑在 QuickJS 沙箱里。</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="install">
+    <h2>安装与首次使用</h2>
+    <div class="note">
+      <b>Windows SmartScreen 提示：</b>安装包没有购买代码签名证书，首次运行会提示「Windows 已保护你的电脑」。
+      点「更多信息」→「仍要运行」即可。如果介意，可以先在
+      <a href="https://github.com/guol9180/suiyi">仓库</a>里核对源码，再自行构建。
+    </div>
+    <ul>
+      <li>系统要求：Windows 10 1809 及以上，x64。Windows 11 自带 WebView2；Windows 10 若提示缺失，装一次 <a href="https://developer.microsoft.com/microsoft-edge/webview2/">WebView2 运行时</a>即可。</li>
+      <li>装好后打开「设置 → 服务配置」，点「添加服务」，协议选 OpenAI 兼容，填 Base URL、API Key 和模型名；DeepSeek、智谱、Kimi、Ollama、OneAPI 中转都适用。</li>
+      <li>填完点一下「测试连接」，它会告诉你 Key 是否有效、网关是否可达、模型是否在权限范围内。</li>
+      <li>API Key 只写进 Windows 凭据管理器，配置文件里零明文。</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>快捷键</h2>
+    <table>
+      <thead><tr><th style="width:180px">动作</th><th style="width:150px">快捷键</th><th>说明</th></tr></thead>
+      <tbody>
+        <tr><td>划词翻译</td><td><kbd>Alt</kbd> + <kbd>D</kbd></td><td>取选中文字，在光标处弹出翻译窗</td></tr>
+        <tr><td>截图识别</td><td><kbd>Alt</kbd> + <kbd>S</kbd></td><td>冻结鼠标所在显示器，框选后离线识别</td></tr>
+        <tr><td>输入框转译</td><td><kbd>Alt</kbd> + <kbd>T</kbd></td><td>翻译当前输入框内容并原位写回</td></tr>
+        <tr><td>关闭弹窗</td><td><kbd>Esc</kbd></td><td>隐藏当前弹窗，内容保留</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>从源码构建</h2>
+    <p style="font-size:13px;color:var(--c-text-2)">
+      需要 Node 18+、pnpm、Rust stable（MSVC 工具链）。
+    </p>
+    <pre style="margin-top:10px;background:var(--c-surface);border:1px solid var(--c-border);
+      border-radius:var(--radius-xl);padding:14px 16px;overflow:auto"><code style="background:none;padding:0">pnpm install
+pnpm tauri dev      # 开发调试
+pnpm tauri build    # 打包安装程序</code></pre>
+    <p class="meta" style="margin-top:10px">
+      仓库里的 <code>.github/workflows/release.yml</code> 会在打 tag 时自动完成构建与发布。
+    </p>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap inner">
+    <span>随译 SuiYi · 桌面 AI 翻译助手</span>
+    <a href="https://github.com/guol9180/suiyi">源码</a>
+    <a href="https://github.com/guol9180/suiyi/releases">发布记录</a>
+    <a href="https://github.com/guol9180/suiyi/issues">反馈问题</a>
+    <span style="margin-left:auto">尚未设置开源协议，仓库暂不授予使用许可</span>
+  </div>
+</footer>
+
+</body>
+</html>

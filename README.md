@@ -2,6 +2,17 @@
 
 Windows 桌面 AI 翻译助手。划词翻译、截图识别、输入框转译，翻译引擎可自由配置。
 
+## 下载
+
+下载页：<https://guol9180.github.io/suiyi/>　·　全部版本：<https://github.com/guol9180/suiyi/releases>
+
+- `SuiYi-Setup-x64.exe`：NSIS 安装程序，推荐
+- `SuiYi-Setup-x64.msi`：MSI 安装包，适合批量部署
+- `SuiYi-Portable-x64.zip`：免安装版，解压后直接运行
+
+安装包未做代码签名，首次运行会有 SmartScreen 提示，属预期情况。
+发布由 `.github/workflows/release.yml` 在打 `v*` tag 时自动完成。
+
 ## 里程碑
 
 | 里程碑 | 内容 | 状态 |
