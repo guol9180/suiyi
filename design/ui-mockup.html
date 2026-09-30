@@ -373,13 +373,15 @@ backdrop-filter:var(--glass-blur);-webkit-backdrop-filter:var(--glass-blur);tran
 .svc:hover{background:var(--glass-card-strong)}
 .svc.on{border-color:var(--c-primary-border);background:var(--c-primary-soft)}
 .arrows{display:flex;flex-direction:column;gap:1px;flex:none}
-.arr{border:none;background:none;color:var(--c-icon);line-height:1;padding:0;cursor:pointer;display:inline-flex}
-.arr:hover{color:var(--c-primary-strong)}
+.arr{border:none;background:none;color:var(--c-icon);line-height:1;padding:0;cursor:pointer;
+display:inline-flex;align-items:center;justify-content:center;width:22px;height:16px;border-radius:var(--radius-sm)}
+.arr:hover{color:var(--c-text);background:var(--c-muted-bg)}
 .svc-name{flex:1;min-width:0}
 .svc-name .n{font-size:13px;display:block;font-weight:600}
 .svc-name .m{font-size:11.5px;color:var(--c-caption)}
 .ok-t{font-size:11px;color:var(--c-success);white-space:nowrap}
-.group{background:var(--c-surface-2);border:1px solid var(--c-border);border-radius:var(--radius-md);padding:11px 12px;margin-top:12px}
+.group{background:var(--glass-card);border:1px solid var(--glass-edge);border-radius:var(--radius-lg);padding:11px 12px;margin-top:12px;
+backdrop-filter:var(--glass-blur);-webkit-backdrop-filter:var(--glass-blur)}
 .group .ghead{font-size:11.5px;color:var(--c-caption);margin-bottom:9px}
 .group .gnote{margin-top:9px;font-size:11px;color:var(--c-caption);line-height:1.7}
 .gnote code,.statecard code{font-family:var(--font-mono);font-size:11px;background:var(--c-mile-bg);border-radius:3px;padding:1px 5px;color:#3C4A60}
@@ -547,7 +549,6 @@ backdrop-filter:var(--glass-blur);-webkit-backdrop-filter:var(--glass-blur);tran
           <textarea class="inp" readonly>The quick brown fox jumps over the lazy dog.</textarea>
           <div class="actrow">
             <button class="btn primary">翻 译</button>
-            <button class="btn">弹窗预览</button>
             <button class="btn"><svg class="ico sm"><use href="#i-frame"/></svg>截图识别</button>
             <span class="hint">Ctrl+Enter 翻译</span>
           </div>
@@ -728,7 +729,7 @@ backdrop-filter:var(--glass-blur);-webkit-backdrop-filter:var(--glass-blur);tran
   <!-- ==================== 2 输入框转译 ==================== -->
   <section class="sec" id="s2">
     <div class="sec-head"><span class="idx">2</span><h2>输入框转译</h2>
-      <span class="chip warn">M3 计划中</span></div>
+      <span class="chip ok">已实现</span></div>
     <div class="block">
       <div class="chats">
         <div class="chat">
@@ -775,7 +776,7 @@ backdrop-filter:var(--glass-blur);-webkit-backdrop-filter:var(--glass-blur);tran
   <!-- ==================== 3 截图识别 ==================== -->
   <section class="sec" id="s3">
     <div class="sec-head"><span class="idx">3</span><h2>截图识别 · 原图翻译</h2>
-      <span class="chip warn">M2 开发中</span></div>
+      <span class="chip ok">已实现</span></div>
     <div class="block">
       <div class="darkpanel">
         <div class="shot">
@@ -891,13 +892,13 @@ backdrop-filter:var(--glass-blur);-webkit-backdrop-filter:var(--glass-blur);tran
             <div class="side-item">通用</div>
             <div class="side-item">热键</div>
             <div class="side-item on">服务配置</div>
+              <div class="side-item">历史记录</div>
+              <div class="side-item">插件</div>
             <div class="side-group">即将推出</div>
             <div class="side-item soon">生词本<span class="lk"><svg class="ico sm"><use href="#i-lock"/></svg>M3</span></div>
-            <div class="side-item soon">历史记录<span class="lk"><svg class="ico sm"><use href="#i-lock"/></svg>M4</span></div>
             <div class="side-item soon">语音合成<span class="lk"><svg class="ico sm"><use href="#i-lock"/></svg>M4</span></div>
-            <div class="side-item soon">插件<span class="lk"><svg class="ico sm"><use href="#i-lock"/></svg>M5</span></div>
             <div class="side-item">关于</div>
-            <div class="side-foot">随译 v0.1.0 dev<br>Tauri 2 · Rust + WebView</div>
+              <div class="side-foot">随译 v0.1.1<br>译文由你配置的服务提供</div>
           </div>
           <div class="main">
             <div class="card list-col">
@@ -910,18 +911,17 @@ backdrop-filter:var(--glass-blur);-webkit-backdrop-filter:var(--glass-blur);tran
                   <button class="arr" title="下移"><svg class="ico sm"><use href="#i-chev-down"/></svg></button>
                 </span>
                 <button class="tgl" role="switch" aria-checked="true" aria-label="启用 ZAI"></button>
-                <span class="svc-name"><span class="n">ZAI</span><span class="m">OpenAI 兼容 · glm-5.3-flash</span></span>
-                <span class="ok-t">已启用</span>
-                <button class="btn mini">编辑</button>
+                <span class="svc-name"><span class="n">ZAI</span><span class="m">glm-5.3-flash</span></span>
+                <span class="chip ok mini">已启用</span>
               </div>
               <div class="svc">
                 <span class="arrows">
                   <button class="arr" title="上移"><svg class="ico sm"><use href="#i-chev-up"/></svg></button>
                   <button class="arr" title="下移"><svg class="ico sm"><use href="#i-chev-down"/></svg></button>
                 </span>
-                <button class="tgl" role="switch" aria-checked="false" aria-label="启用 DeepSeek"></button>
-                <span class="svc-name"><span class="n">DeepSeek</span><span class="m">OpenAI 兼容 · deepseek-chat</span></span>
-                <button class="btn mini">编辑</button>
+                <button class="tgl" role="switch" aria-checked="true" aria-label="启用 DeepSeek"></button>
+                <span class="svc-name"><span class="n">DeepSeek</span><span class="m">deepseek-chat</span></span>
+                <span class="chip ok mini">已启用</span>
               </div>
               <div class="svc">
                 <span class="arrows">
@@ -929,9 +929,8 @@ backdrop-filter:var(--glass-blur);-webkit-backdrop-filter:var(--glass-blur);tran
                   <button class="arr" title="下移"><svg class="ico sm"><use href="#i-chev-down"/></svg></button>
                 </span>
                 <button class="tgl" role="switch" aria-checked="false" aria-label="启用智谱 GLM"></button>
-                <span class="svc-name"><span class="n">智谱 GLM</span><span class="m">OpenAI 兼容 · glm-4-flash</span></span>
+                <span class="svc-name"><span class="n">智谱 GLM</span><span class="m">glm-4-flash</span></span>
                 <span class="chip warn mini">上次失败 429</span>
-                <button class="btn mini">编辑</button>
               </div>
               <div class="group">
                 <div class="ghead">性能与回退</div>
@@ -1084,7 +1083,7 @@ backdrop-filter:var(--glass-blur);-webkit-backdrop-filter:var(--glass-blur);tran
           </div>
           <div class="hk conflict">
             <span class="nm"><span class="n">输入框转译</span><span class="m">当前输入框整体替换</span></span>
-            <span class="chip warn mini">M3 计划中</span>
+            <span class="chip ok mini">已实现</span>
             <span class="kbd">Alt</span><span class="kbd">T</span>
             <button class="btn mini">录制</button>
             <div class="warnline"><svg class="ico sm"><use href="#i-alert"/></svg>该组合已被其他程序占用，可能无法生效。建议改用
@@ -1095,13 +1094,13 @@ backdrop-filter:var(--glass-blur);-webkit-backdrop-filter:var(--glass-blur);tran
         <div class="win">
           <div class="hk">
             <span class="nm"><span class="n">截图识别</span><span class="m">框选识别或识别后翻译</span></span>
-            <span class="chip warn mini">M2 开发中</span>
+            <span class="chip ok mini">已实现</span>
             <span class="kbd">Alt</span><span class="kbd">S</span>
             <button class="btn mini">录制</button>
           </div>
           <div class="hk">
             <span class="nm"><span class="n">朗读选中文字</span><span class="m">用系统语音播报</span></span>
-            <span class="chip mile mini">M4 计划中</span>
+            <span class="chip ok mini">已实现</span>
             <span class="kbd">Alt</span><span class="kbd">R</span>
             <button class="btn mini locked"><svg class="ico sm"><use href="#i-lock"/></svg>录制</button>
           </div>
@@ -1122,7 +1121,7 @@ backdrop-filter:var(--glass-blur);-webkit-backdrop-filter:var(--glass-blur);tran
   <!-- ==================== 6 历史与词典 ==================== -->
   <section class="sec" id="s6">
     <div class="sec-head"><span class="idx">6</span><h2>历史记录 · 词典结构化</h2>
-      <span class="chip mile">M4 计划中</span></div>
+      <span class="chip ok">已实现</span></div>
     <div class="block">
       <div class="win">
         <div class="titlebar"><span class="winname">随译 · 历史记录</span></div>
@@ -1288,11 +1287,11 @@ backdrop-filter:var(--glass-blur);-webkit-backdrop-filter:var(--glass-blur);tran
             </tr>
             <tr>
               <td>次级按钮</td>
-              <td><span class="cell"><button class="btn mini">弹窗预览</button></span></td>
-              <td><span class="cell"><button class="btn mini" style="background:var(--c-app-bg);border-color:var(--c-border-hover);color:var(--c-text)">弹窗预览</button></span></td>
-              <td><span class="cell"><button class="btn mini" style="background:var(--c-muted-bg)">弹窗预览</button></span></td>
-              <td><span class="cell"><button class="btn mini" style="outline:2px solid var(--c-primary-strong);outline-offset:2px">弹窗预览</button></span></td>
-              <td><span class="cell"><button class="btn mini is-disabled">弹窗预览</button></span></td>
+              <td><span class="cell"><button class="btn mini">保存修改</button></span></td>
+              <td><span class="cell"><button class="btn mini" style="background:var(--c-app-bg);border-color:var(--c-border-hover);color:var(--c-text)">保存修改</button></span></td>
+              <td><span class="cell"><button class="btn mini" style="background:var(--c-muted-bg)">保存修改</button></span></td>
+              <td><span class="cell"><button class="btn mini" style="outline:2px solid var(--c-primary-strong);outline-offset:2px">保存修改</button></span></td>
+              <td><span class="cell"><button class="btn mini is-disabled">保存修改</button></span></td>
               <td><span class="cell"><button class="btn mini is-disabled"><span class="spin"></span>加载</button></span></td>
               <td><span class="cell"><span class="t-cap">不适用</span></span></td>
             </tr>
