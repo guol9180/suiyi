@@ -3,230 +3,398 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>随译 SuiYi · Windows 桌面 AI 翻译助手</title>
-<meta name="description" content="划词翻译、截图识别、输入框转译，翻译引擎可自由配置的 Windows 桌面工具。">
+<title>随译 SuiYi · Windows 桌面翻译工具</title>
+<meta name="description" content="选中文字按 Alt+D、框选屏幕按 Alt+S、输入框按 Alt+T。翻译使用你自己的 API Key。">
 <style>
+/*
+ * 下载页。单文件，图片是应用真实界面的渲染结果（docs/img）。
+ * 颜色与字阶取自 design/ui-mockup.html（v0.4）。
+ */
 :root{
-  --c-primary:#4c6fff;
-  --c-primary-strong:#3b5bff;
-  --c-primary-hover:#2f49e0;
-  --c-primary-soft:#eef2ff;
-  --c-primary-border:#d6deff;
-  --c-text:#0f172a;
-  --c-text-2:#475569;
-  --c-text-3:#64748b;
-  --c-caption:#5c6b80;
-  --c-surface:#ffffff;
-  --c-app-bg:#f6f8fb;
-  --c-border:#e2e8f0;
-  --c-border-strong:#d9e0ec;
-  --c-mile:#52607a;
-  --c-mile-bg:#eef1f6;
-  --radius-sm:4px; --radius-md:6px; --radius-lg:8px; --radius-xl:10px;
-  --font-ui:"Segoe UI","Microsoft YaHei","PingFang SC",sans-serif;
-  --font-mono:Consolas,"Microsoft YaHei",monospace;
+  --ink:#0f172a;
+  --ink-2:#475569;
+  --ink-3:#64748b;
+  --caption:#5c6b80;
+  --hair:#e3e8ef;
+  --hair-soft:#eef1f6;
+  --paper:#ffffff;
+  --bg:#f2f5f9;
+  --accent:#3b5bff;
+  --accent-dark:#2f49e0;
+  --accent-soft:#eef2ff;
+  --accent-line:#d6deff;
+  --warn-bg:#fffaf0;
+  --warn-line:#f0e0c0;
+  --warn-ink:#8a5a08;
+  --font:"Segoe UI","Microsoft YaHei","PingFang SC",sans-serif;
+  --mono:Consolas,"Microsoft YaHei",monospace;
+  --shadow:0 18px 40px rgba(15,23,42,.10), 0 2px 6px rgba(15,23,42,.05);
 }
 *{margin:0;padding:0;box-sizing:border-box}
 body{
-  font-family:var(--font-ui);
-  color:var(--c-text);
-  background:var(--c-app-bg);
-  font-size:14px;
-  line-height:1.75;
+  background:var(--bg);
+  color:var(--ink);
+  font-family:var(--font);
+  font-size:14.5px;
+  line-height:1.8;
   -webkit-font-smoothing:antialiased;
+  text-rendering:optimizeLegibility;
 }
-a{color:var(--c-primary-strong);text-decoration:none}
-a:hover{text-decoration:underline}
-:focus-visible{outline:2px solid var(--c-primary-strong);outline-offset:2px}
+a{color:var(--accent-dark);text-decoration:none}
+a:hover{text-decoration:underline;color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
+img{display:block;max-width:100%;height:auto}
 
-.wrap{max-width:960px;margin:0 auto;padding:0 24px}
+.wrap{max-width:1040px;margin:0 auto;padding:0 32px}
+.prose{max-width:660px}
 
-header{border-bottom:1px solid var(--c-border);background:var(--c-surface)}
-header .inner{display:flex;align-items:center;gap:12px;height:60px}
+/* ============ 顶栏 ============ */
+.bar{background:var(--paper);border-bottom:1px solid var(--hair)}
+.bar .in{max-width:1040px;margin:0 auto;padding:0 32px;height:58px;display:flex;align-items:center;gap:11px}
 .mark{
-  width:32px;height:32px;border-radius:8px;background:var(--c-primary);color:#fff;
-  display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:600;flex:none;
+  width:27px;height:27px;border-radius:7px;background:#4c6fff;color:#fff;flex:none;
+  font-size:14px;font-weight:600;display:inline-flex;align-items:center;justify-content:center;
 }
-.brand{font-size:16px;font-weight:600}
-.ver{font-size:11.5px;color:var(--c-mile);background:var(--c-mile-bg);
-  border:1px solid #dfe5ee;border-radius:var(--radius-sm);padding:1px 7px}
-header nav{margin-left:auto;display:flex;gap:16px;font-size:13px}
-header nav a{color:var(--c-text-2)}
+.brand{font-size:15px;font-weight:600;letter-spacing:.2px}
+.bar .sp{flex:1}
+.bar nav{display:flex;gap:20px;font-size:13.5px}
+.bar nav a{color:var(--ink-2)}
+.bar nav a:hover{color:var(--ink)}
 
-.hero{padding:56px 0 40px}
-.hero h1{font-size:34px;line-height:1.35;font-weight:600;letter-spacing:.2px}
-.hero p{margin-top:14px;font-size:15px;color:var(--c-text-2);max-width:640px}
+/* ============ 首屏 ============ */
+.hero{display:grid;grid-template-columns:1.02fr .98fr;gap:56px;align-items:center;padding:60px 0 64px}
+.eyebrow{
+  font-size:12.5px;color:var(--caption);letter-spacing:.3px;
+  display:flex;align-items:center;gap:8px;
+}
+.eyebrow i{display:inline-block;width:5px;height:5px;border-radius:50%;background:var(--accent);font-style:normal}
+h1{
+  font-size:36px;line-height:1.3;font-weight:600;letter-spacing:-.3px;
+  margin:12px 0 16px;
+}
+.hero .lead{font-size:16px;line-height:1.85;color:var(--ink-2);max-width:520px}
+.hero .lead b{font-weight:600;color:var(--ink)}
 
-.dl{margin-top:28px;display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.cta{margin-top:30px;display:flex;align-items:center;gap:18px;flex-wrap:wrap}
 .btn{
-  display:inline-flex;align-items:center;gap:8px;height:44px;padding:0 20px;
-  border-radius:var(--radius-lg);border:1px solid var(--c-border-strong);
-  background:var(--c-surface);color:var(--c-text-2);font-size:14px;cursor:pointer;
-  transition:background .14s,border-color .14s,color .14s;
+  display:inline-flex;align-items:center;gap:9px;height:46px;padding:0 22px;
+  border-radius:9px;font-size:15px;font-family:inherit;cursor:pointer;
+  transition:background .15s,border-color .15s,transform .15s,box-shadow .15s;
 }
-.btn:hover{background:var(--c-app-bg);border-color:#bfcbe0;color:var(--c-text);text-decoration:none}
-.btn.primary{background:var(--c-primary-strong);border-color:var(--c-primary-strong);color:#fff;font-weight:600}
-.btn.primary:hover{background:var(--c-primary-hover);border-color:var(--c-primary-hover);color:#fff}
-.btn .size{font-size:12px;color:inherit;opacity:.75;font-weight:400}
-.meta{margin-top:14px;font-size:12.5px;color:var(--c-caption)}
+.btn.primary{
+  background:var(--accent);border:1px solid var(--accent);color:#fff;font-weight:500;
+  box-shadow:0 6px 16px rgba(59,91,255,.28);
+}
+.btn.primary:hover{background:var(--accent-dark);border-color:var(--accent-dark);text-decoration:none;transform:translateY(-1px)}
+.btn.primary svg{width:17px;height:17px}
+.other{font-size:13.5px;color:var(--ink-3)}
+.other a{color:var(--ink-2);text-decoration:underline;text-decoration-color:#c6d0de;text-underline-offset:3px}
+.other a:hover{color:var(--accent-dark);text-decoration-color:currentColor}
 
-section{padding:36px 0;border-top:1px solid var(--c-border)}
-h2{font-size:19px;font-weight:600;margin-bottom:18px}
+.spec{
+  margin-top:26px;display:flex;gap:22px;flex-wrap:wrap;
+  font-size:12.5px;color:var(--caption);font-variant-numeric:tabular-nums;
+}
 
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}
-.card{background:var(--c-surface);border:1px solid var(--c-border);border-radius:var(--radius-xl);padding:16px}
-.card h3{font-size:14.5px;font-weight:600;margin-bottom:6px;display:flex;align-items:center;gap:7px}
-.card p{font-size:13px;color:var(--c-text-2)}
-.dot{width:6px;height:6px;border-radius:50%;background:var(--c-success,#15803d);flex:none}
+/* 首屏右侧：划词弹窗 */
+.stage{position:relative;justify-self:center}
+.stage::before{
+  content:"";position:absolute;inset:-28px -34px -22px -30px;border-radius:22px;
+  background:radial-gradient(120% 100% at 30% 0%, #e6ecfb 0%, rgba(230,236,251,0) 70%);
+}
+.stage img{
+  position:relative;width:430px;border-radius:12px;border:1px solid var(--hair);
+  box-shadow:var(--shadow);background:#fff;
+}
 
-table{width:100%;border-collapse:collapse;background:var(--c-surface);
-  border:1px solid var(--c-border);border-radius:var(--radius-xl);overflow:hidden;font-size:13px}
-th,td{padding:10px 14px;text-align:left;border-bottom:1px solid #edf1f7}
-th{background:var(--c-app-bg);font-size:12px;color:var(--c-caption);font-weight:600}
-tr:last-child td{border-bottom:none}
+/* ============ 通用区块 ============ */
+section{padding:56px 0 0}
+.head{display:flex;align-items:baseline;gap:12px;padding-bottom:12px;border-bottom:1px solid var(--hair)}
+h2{font-size:20px;font-weight:600;letter-spacing:-.1px}
+.head .note{margin-left:auto;font-size:12.5px;color:var(--caption)}
+
+/* 三个入口 */
+.entries{margin-top:6px}
+.entry{
+  display:grid;grid-template-columns:170px 1fr;gap:20px;align-items:start;
+  padding:20px 0;border-bottom:1px solid var(--hair-soft);
+}
+.entry:last-child{border-bottom:none}
+.keys{display:flex;align-items:center;gap:5px;padding-top:2px}
 kbd{
-  font-family:var(--font-mono);font-size:12px;background:#f1f5f9;border:1px solid #d6dee9;
-  border-bottom-width:2px;border-radius:var(--radius-sm);padding:1px 6px;color:var(--c-text-2);
+  font-family:var(--mono);font-size:12.5px;color:var(--ink-2);background:#eef1f6;
+  border:1px solid #dde3ec;border-bottom-width:2px;border-radius:5px;
+  padding:2px 7px;white-space:nowrap;
 }
-code{font-family:var(--font-mono);font-size:12.5px;background:var(--c-mile-bg);
-  border-radius:3px;padding:1px 5px;color:#3c4a60}
+.plus{color:#aab4c4;font-size:12px}
+.entry h3{font-size:15px;font-weight:600;margin-bottom:4px}
+.entry p{color:var(--ink-2);font-size:14px}
 
-.note{
-  background:#fff7e6;border:1px solid #fde1b9;border-radius:var(--radius-xl);
-  padding:14px 16px;font-size:13px;color:#b45309;
+/* 界面图 */
+.figs{margin-top:26px;display:flex;flex-direction:column;gap:34px}
+figure img{
+  width:100%;border-radius:12px;border:1px solid var(--hair);
+  box-shadow:0 12px 30px rgba(15,23,42,.07);
 }
-.note b{color:#92400e}
-ul{margin:8px 0 0 18px}
-li{font-size:13px;color:var(--c-text-2);margin:4px 0}
+figcaption{margin-top:12px;font-size:13px;color:var(--caption);max-width:640px}
 
-footer{padding:28px 0 44px;border-top:1px solid var(--c-border);font-size:12.5px;color:var(--c-caption)}
-footer .inner{display:flex;gap:14px;flex-wrap:wrap;align-items:center}
+/* 安装步骤 */
+.steps{counter-reset:s;margin-top:8px}
+.step{
+  counter-increment:s;display:grid;grid-template-columns:34px 1fr;gap:14px;
+  padding:16px 0;border-bottom:1px solid var(--hair-soft);
+}
+.step:last-child{border-bottom:none}
+.step::before{
+  content:counter(s);width:24px;height:24px;border-radius:50%;
+  background:var(--accent-soft);border:1px solid var(--accent-line);color:var(--accent-dark);
+  font-size:12.5px;font-weight:600;display:flex;align-items:center;justify-content:center;
+  font-variant-numeric:tabular-nums;margin-top:3px;
+}
+.step h3{font-size:14.5px;font-weight:600;margin-bottom:3px}
+.step p{color:var(--ink-2);font-size:14px}
+
+.warn{
+  background:var(--warn-bg);border:1px solid var(--warn-line);border-radius:10px;
+  padding:14px 16px;color:var(--warn-ink);font-size:13.5px;line-height:1.8;
+  max-width:680px;
+}
+.warn a{color:var(--warn-ink);text-decoration:underline}
+.warn b{color:#7a4d06}
+
+/* 已知限制 */
+.notes{
+  margin-top:18px;background:var(--paper);border:1px solid var(--hair);border-radius:12px;
+  padding:6px 22px;
+}
+.notes li{
+  list-style:none;position:relative;padding:11px 0 11px 16px;
+  border-bottom:1px solid var(--hair-soft);color:var(--ink-2);font-size:13.5px;
+}
+.notes li:last-child{border-bottom:none}
+.notes li::before{
+  content:"";position:absolute;left:0;top:20px;width:4px;height:4px;border-radius:50%;background:#c2cad8;
+}
+
+/* 代码 */
+pre{
+  margin-top:14px;background:var(--paper);border:1px solid var(--hair);border-radius:10px;
+  padding:14px 16px;overflow:auto;
+}
+pre code{font-family:var(--mono);font-size:12.5px;line-height:2;color:var(--ink-2)}
+.code-inline{font-family:var(--mono);font-size:13px;background:var(--hair-soft);
+  border-radius:4px;padding:1px 5px;color:#3c4a60}
+
+/* ============ 页脚 ============ */
+footer{
+  margin-top:60px;border-top:1px solid var(--hair);padding:22px 0 64px;
+  display:flex;gap:20px;flex-wrap:wrap;font-size:13px;color:var(--caption);
+}
+footer .sp{flex:1}
+
+@media (max-width:900px){
+  .hero{grid-template-columns:1fr;gap:40px;padding:44px 0 48px}
+  .stage{justify-self:start}
+  h1{font-size:32px}
+  .entry{grid-template-columns:1fr;gap:8px}
+  .wrap,.bar .in{padding-left:22px;padding-right:22px}
+}
 </style>
 </head>
 <body>
 
-<header>
-  <div class="wrap inner">
+<div class="bar">
+  <div class="in">
     <span class="mark">译</span>
     <span class="brand">随译 SuiYi</span>
-    <span class="ver">v0.1.0 · Windows x64</span>
+    <span class="sp"></span>
     <nav>
-      <a href="#features">功能</a>
+      <a href="#entries">功能</a>
+      <a href="#shots">界面</a>
       <a href="#install">安装</a>
-      <a href="https://github.com/guol9180/suiyi">GitHub</a>
+      <a href="#limits">限制</a>
+      <a href="https://github.com/guol9180/suiyi">源码</a>
     </nav>
   </div>
-</header>
+</div>
 
-<main class="wrap">
+<div class="wrap">
+
   <div class="hero">
-    <h1>划词就译，截屏也译。<br>翻译引擎由你定。</h1>
-    <p>
-      随译是 Windows 上的桌面翻译助手：在任何应用里选中文字按 <kbd>Alt</kbd>+<kbd>D</kbd> 出译文，
-      框选屏幕按 <kbd>Alt</kbd>+<kbd>S</kbd> 识别并翻译，
-      输入框里写完中文按 <kbd>Alt</kbd>+<kbd>T</kbd> 直接换成目标语言。
-      翻译服务可以是 DeepSeek、智谱、Kimi、Ollama 或任何 OpenAI 兼容的端点，多个服务同时出结果做对比。
-    </p>
+    <div>
+      <div class="eyebrow"><i></i>随译 SuiYi · v0.1.0</div>
+      <h1>Windows 桌面翻译工具</h1>
+      <p class="lead">
+        选中文字按 <b>Alt+D</b>，框选屏幕按 <b>Alt+S</b>，输入框里按 <b>Alt+T</b>。
+        翻译请求发给你自己的服务，支持 DeepSeek、智谱、Kimi、Ollama
+        以及任何 OpenAI 兼容的端点。
+      </p>
 
-    <div class="dl">
-      <a class="btn primary" href="https://github.com/guol9180/suiyi/releases/latest/download/SuiYi-Setup-x64.exe">
-        下载安装程序 <span class="size">.exe</span>
-      </a>
-      <a class="btn" href="https://github.com/guol9180/suiyi/releases/latest/download/SuiYi-Setup-x64.msi">
-        MSI 安装包
-      </a>
-      <a class="btn" href="https://github.com/guol9180/suiyi/releases/latest/download/SuiYi-Portable-x64.zip">
-        免安装版 <span class="size">.zip</span>
-      </a>
+      <div class="cta">
+        <a class="btn primary" href="https://github.com/guol9180/suiyi/releases/latest/download/SuiYi-Setup-x64.exe">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"
+               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M8 2.4v7.4"/><path d="M5.1 7.1 8 10l2.9-2.9"/><path d="M3 12.6h10"/>
+          </svg>
+          下载 Windows 版
+        </a>
+        <span class="other">
+          <a href="https://github.com/guol9180/suiyi/releases/latest/download/SuiYi-Setup-x64.msi">MSI</a>
+          ·
+          <a href="https://github.com/guol9180/suiyi/releases/latest/download/SuiYi-Portable-x64.zip">免安装版</a>
+          ·
+          <a href="https://github.com/guol9180/suiyi/releases">全部版本</a>
+        </span>
+      </div>
+
+      <div class="spec">
+        <span>Windows 10 1809+ · x64</span>
+        <span>8.9 MB</span>
+        <span>未签名</span>
+        <span>需要自己的 API Key</span>
+      </div>
     </div>
-    <div class="meta">
-      下载链接始终指向最新发布版本。安装包未做代码签名，首次运行会有 SmartScreen 提示，属预期情况。
-      <a href="https://github.com/guol9180/suiyi/releases">查看全部版本</a>
+
+    <div class="stage">
+      <img src="img/shot-popup.png" width="430" height="540"
+           alt="划词翻译弹窗：原文在上，ZAI 与 DeepSeek 两个服务的译文并排在下">
     </div>
   </div>
 
-  <section id="features">
-    <h2>能做什么</h2>
-    <div class="grid">
-      <div class="card">
-        <h3><span class="dot"></span>多服务并发对比</h3>
-        <p>把几个 AI 服务都配上，一次翻译同时出几份译文，哪家更准一眼看得出来。服务可启停、可排序。</p>
+  <section id="entries">
+    <div class="head">
+      <h2>三个入口</h2>
+      <span class="note">热键固定，暂不支持自定义</span>
+    </div>
+    <div class="entries">
+      <div class="entry">
+        <div class="keys">
+          <kbd>Alt</kbd><span class="plus">+</span><kbd>D</kbd>
+        </div>
+        <div>
+          <h3>划词翻译</h3>
+          <p>在任意应用里选中文字，译文窗口出现在光标附近并流式出稿。窗口失焦自动隐藏，也可以钉住留在屏幕上。</p>
+        </div>
       </div>
-      <div class="card">
-        <h3><span class="dot"></span>划词翻译</h3>
-        <p>任意应用里选中文字按 Alt+D，弹窗出现在光标旁边，流式出稿，失焦自动隐藏，也可以钉住。</p>
+      <div class="entry">
+        <div class="keys">
+          <kbd>Alt</kbd><span class="plus">+</span><kbd>S</kbd>
+        </div>
+        <div>
+          <h3>截图识别</h3>
+          <p>冻结鼠标所在的那块屏幕，拖动框选后在本机识别文字，图片不上传。只框一块屏，不支持跨屏拖选。</p>
+        </div>
       </div>
-      <div class="card">
-        <h3><span class="dot"></span>截图识别</h3>
-        <p>Alt+S 冻结鼠标所在的那块屏幕，框选后离线 OCR 识别。识别在本机完成，截图不上传。</p>
+      <div class="entry">
+        <div class="keys">
+          <kbd>Alt</kbd><span class="plus">+</span><kbd>T</kbd>
+        </div>
+        <div>
+          <h3>输入框转译</h3>
+          <p>读取当前输入框的内容，翻译后原位替换。写回前会核对焦点是否还在原窗口，不在就放弃写回，改为把译文放进剪贴板。</p>
+        </div>
       </div>
-      <div class="card">
-        <h3><span class="dot"></span>输入框转译</h3>
-        <p>Alt+T 把当前输入框的中文整体换成目标语言。切换窗口时会自动放弃写回，改成复制到剪贴板。</p>
-      </div>
-      <div class="card">
-        <h3><span class="dot"></span>词典、朗读与历史</h3>
-        <p>单词可出音标与义项；本地语音离线朗读；翻译历史可搜索、按来源筛选，失败记录也会留下。</p>
-      </div>
-      <div class="card">
-        <h3><span class="dot"></span>插件系统</h3>
-        <p>放一个目录就能加插件，支持翻译、OCR、语音、动作四类扩展点，跑在 QuickJS 沙箱里。</p>
-      </div>
+    </div>
+  </section>
+
+  <section id="shots">
+    <div class="head">
+      <h2>界面</h2>
+      <span class="note">实际运行截图</span>
+    </div>
+    <div class="figs">
+      <figure>
+        <img src="img/shot-translate.png" width="1024" height="470"
+             alt="主窗口翻译页：同一句原文下，ZAI 与 DeepSeek 各出一张结果卡">
+        <figcaption>
+          启用多个服务时，一次翻译并发请求，每个服务各占一张结果卡。哪家更贴切，对着看就知道。
+        </figcaption>
+      </figure>
+      <figure>
+        <img src="img/shot-settings.png" width="1024" height="700"
+             alt="设置页：左侧服务列表，右侧服务编辑表单，含测试连接按钮">
+        <figcaption>
+          服务配置。填完点一次「测试连接」，它会请求 <span class="code-inline">/models</span>，
+          告诉你 Key 是否有效、网关是否可达、模型在不在权限范围内。
+        </figcaption>
+      </figure>
     </div>
   </section>
 
   <section id="install">
-    <h2>安装与首次使用</h2>
-    <div class="note">
-      <b>Windows SmartScreen 提示：</b>安装包没有购买代码签名证书，首次运行会提示「Windows 已保护你的电脑」。
-      点「更多信息」→「仍要运行」即可。如果介意，可以先在
-      <a href="https://github.com/guol9180/suiyi">仓库</a>里核对源码，再自行构建。
+    <div class="head"><h2>安装</h2></div>
+
+    <div style="margin-top:20px">
+      <div class="warn">
+        <b>安装包没有代码签名。</b>首次运行时 Windows 会提示「已保护你的电脑」，
+        点「更多信息」再点「仍要运行」即可。介意的话可以
+        <a href="https://github.com/guol9180/suiyi">对着源码自己构建</a>。
+      </div>
     </div>
-    <ul>
-      <li>系统要求：Windows 10 1809 及以上，x64。Windows 11 自带 WebView2；Windows 10 若提示缺失，装一次 <a href="https://developer.microsoft.com/microsoft-edge/webview2/">WebView2 运行时</a>即可。</li>
-      <li>装好后打开「设置 → 服务配置」，点「添加服务」，协议选 OpenAI 兼容，填 Base URL、API Key 和模型名；DeepSeek、智谱、Kimi、Ollama、OneAPI 中转都适用。</li>
-      <li>填完点一下「测试连接」，它会告诉你 Key 是否有效、网关是否可达、模型是否在权限范围内。</li>
-      <li>API Key 只写进 Windows 凭据管理器，配置文件里零明文。</li>
+
+    <div class="steps">
+      <div class="step">
+        <div>
+          <h3>装好并启动</h3>
+          <p>Windows 11 自带 WebView2；Windows 10 若提示缺失，装一次 WebView2 运行时。</p>
+        </div>
+      </div>
+      <div class="step">
+        <div>
+          <h3>配一个翻译服务</h3>
+          <p>设置 → 服务配置 → 添加服务，协议选 OpenAI 兼容，填 Base URL、API Key 和模型名。</p>
+        </div>
+      </div>
+      <div class="step">
+        <div>
+          <h3>点「测试连接」确认</h3>
+          <p>确认 Key、网关与模型三件事都对，再开始用。</p>
+        </div>
+      </div>
+      <div class="step">
+        <div>
+          <h3>注意额度</h3>
+          <p>翻译花的是你自己的 API 额度。同时启用多个服务时，每次翻译会同时消耗这几个服务的额度。</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="limits">
+    <div class="head">
+      <h2>已知限制</h2>
+      <span class="note">v0.1.0 的真实状态</span>
+    </div>
+    <ul class="notes">
+      <li>只在 Windows 上构建与验证过。macOS 和 Linux 尚未实现，代码里只有「当前平台不支持」的提示。</li>
+      <li>截图识别的语言取决于系统 OCR 语言包。本机只装中文包时，识别英文会有把小写 l 认成大写 I 这类误差。</li>
+      <li>朗读用系统自带语音，音色一般，也还没有语速和音色选择。</li>
+      <li>插件不能联网，只能读写剪贴板（需要申请权限）。</li>
+      <li>输入框转译写回后要撤销，得用目标程序自己的 Ctrl+Z。</li>
+      <li>API Key 只写进 Windows 凭据管理器，配置文件中零明文。</li>
     </ul>
   </section>
 
   <section>
-    <h2>快捷键</h2>
-    <table>
-      <thead><tr><th style="width:180px">动作</th><th style="width:150px">快捷键</th><th>说明</th></tr></thead>
-      <tbody>
-        <tr><td>划词翻译</td><td><kbd>Alt</kbd> + <kbd>D</kbd></td><td>取选中文字，在光标处弹出翻译窗</td></tr>
-        <tr><td>截图识别</td><td><kbd>Alt</kbd> + <kbd>S</kbd></td><td>冻结鼠标所在显示器，框选后离线识别</td></tr>
-        <tr><td>输入框转译</td><td><kbd>Alt</kbd> + <kbd>T</kbd></td><td>翻译当前输入框内容并原位写回</td></tr>
-        <tr><td>关闭弹窗</td><td><kbd>Esc</kbd></td><td>隐藏当前弹窗，内容保留</td></tr>
-      </tbody>
-    </table>
-  </section>
-
-  <section>
-    <h2>从源码构建</h2>
-    <p style="font-size:13px;color:var(--c-text-2)">
-      需要 Node 18+、pnpm、Rust stable（MSVC 工具链）。
-    </p>
-    <pre style="margin-top:10px;background:var(--c-surface);border:1px solid var(--c-border);
-      border-radius:var(--radius-xl);padding:14px 16px;overflow:auto"><code style="background:none;padding:0">pnpm install
+    <div class="head"><h2>从源码构建</h2><span class="note">需要 Node 18+、pnpm、Rust stable（MSVC）</span></div>
+    <pre><code>pnpm install
 pnpm tauri dev      # 开发调试
 pnpm tauri build    # 打包安装程序</code></pre>
-    <p class="meta" style="margin-top:10px">
-      仓库里的 <code>.github/workflows/release.yml</code> 会在打 tag 时自动完成构建与发布。
+    <p style="margin-top:14px;font-size:13.5px;color:var(--ink-3)">
+      打 <span class="code-inline">v*</span> 标签会自动触发
+      <span class="code-inline">.github/workflows/release.yml</span>，
+      在 GitHub 的 Windows 机器上构建并发布。
     </p>
   </section>
-</main>
 
-<footer>
-  <div class="wrap inner">
-    <span>随译 SuiYi · 桌面 AI 翻译助手</span>
+  <footer>
+    <span>随译 SuiYi</span>
     <a href="https://github.com/guol9180/suiyi">源码</a>
-    <a href="https://github.com/guol9180/suiyi/releases">发布记录</a>
-    <a href="https://github.com/guol9180/suiyi/issues">反馈问题</a>
-    <span style="margin-left:auto">尚未设置开源协议，仓库暂不授予使用许可</span>
-  </div>
-</footer>
+    <a href="https://github.com/guol9180/suiyi/issues">反馈</a>
+    <span class="sp"></span>
+    <span>尚未设置开源协议，仓库暂不授予使用许可</span>
+  </footer>
 
+</div>
 </body>
 </html>
