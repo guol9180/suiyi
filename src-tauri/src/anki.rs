@@ -185,6 +185,8 @@ pub async fn add_note(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::{Read, Write};
+    use std::net::TcpListener;
 
     #[test]
     fn falls_back_to_defaults() {
@@ -192,6 +194,125 @@ mod tests {
         assert_eq!(normalized("http://127.0.0.1:9999"), "http://127.0.0.1:9999");
         assert_eq!(normalized_deck(""), DEFAULT_ANKI_DECK);
         assert_eq!(normalized_deck("  考研  "), "考研");
+    }
+
+    /// 读一条完整的 HTTP 请求（按 Content-Length 等 body 到齐）
+    fn read_request(sock: &mut std::net::TcpStream) -> String {
+        let mut buf: Vec<u8> = Vec::new();
+        let mut tmp = [0u8; 4096];
+        loop {
+            let n = sock.read(&mut tmp).unwrap_or(0);
+            if n == 0 {
+                break;
+            }
+            buf.extend_from_slice(&tmp[..n]);
+            let text = String::from_utf8_lossy(&buf).to_string();
+            if let Some(pos) = text.find("\r\n\r\n") {
+                let head = &text[..pos];
+                let len = head
+                    .lines()
+                    .find_map(|l| {
+                        l.to_ascii_lowercase()
+                            .strip_prefix("content-length:")
+                            .map(|v| v.trim().parse::<usize>().unwrap_or(0))
+                    })
+                    .unwrap_or(0);
+                if buf.len() >= pos + 4 + len {
+                    break;
+                }
+            }
+        }
+        String::from_utf8_lossy(&buf).to_string()
+    }
+
+    /// 起一个只认 AnkiConnect 协议的假服务端，按请求顺序返回预设应答，
+    /// 并把收到的请求原文返回给测试断言。
+    fn mock_anki(responses: Vec<&'static str>) -> (String, std::thread::JoinHandle<Vec<String>>) {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+        let handle = std::thread::spawn(move || {
+            let mut seen = Vec::new();
+            for body in responses {
+                let Ok((mut sock, _)) = listener.accept() else { break };
+                seen.push(read_request(&mut sock));
+                let resp = format!(
+                    "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                    body.len(),
+                    body
+                );
+                let _ = sock.write_all(resp.as_bytes());
+                let _ = sock.flush();
+            }
+            seen
+        });
+        (format!("http://{addr}"), handle)
+    }
+
+    #[tokio::test]
+    async fn probes_status_over_ankiconnect() {
+        let (url, server) = mock_anki(vec![
+            r#"{"result":6,"error":null}"#,
+            r#"{"result":["默认","随译"],"error":null}"#,
+        ]);
+        let st = status(&url, "随译").await;
+        assert!(st.available);
+        assert_eq!(st.version, Some(6));
+        assert!(st.deck_exists, "牌组在列表里，应判定为已存在");
+
+        let seen = server.join().unwrap();
+        assert!(seen[0].contains("\"action\":\"version\""));
+        assert!(seen[1].contains("\"action\":\"deckNames\""));
+    }
+
+    #[tokio::test]
+    async fn adds_note_and_creates_missing_deck() {
+        let (url, server) = mock_anki(vec![
+            r#"{"result":[],"error":null}"#,          // deckNames：牌组还不存在
+            r#"{"result":123,"error":null}"#,         // createDeck
+            r#"{"result":4567,"error":null}"#,        // addNote
+        ]);
+        let r = add_note(&url, "随译", "retrieval", "检索；找回").await.unwrap();
+        assert!(r.added);
+        assert!(!r.duplicate);
+        assert_eq!(r.note_id, Some(4567));
+        assert!(r.error.is_none());
+
+        let seen = server.join().unwrap();
+        assert!(seen[1].contains("\"action\":\"createDeck\""), "牌组缺失时应自动创建");
+        let add = &seen[2];
+        assert!(add.contains("\"action\":\"addNote\""));
+        assert!(add.contains("\"deckName\":\"随译\""));
+        assert!(add.contains("\"modelName\":\"Basic\""));
+        assert!(add.contains("retrieval") && add.contains("检索"));
+        assert!(add.contains(ANKI_TAG), "应打上 suiyi 标签便于筛选");
+        assert!(add.contains("\"allowDuplicate\":false"));
+    }
+
+    #[tokio::test]
+    async fn treats_duplicate_as_already_saved() {
+        let (url, server) = mock_anki(vec![
+            r#"{"result":["随译"],"error":null}"#,    // 牌组已存在，不该再建
+            r#"{"result":null,"error":"cannot create note because it is a duplicate"}"#,
+        ]);
+        let r = add_note(&url, "随译", "retrieval", "检索").await.unwrap();
+        assert!(!r.added);
+        assert!(r.duplicate, "重复词条应识别为已存在而不是失败");
+        assert!(r.error.is_none());
+
+        let seen = server.join().unwrap();
+        assert_eq!(seen.len(), 2, "牌组已存在时不应发 createDeck");
+    }
+
+    #[tokio::test]
+    async fn reports_unreachable_anki() {
+        // 指向一个没人监听的端口
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+        drop(listener);
+
+        let st = status(&format!("http://{addr}"), "随译").await;
+        assert!(!st.available);
+        assert!(st.error.is_some());
     }
 }
 
