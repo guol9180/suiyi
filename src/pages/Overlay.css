@@ -9,6 +9,8 @@ html, body, #root { height: 100%; }
   background: #000;
   cursor: crosshair;
   user-select: none;
+  /* 覆盖层不引 base.css，字体栈在这里补一次 */
+  font-family: var(--font-ui);
 }
 
 .ov-img {

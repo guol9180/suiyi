@@ -12,16 +12,37 @@
        *      浏览器打开 http://localhost:4181/dist/app.html
        *
        * 参数：
-       *   ?win=main|popup   渲染主窗口（默认）或划词弹窗
+       *   ?win=main|popup|overlay   渲染主窗口（默认）、划词弹窗或截图框选覆盖层
        *   #services #history #plugins #hotkey #general #about   直接跳到某页
        *   ?demo=translate   主窗口填入原文并触发一次翻译
        *   ?conflict=1       让「截图识别」显示为被占用，用来看冲突提示
        */
       (function () {
         var q = new URLSearchParams(location.search);
-        var isPopup = q.get("win") === "popup";
+         var isPopup = q.get("win") === "popup";
+         var isOverlay = q.get("win") === "overlay";
         var conflict = q.get("conflict") === "1";
         var failOne = q.get("fail") === "1";
+
+        // 覆盖层要一张「冻结帧」当背景，桩里画一张文档样子的图顶着
+        var OVERLAY_SHOT =
+          "data:image/svg+xml;utf8," +
+          encodeURIComponent(
+            '<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="800">' +
+              '<rect width="1280" height="800" fill="#c9cdd4"/>' +
+              '<rect x="150" y="70" width="980" height="660" rx="8" fill="#ffffff"/>' +
+              '<rect x="196" y="120" width="520" height="26" rx="4" fill="#2f3237"/>' +
+              '<rect x="196" y="176" width="880" height="12" rx="6" fill="#c3c8d0"/>' +
+              '<rect x="196" y="204" width="840" height="12" rx="6" fill="#c3c8d0"/>' +
+              '<rect x="196" y="232" width="860" height="12" rx="6" fill="#c3c8d0"/>' +
+              '<rect x="196" y="272" width="430" height="14" rx="6" fill="#3964fe" opacity=".28"/>' +
+              '<rect x="196" y="308" width="856" height="12" rx="6" fill="#c3c8d0"/>' +
+              '<rect x="196" y="336" width="820" height="12" rx="6" fill="#c3c8d0"/>' +
+              '<rect x="196" y="364" width="870" height="12" rx="6" fill="#c3c8d0"/>' +
+              '<rect x="196" y="404" width="700" height="12" rx="6" fill="#c3c8d0"/>' +
+              '<rect x="196" y="432" width="840" height="12" rx="6" fill="#c3c8d0"/>' +
+            "</svg>",
+          );
 
         var SERVICES = {
           version: 1, concurrency: 2, timeoutSecs: 15, inputTargetLang: "中文",
@@ -92,6 +113,9 @@
           speak_text: function () { return null; },
           stop_speaking: function () { return null; },
           test_connection: function () { return { ok: true, elapsedMs: 412, models: ["glm-5.3-flash"], error: null }; },
+          get_screenshot: function () { return { dataUrl: OVERLAY_SHOT }; },
+          finish_region: function () { return null; },
+          cancel_screenshot: function () { return null; },
           translate_text: function (args) {
             if (failOne && args.serviceId === "deepseek") {
               throw new Error("服务返回 429：当前分组上游负载已饱和，请稍后再试");
@@ -210,7 +234,11 @@
 
         var scr = document.createElement("script");
         scr.type = "module";
-        scr.src = isPopup ? "/src/popup-main.tsx" : "/src/main.tsx";
+        scr.src = isOverlay
+          ? "/src/overlay-main.tsx"
+          : isPopup
+            ? "/src/popup-main.tsx"
+            : "/src/main.tsx";
         document.addEventListener("DOMContentLoaded", function () { document.body.appendChild(scr); });
       })();
     </script>

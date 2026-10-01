@@ -4,7 +4,7 @@
 //
 // 只报「真溢出」：父级自己可滚（overflow 非 visible）时，超出算滚动区正常内容。
 
-const [url, w, h, waitMsArg] = process.argv.slice(2);
+const [url, w, h, waitMsArg, shotPath] = process.argv.slice(2);
 const W = Number(w || 900);
 const H = Number(h || 620);
 const WAIT = Number(waitMsArg || 3500);
@@ -13,7 +13,7 @@ const PORT = 9333 + (process.pid % 500);
 const EDGE = "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe";
 
 const { spawn } = await import("node:child_process");
-const { mkdtempSync } = await import("node:fs");
+const { mkdtempSync, writeFileSync } = await import("node:fs");
 const { tmpdir } = await import("node:os");
 const { join } = await import("node:path");
 
@@ -84,6 +84,35 @@ const evaluate = async (expr) => {
 await send("Runtime.enable");
 await sleep(WAIT);
 
+// 覆盖层要拖出一个选区才有东西可看；只按下+移动，不松开，选区就留在画面上
+const DRAG = `(() => {
+  const root = document.querySelector(".overlay-root");
+  if (!root) return "skip";
+  const mk = (type, x, y) =>
+    root.dispatchEvent(new MouseEvent(type, { clientX: x, clientY: y, bubbles: true }));
+  mk("mousedown", 200, 150);
+  mk("mousemove", 320, 240);
+  mk("mousemove", calcX(), calcY());
+  function calcX() { return Math.round(window.innerWidth * 0.62); }
+  function calcY() { return Math.round(window.innerHeight * 0.66); }
+  return "dragged";
+})()`;
+await evaluate(DRAG);
+await sleep(400);
+
+// 覆盖层只引了自己的 CSS，变量有没有解析出来直接看计算值
+const STYLES = `(() => {
+  const root = document.documentElement;
+  const token = (n) => getComputedStyle(root).getPropertyValue(n).trim() || "(未定义)";
+  const cs = (s) => { const el = document.querySelector(s); return el ? getComputedStyle(el) : null; };
+  const out = ["--c-primary = " + token("--c-primary"), "--glass-dark-tint = " + token("--glass-dark-tint")];
+  const hint = cs(".ov-hint"), size = cs(".ov-size"), sel = cs(".ov-sel");
+  if (hint) out.push(".ov-hint  bg=" + hint.backgroundColor + " color=" + hint.color + " font=" + hint.fontSize);
+  if (size) out.push(".ov-size  bg=" + size.backgroundColor + " color=" + size.color + " font=" + size.fontSize);
+  if (sel) out.push(".ov-sel   border=" + sel.borderTopColor + " " + sel.borderTopWidth);
+  return out.join("\\n");
+})()`;
+
 const MEASURE = `(() => {
   const shell = document.querySelector(".app-shell, .popup-root, .overlay-root");
   if (!shell) return "找不到根容器（.app-shell / .popup-root / .overlay-root）";
@@ -112,7 +141,10 @@ const MEASURE = `(() => {
 })()`;
 
 const BOXES = `(() => {
-  const pick = [".side", ".main", ".list-col", ".form-col", ".fallback", ".seg", ".set-body"];
+  const pick = [
+    ".side", ".main", ".cols", ".list-col", ".form-col", ".fallback", ".seg", ".set-body",
+    ".panel", ".panel .f", ".panel .inp", ".row2", ".row2 .f",
+  ];
   const out = pick.map((s) => {
     const el = document.querySelector(s);
     if (!el) return s + ": 无";
@@ -128,6 +160,19 @@ console.log("=== 越界 ===");
 console.log(await evaluate(MEASURE));
 console.log("=== 盒模型 ===");
 console.log(await evaluate(BOXES));
+console.log("=== 计算样式 ===");
+console.log(await evaluate(STYLES));
+
+if (shotPath) {
+  await send("Page.enable");
+  const shot = await send("Page.captureScreenshot", { format: "png" });
+  if (shot.result?.data) {
+    writeFileSync(shotPath, Buffer.from(shot.result.data, "base64"));
+    console.log("截图已保存: " + shotPath);
+  } else {
+    console.log("截图失败");
+  }
+}
 
 ws.close();
 child.kill();
