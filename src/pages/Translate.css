@@ -40,7 +40,7 @@
 .swap:hover {
   background: var(--c-primary-soft);
   border-color: var(--c-primary-border);
-  color: var(--c-primary-strong);
+  color: var(--c-primary-text);
 }
 
 .src-area { min-height: 110px; resize: vertical; }

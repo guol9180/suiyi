@@ -83,7 +83,7 @@ html, body, #root { height: 100%; }
 .swap:hover {
   background: var(--c-primary-soft);
   border-color: var(--c-primary-border);
-  color: var(--c-primary-strong);
+  color: var(--c-primary-text);
 }
 
 /* 写回降级等一次性提示 */
@@ -188,7 +188,7 @@ html, body, #root { height: 100%; }
 .pop-actions .btn.open {
   background: var(--c-primary-soft);
   border-color: var(--c-primary-border);
-  color: var(--c-primary-strong);
+  color: var(--c-primary-text);
 }
 
 /* ---------- 溢出菜单 ---------- */

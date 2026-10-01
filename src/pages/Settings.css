@@ -37,7 +37,7 @@
 }
 .side-item.on {
   background: var(--c-primary-soft);
-  color: var(--c-primary-strong);
+  color: var(--c-primary-text);
   font-weight: 600;
 }
 .side-foot {
@@ -294,7 +294,7 @@ select.inp { appearance: auto; }
 .hkrow .m { flex: 1; min-width: 0; font-size: var(--fs-sec); color: var(--c-caption); }
 .hkrow .key { display: inline-flex; gap: 4px; flex: none; }
 /* 录制中的提示与底部的恢复默认 */
-.hk-rec { flex: none; font-size: var(--fs-cap); color: var(--c-primary-strong); }
+.hk-rec { flex: none; font-size: var(--fs-cap); color: var(--c-primary-text); }
 .hk-foot { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
 .hk-foot .thint { flex: 1; min-width: 0; margin-top: 0; }
 
@@ -613,7 +613,7 @@ select.inp { appearance: auto; }
 }
 .vrow:last-child { border-bottom: none; }
 .vrow:hover { background: var(--c-surface-2); }
-.vrow.on { background: var(--c-primary-soft); color: var(--c-primary-strong); font-weight: 600; }
+.vrow.on { background: var(--c-primary-soft); color: var(--c-primary-text); font-weight: 600; }
 .vrow .m { margin-left: auto; font-size: var(--fs-cap); color: var(--c-caption); }
 
 /*

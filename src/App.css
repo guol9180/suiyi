@@ -60,7 +60,7 @@
   border-bottom: 2px solid transparent;
 }
 .tabbar button.on {
-  color: var(--c-primary-strong);
+  color: var(--c-primary-text);
   border-color: var(--c-primary);
   font-weight: 600;
 }

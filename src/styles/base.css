@@ -105,7 +105,7 @@ body {
 .chip.info { background: var(--c-info-bg); border-color: var(--c-info-border); color: var(--c-info); }
 /* 里程碑与文档状态：中性色，不抢运行时状态 */
 .chip.mile { background: var(--c-mile-bg); border-color: var(--c-mile-border); color: var(--c-mile); }
-.chip.acc { background: var(--c-primary-soft); border-color: var(--c-primary-border); color: var(--c-primary-strong); }
+.chip.acc { background: var(--c-primary-soft); border-color: var(--c-primary-border); color: var(--c-primary-text); }
 .chip.mini { font-size: var(--fs-cap); padding: 1px 6px; }
 
 .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--c-success); flex: none; }
@@ -191,7 +191,7 @@ textarea.inp { height: auto; min-height: 86px; padding: 9px 11px; line-height: 1
 .seg span:hover { background: var(--glass-card-strong); color: var(--c-text); }
 .seg span.on {
   background: #fff;
-  color: var(--c-primary-strong);
+  color: var(--c-primary-text);
   font-weight: 600;
   box-shadow: 0 1px 3px rgba(15, 17, 21, 0.10);
 }

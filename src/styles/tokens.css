@@ -9,7 +9,13 @@
 :root {
   /* 品牌与交互：DeepSeek 的 deepseek-500 及其邻近档 */
   --c-primary: #3964fe;          /* 品牌识别：logo、进度、选中标记 */
-  --c-primary-strong: #3964fe;   /* 交互主色：主按钮、链接（白字 4.7:1） */
+--c-primary-strong: #3964fe;   /* 交互主色：主按钮、链接（白字 4.7:1） */
+/*
+ * 品牌蓝当「文字」用时换这一档深色。
+ * #3964FE 作为文字只有 4.38:1（应用底）/ 4.26:1（选中态浅蓝底），都不够 AA；
+ * #2B52E0 分别是 5.73:1 与 5.57:1。按钮底仍然是 #3964FE 配白字，不动。
+ */
+--c-primary-text: #2b52e0;
   --c-primary-hover: #2b52e0;    /* 悬停压深，保证白字仍然达标 */
   --c-primary-press: #2445c4;
   --c-primary-soft: #edf3fe;     /* deepseek-50 */
