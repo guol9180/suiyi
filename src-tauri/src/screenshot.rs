@@ -770,6 +770,34 @@ pub fn ocr_bytes(_img: &[u8], _lang: &str) -> Result<Vec<OcrLine>, String> {
 
 #[cfg(all(test, windows))]
 mod tests {
+    /// 结果面板按这套字段名取值，序列化键改了就前端就断了，在这里钉住
+    #[test]
+    fn ocr_result_serializes_to_the_keys_the_panel_reads() {
+        let r = super::OcrResult {
+            crop_url: "data:image/png;base64,AAAA".into(),
+            crop_w: 320,
+            crop_h: 200,
+            text: "Hello".into(),
+            lines: vec![super::OcrLine {
+                text: "Hello".into(),
+                x: 1.0,
+                y: 2.0,
+                w: 3.0,
+                h: 4.0,
+            }],
+            engine: "windows".into(),
+            lang: "en-US".into(),
+        };
+        let v: serde_json::Value = serde_json::to_value(&r).expect("OcrResult 应能序列化");
+        for key in ["cropUrl", "cropW", "cropH", "text", "lines", "engine", "lang"] {
+            assert!(v.get(key).is_some(), "缺字段 {key}");
+        }
+        let line = &v["lines"][0];
+        for key in ["text", "x", "y", "w", "h"] {
+            assert!(line.get(key).is_some(), "行缺字段 {key}");
+        }
+    }
+
     /// OCR 固定样本测试，覆盖 COM 单元选择、内存流写入、位图解码与识别引擎四段。
     /// 样本是白底黑字的 "Hello World" 与一行中文；系统装有任一中英文 OCR 语言包即可。
     #[test]
