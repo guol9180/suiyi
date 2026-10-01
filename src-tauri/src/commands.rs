@@ -583,9 +583,75 @@ pub fn hotkey_status(
 /// 重新尝试注册尚未成功的热键，返回最新状态
 #[tauri::command]
 pub fn retry_hotkeys(app: tauri::AppHandle) -> Vec<crate::hotkeys::HotkeyStatus> {
-    let list = crate::hotkeys::register_all(&app);
+    let pairs = current_hotkey_pairs(&app);
+    let list = crate::hotkeys::apply(&app, &pairs);
     app.state::<crate::hotkeys::HotkeyState>().store(list.clone());
     list
+}
+
+/// 当前该用的热键组合：配置里的自定义值 + 其余走出厂默认
+fn current_hotkey_pairs(app: &tauri::AppHandle) -> Vec<(String, String)> {
+    let config = config_dir(app)
+        .and_then(|dir| load_services(&dir))
+        .map(|f| f.hotkeys)
+        .unwrap_or_default();
+    crate::hotkeys::effective(&config)
+}
+
+/// 改一个全局热键：先落盘，再重新注册；注册不上就回滚配置，
+/// 免得下次启动带着一个用不了的组合。
+#[tauri::command]
+pub fn set_hotkey(
+    app: tauri::AppHandle,
+    id: String,
+    accelerator: String,
+) -> Result<Vec<crate::hotkeys::HotkeyStatus>, String> {
+    let accel = accelerator.trim().to_lowercase();
+    if accel.is_empty() {
+        return Err("没有按下任何组合键".into());
+    }
+    if accel
+        .parse::<tauri_plugin_global_shortcut::Shortcut>()
+        .is_err()
+    {
+        return Err(format!("无法识别这个组合：{accelerator}"));
+    }
+
+    let dir = config_dir(&app)?;
+    let mut file = load_services(&dir)?;
+    let prev = file.hotkeys.get(&id).cloned();
+    file.hotkeys.insert(id.clone(), accel);
+    save_services(&dir, &file)?;
+
+    let pairs = crate::hotkeys::effective(&file.hotkeys);
+    let mut list = crate::hotkeys::apply(&app, &pairs);
+
+    if list.iter().any(|s| s.id == id && !s.registered) {
+        // 没注册上：把配置退回去，再把原来的组合装回来
+        match prev {
+            Some(v) => file.hotkeys.insert(id.clone(), v),
+            None => file.hotkeys.remove(&id),
+        };
+        save_services(&dir, &file)?;
+        let pairs = crate::hotkeys::effective(&file.hotkeys);
+        list = crate::hotkeys::apply(&app, &pairs);
+    }
+
+    app.state::<crate::hotkeys::HotkeyState>().store(list.clone());
+    Ok(list)
+}
+
+/// 全部恢复出厂热键
+#[tauri::command]
+pub fn reset_hotkeys(app: tauri::AppHandle) -> Result<Vec<crate::hotkeys::HotkeyStatus>, String> {
+    let dir = config_dir(&app)?;
+    let mut file = load_services(&dir)?;
+    file.hotkeys.clear();
+    save_services(&dir, &file)?;
+    let pairs = crate::hotkeys::effective(&file.hotkeys);
+    let list = crate::hotkeys::apply(&app, &pairs);
+    app.state::<crate::hotkeys::HotkeyState>().store(list.clone());
+    Ok(list)
 }
 
 #[cfg(test)]

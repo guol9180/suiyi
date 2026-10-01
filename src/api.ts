@@ -57,6 +57,8 @@ export interface HotkeyStatus {
   registered: boolean;
   /** 注册失败的原因，成功时为 null */
   error: string | null;
+  /** 是否已被用户改过 */
+  custom: boolean;
 }
 
 /** 三个全局热键当前的注册状态 */
@@ -67,6 +69,16 @@ export function hotkeyStatus(): Promise<HotkeyStatus[]> {
 /** 重新尝试注册尚未成功的热键 */
 export function retryHotkeys(): Promise<HotkeyStatus[]> {
   return invoke("retry_hotkeys");
+}
+
+/** 改一个全局热键；组合注册不上时后端会回滚配置并返回原状态 */
+export function setHotkey(id: string, accelerator: string): Promise<HotkeyStatus[]> {
+  return invoke("set_hotkey", { id, accelerator });
+}
+
+/** 全部恢复出厂热键 */
+export function resetHotkeys(): Promise<HotkeyStatus[]> {
+  return invoke("reset_hotkeys");
 }
 
 /** 探测服务连通性：Key 是否有效、网关是否可达、模型是否可见 */

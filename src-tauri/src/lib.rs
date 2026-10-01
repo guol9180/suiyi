@@ -19,22 +19,21 @@ use tauri_plugin_global_shortcut::ShortcutState;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    // 热键比对用的目标定义
-    let hk_d: tauri_plugin_global_shortcut::Shortcut = "alt+d".parse().expect("解析 alt+d");
-    let hk_s: tauri_plugin_global_shortcut::Shortcut = "alt+s".parse().expect("解析 alt+s");
-    let hk_t: tauri_plugin_global_shortcut::Shortcut = "alt+t".parse().expect("解析 alt+t");
-
+    // 回调里不再比对写死的组合，而是查「当前生效」那张表，
+    // 这样用户改过键之后事件还能落到正确的动作上。
     let hotkey = tauri_plugin_global_shortcut::Builder::new()
         .with_handler(move |app, shortcut, event| {
             if event.state != ShortcutState::Pressed {
                 return;
             }
-            if *shortcut == hk_d {
-                selection::trigger_selection_translate(app.clone());
-            } else if *shortcut == hk_s {
-                screenshot::trigger_screenshot(app.clone());
-            } else if *shortcut == hk_t {
-                writeback::trigger_input_translate(app.clone());
+            let action = app
+                .state::<hotkeys::HotkeyState>()
+                .action_of(shortcut);
+            match action.as_deref() {
+                Some("selection") => selection::trigger_selection_translate(app.clone()),
+                Some("screenshot") => screenshot::trigger_screenshot(app.clone()),
+                Some("input") => writeback::trigger_input_translate(app.clone()),
+                _ => {}
             }
         });
 
@@ -80,16 +79,23 @@ pub fn run() {
                 .build()?;
 
             // 逐个注册热键：失败的只影响它自己，界面会显示「已被其他程序占用」
-            let status = hotkeys::register_all(&handle);
+            let config = commands::config_dir(&handle)
+                .and_then(|dir| config::load_services(&dir))
+                .map(|f| f.hotkeys)
+                .unwrap_or_default();
+            let pairs = hotkeys::effective(&config);
+            let status = hotkeys::apply(&handle, &pairs);
             handle.state::<hotkeys::HotkeyState>().store(status);
 
             // 旧实例退出需要时间，先失败的在后台补注册
             #[cfg(desktop)]
             {
                 let handle = handle.clone();
+                let pairs = pairs.clone();
                 std::thread::spawn(move || {
                     hotkeys::retry_until_ready(
                         &handle,
+                        &pairs,
                         6,
                         std::time::Duration::from_millis(2500),
                     );
@@ -110,6 +116,8 @@ pub fn run() {
             commands::save_settings,
             commands::hotkey_status,
             commands::retry_hotkeys,
+            commands::set_hotkey,
+            commands::reset_hotkeys,
             commands::translate_text,
             commands::list_history,
             commands::delete_history,

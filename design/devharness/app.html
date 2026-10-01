@@ -55,11 +55,26 @@
           { id: "copy-markdown", name: "复制为 Markdown", version: "0.1.0", description: "把原文与译文拼成 Markdown 引用块放进剪贴板。", author: "随译", kind: "action", permissions: ["clipboard:write"], dir: "C:\\Users\\PC\\AppData\\Roaming\\com.suiyi.dev\\plugins\\copy-markdown", main: "main.js", enabled: false, ok: true, error: null },
         ];
         var HOTKEYS = [
-          { id: "selection", label: "划词翻译", accelerator: "alt+d", registered: true, error: null },
+          { id: "selection", label: "划词翻译", accelerator: "alt+d", registered: true, error: null, custom: false },
           { id: "screenshot", label: "截图识别", accelerator: "alt+s",
-            registered: !conflict, error: conflict ? "该组合已被其他程序占用" : null },
-          { id: "input", label: "输入框转译", accelerator: "alt+t", registered: true, error: null },
+            registered: !conflict, error: conflict ? "该组合已被其他程序占用" : null, custom: false },
+          { id: "input", label: "输入框转译", accelerator: "alt+t", registered: true, error: null, custom: false },
         ];
+        function setHotkeyStub(args) {
+          var hit = HOTKEYS.filter(function (h) { return h.id === args.id; })[0];
+          if (hit) {
+            hit.accelerator = String(args.accelerator).toLowerCase();
+            hit.custom = true;
+            hit.registered = true;
+            hit.error = null;
+          }
+          return HOTKEYS;
+        }
+        function resetHotkeysStub() {
+          var defs = { selection: "alt+d", screenshot: "alt+s", input: "alt+t" };
+          HOTKEYS.forEach(function (h) { h.accelerator = defs[h.id]; h.custom = false; h.registered = true; h.error = null; });
+          return HOTKEYS;
+        }
 
         var MOCK = {
           list_services: function () { return SERVICES; },
@@ -71,6 +86,8 @@
           anki_status: function () { return { available: true, version: 6, deckExists: true, error: null }; },
           hotkey_status: function () { return HOTKEYS; },
           retry_hotkeys: function () { return HOTKEYS; },
+          set_hotkey: setHotkeyStub,
+          reset_hotkeys: resetHotkeysStub,
           anki_add: function () { return { added: true, duplicate: false, noteId: 42, error: null }; },
           speak_text: function () { return null; },
           stop_speaking: function () { return null; },

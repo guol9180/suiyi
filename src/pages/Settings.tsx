@@ -16,7 +16,9 @@ import {
   listServices,
   pluginsDirPath,
   reorderServices,
+  resetHotkeys,
   retryHotkeys,
+  setHotkey,
   speakText,
   stopSpeaking,
   saveService,
@@ -60,10 +62,10 @@ const SIDEBAR_PAGES: Record<string, Page> = {
 };
 
 /** 三个入口的热键，id 与 src-tauri/src/hotkeys.rs 的 ENTRIES 一一对应 */
-const HOTKEYS: { id: string; name: string; key: string; desc: string }[] = [
-  { id: "selection", name: "划词翻译", key: "D", desc: "取选中文字并在光标处弹出翻译窗" },
-  { id: "screenshot", name: "截图识别", key: "S", desc: "冻结鼠标所在显示器，框选后离线识别" },
-  { id: "input", name: "输入框转译", key: "T", desc: "翻译当前输入框内容并原位写回" },
+const HOTKEYS: { id: string; name: string; accel: string; desc: string }[] = [
+  { id: "selection", name: "划词翻译", accel: "alt+d", desc: "取选中文字并在光标处弹出翻译窗" },
+  { id: "screenshot", name: "截图识别", accel: "alt+s", desc: "冻结鼠标所在显示器，框选后离线识别" },
+  { id: "input", name: "输入框转译", accel: "alt+t", desc: "翻译当前输入框内容并原位写回" },
 ];
 /** 未实现的入口收进「即将推出」分组并带里程碑锁标，不再平铺成一排空壳 */
 const SIDEBAR_SOON: { name: string; milestone: string }[] = [
@@ -73,6 +75,12 @@ const SIDEBAR_SOON: { name: string; milestone: string }[] = [
 const SIDEBAR_TAIL = ["关于"];
 
 /** 历史时间显示成「今天 14:22」这种更好读的形式 */
+/** 把 "alt+d" 这种加速度拆成键帽上该显示的字符 */
+function accelKeys(accel: string): string[] {
+  const named: Record<string, string> = { ctrl: "Ctrl", alt: "Alt", shift: "Shift", super: "Win" };
+  return accel.split("+").map((p) => named[p] ?? p.toUpperCase());
+}
+
 function formatTime(ms: number): string {
   const d = new Date(ms);
   const today = new Date();
@@ -130,6 +138,8 @@ export default function SettingsPage() {
   const [speakingId, setSpeakingId] = useState<number | null>(null);
   /** 换服务重译的临时结果，只留在界面上，不改动历史 */
   const [retrans, setRetrans] = useState<{ id: number; service: string; text: string } | null>(null);
+  /** 正在录制哪个动作的热键；null 表示没有在录制 */
+  const [recording, setRecording] = useState<string | null>(null);
   const [histQuery, setHistQuery] = useState("");
   const [histKind, setHistKind] = useState<HistoryKind | "">("");
   /** 按服务筛选；空串表示全部 */
@@ -203,6 +213,50 @@ export default function SettingsPage() {
   useEffect(() => {
     if (page === "hotkeys") void loadHotkeys();
   }, [page, loadHotkeys]);
+
+  // 录制中：抓下一次按键组合，Esc 取消。只按修饰键时继续等。
+  useEffect(() => {
+    if (!recording) return;
+    const onKey = (e: KeyboardEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.key === "Escape") {
+        setRecording(null);
+        return;
+      }
+      const mods: string[] = [];
+      if (e.ctrlKey) mods.push("ctrl");
+      if (e.altKey) mods.push("alt");
+      if (e.shiftKey) mods.push("shift");
+      if (e.metaKey) mods.push("super");
+      const named: Record<string, string> = {
+        " ": "space",
+        ArrowUp: "up",
+        ArrowDown: "down",
+        ArrowLeft: "left",
+        ArrowRight: "right",
+        Enter: "enter",
+        Tab: "tab",
+        Backspace: "backspace",
+        Delete: "delete",
+      };
+      const key = e.key.length === 1 ? e.key.toLowerCase() : named[e.key];
+      if (!key) return; // 只按了修饰键
+      if (mods.length === 0) {
+        setError("至少要带一个修饰键，否则会和正常打字冲突");
+        setRecording(null);
+        return;
+      }
+      const accel = [...mods, key].join("+");
+      const target = recording;
+      setRecording(null);
+      void setHotkey(target, accel)
+        .then(setHotkeys)
+        .catch((err) => setError(String(err)));
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [recording]);
 
   // 翻译页会把每个服务最近一次结果写进 lastResult，这里跟着刷新
   useSyncExternalStore(subscribe, getVersion);
@@ -582,6 +636,7 @@ export default function SettingsPage() {
 
             {HOTKEYS.map((h) => {
               const st = hotkeys.find((x) => x.id === h.id);
+              const keys = accelKeys(st?.accelerator ?? h.accel);
               return (
                 <div className="hkrow" key={h.id}>
                   <span className="n">{h.name}</span>
@@ -591,13 +646,29 @@ export default function SettingsPage() {
                       {st.registered ? "已启用" : "已被占用"}
                     </span>
                   )}
-                  <span className="key"><span className="kbd">Alt</span><span className="kbd">{h.key}</span></span>
+                  <span className="key">
+                    {keys.map((k, i) => (
+                      <span className="kbd" key={i}>{k}</span>
+                    ))}
+                  </span>
+                  {recording === h.id ? (
+                    <span className="hk-rec">按下新组合，Esc 取消</span>
+                  ) : (
+                    <button className="btn mini" onClick={() => setRecording(h.id)}>录制</button>
+                  )}
                 </div>
               );
             })}
 
-            <div className="thint">
-              热键在应用启动时逐个注册，被占用的会在后台补注册。这里显示的是当前状态。
+            <div className="hk-foot">
+              <span className="thint">
+                热键在应用启动时逐个注册，被占用的会在后台补注册；录制时至少要带一个修饰键。
+              </span>
+              {hotkeys.some((h) => h.custom) && (
+                <button className="btn mini" onClick={() => void resetHotkeys().then(setHotkeys)}>
+                  <Icon name="refresh" size="sm" />恢复默认热键
+                </button>
+              )}
             </div>
           </div>
         )}

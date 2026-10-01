@@ -255,6 +255,10 @@ select.inp { appearance: auto; }
 .hkrow .n { font-size: var(--fs-sec); font-weight: 600; white-space: nowrap; }
 .hkrow .m { flex: 1; min-width: 0; font-size: var(--fs-sec); color: var(--c-caption); }
 .hkrow .key { display: inline-flex; gap: 4px; flex: none; }
+/* 录制中的提示与底部的恢复默认 */
+.hk-rec { flex: none; font-size: var(--fs-cap); color: var(--c-primary-strong); }
+.hk-foot { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
+.hk-foot .thint { flex: 1; min-width: 0; margin-top: 0; }
 
 /* 热键被别的程序占用时的提示条 */
 .hkwarn {

@@ -90,6 +90,10 @@ pub struct ServicesFile {
     /// AnkiConnect 地址与目标牌组
     pub anki_url: String,
     pub anki_deck: String,
+    /// 用户改过的全局热键，键是动作 id（selection / screenshot / input），
+    /// 值是 "alt+d" 这种加速度字符串。没写过的动作走默认值。
+    #[serde(default)]
+    pub hotkeys: std::collections::BTreeMap<String, String>,
     pub services: Vec<ServiceConfig>,
 }
 
@@ -106,6 +110,7 @@ impl Default for ServicesFile {
             input_target_lang: DEFAULT_INPUT_TARGET_LANG.into(),
             anki_url: crate::anki::DEFAULT_ANKI_URL.into(),
             anki_deck: crate::anki::DEFAULT_ANKI_DECK.into(),
+            hotkeys: std::collections::BTreeMap::new(),
             services: Vec::new(),
         }
     }
