@@ -525,6 +525,8 @@ export default function SettingsPage() {
 
       {/* ---------- 主区 ---------- */}
       <div className="main">
+        {/* 两栏包一层：卡片高度跟着内容走，内容不满时至少占满窗口高度 */}
+        <div className="cols">
         {page === "general" && (
           <div className="panel" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             <div className="card">
@@ -1033,9 +1035,10 @@ export default function SettingsPage() {
                   <label>协议</label>
                   <select className="inp" value={draft.protocol}
                     onChange={(e) => setDraft({ ...draft, protocol: e.target.value as Protocol })}>
-                    <option value="open_ai_compatible">OpenAI 兼容 (/v1/chat/completions)</option>
-                    <option value="anthropic" disabled>Anthropic（S0.7 开放）</option>
-                    <option value="gemini" disabled>Gemini（S0.7 开放）</option>
+                    {/* 只写协议名：端点写在下面的 Base URL 里，写全了在半栏宽度会被截断 */}
+                    <option value="open_ai_compatible">OpenAI 兼容</option>
+                    <option value="anthropic" disabled>Anthropic（开发中）</option>
+                    <option value="gemini" disabled>Gemini（开发中）</option>
                   </select>
                 </div>
               </div>
@@ -1104,7 +1107,7 @@ export default function SettingsPage() {
                     onChange={(e) => setDraft({ ...draft, model: e.target.value })}
                     placeholder="deepseek-chat" />
                 </div>
-                <div className="f" style={{ flex: "0 0 50%" }}>
+                <div className="f" style={{ flex: "0 0 44%" }}>
                   <label>结果类型</label>
                   <div className="seg">
                     {(["text", "dictionary"] as ResultType[]).map((t) => (
@@ -1146,6 +1149,7 @@ export default function SettingsPage() {
         </div>
           </>
         )}
+        </div>
       </div>
 
       {/* ---------- 全局提示条 ---------- */}

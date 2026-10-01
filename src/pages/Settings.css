@@ -20,6 +20,9 @@
   display: flex;
   flex-direction: column;
   flex: none;
+  /* 窗口压矮时侧边栏自己滚，不让条目溢出到内容区上 */
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 .side-item {
   display: flex;
@@ -30,6 +33,7 @@
   font-size: var(--fs-body);
   color: var(--c-text-2);
   margin-bottom: 2px;
+  flex: none;
 }
 .side-item.on {
   background: var(--c-primary-soft);
@@ -42,6 +46,7 @@
   font-size: var(--fs-cap);
   color: var(--c-caption);
   line-height: 1.7;
+  flex: none;
 }
 
 /* ---------- 主区两栏 ---------- */
@@ -50,13 +55,23 @@
   /* 不铺底色，让窗口那层流动色雾透上来 */
   background: transparent;
   padding: 16px;
-  display: flex;
-  gap: 14px;
   min-width: 0;
   /* 窗口拉宽时不再把表单拉成 1300px，超过这个宽度就居中留白 */
   max-width: 980px;
   margin: 0 auto;
   overflow: auto;
+}
+/*
+ * 两栏放在内层容器里。
+ * 之前 .main 直接是 flex 容器，卡片被拉伸到「窗口高度」而不是「内容高度」，
+ * 内容一超过窗口就整块溢出卡片背景（服务配置页的表单、历史页的卡片都中过招）。
+ * 这里让内层至少占满窗口，卡片再按各自内容撑开，超出部分交给 .main 滚动。
+ */
+.cols {
+  display: flex;
+  gap: 14px;
+  align-items: stretch;
+  min-height: 100%;
 }
 .list-col {
   /* 窄窗口收窄、宽窗口停在 340px，不再固定死 */
@@ -132,9 +147,24 @@
 }
 
 /* ---------- 编辑表单 ---------- */
-.key-state { margin-left: 8px; }
+.key-state { margin-left: 8px; display: inline-flex; align-items: center; }
 .keyrow { display: flex; gap: 8px; align-items: center; }
 .keyrow .inp { flex: 1; }
+
+/*
+ * 表单行。设计稿 v0.4 有这三条（.f / .f>label / .row2），移植到应用时漏了，
+ * 结果「名称 / 协议」「模型 / 结果类型」全都竖着堆，标签还跟着正文的 13px 走。
+ */
+.f { margin-bottom: 11px; }
+.f > label {
+  display: block;
+  font-size: var(--fs-cap);
+  color: var(--c-text-3);
+  margin-bottom: 5px;
+}
+.row2 { display: flex; gap: 10px; }
+.row2 > .f { flex: 1; min-width: 0; }
+
 .form-foot {
   display: flex;
   align-items: center;
@@ -142,8 +172,16 @@
   margin-top: 14px;
   padding-top: 12px;
   border-top: 1px solid var(--c-border-soft);
+  flex-wrap: wrap;
 }
-.sec-note { margin-left: auto; font-size: var(--fs-cap); color: var(--c-caption); }
+.sec-note {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: var(--fs-cap);
+  color: var(--c-caption);
+}
 .empty-hint {
   color: var(--c-caption);
   font-size: var(--fs-sec);
@@ -401,3 +439,12 @@ select.inp { appearance: auto; }
 .plrow .nm { flex: 1; min-width: 0; }
 .plrow .nm b { display: block; font-size: var(--fs-sec); font-weight: 600; }
 .plrow .nm span { font-size: var(--fs-sec); color: var(--c-caption); }
+
+/*
+ * 窄窗口（预览面板、或把窗口拖到最小以下）折成一栏。
+ * 断点取在应用最小窗口 900px 之下，正常使用时不会触发。
+ */
+@media (max-width: 840px) {
+  .cols { flex-direction: column; }
+  .list-col { width: 100%; }
+}

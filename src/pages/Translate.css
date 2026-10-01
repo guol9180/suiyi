@@ -9,6 +9,8 @@
   gap: 12px;
   height: 100%;
   box-sizing: border-box;
+  /* 窗口压得比内容还矮时整页可滚，否则底部那排按钮会被窗口裁掉 */
+  overflow-y: auto;
 }
 
 /* 分组标题与它自己的那一行贴在一起，不跟着整页的 12px 间距走 */
