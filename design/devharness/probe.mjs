@@ -85,11 +85,12 @@ await send("Runtime.enable");
 await sleep(WAIT);
 
 const MEASURE = `(() => {
-  const shell = document.querySelector(".app-shell");
-  if (!shell) return "NO .app-shell";
+  const shell = document.querySelector(".app-shell, .popup-root, .overlay-root");
+  if (!shell) return "找不到根容器（.app-shell / .popup-root / .overlay-root）";
+  const rootSel = shell.className;
   const lines = [];
   const name = (el) => el.tagName.toLowerCase() + "." + String(el.className || "").trim().replace(/\\s+/g, ".").slice(0, 40);
-  document.querySelectorAll(".app-shell *").forEach((el) => {
+  shell.querySelectorAll("*").forEach((el) => {
     const r = el.getBoundingClientRect();
     if (!r.width && !r.height) return;
     const p = el.parentElement;
