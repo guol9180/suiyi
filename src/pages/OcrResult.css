@@ -1,0 +1,238 @@
+/* 截图识别结果面板（设计稿第 3 节） */
+
+html, body, #root { height: 100%; }
+
+.ocr-root {
+  height: 100%;
+  padding: 6px; /* 给窗口阴影与圆角留边 */
+  box-sizing: border-box;
+  background: transparent;
+}
+
+.ocr-card {
+  height: 100%;
+  width: 100%;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--glass-tint);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-edge);
+  border-radius: 14px;
+  box-shadow: 0 16px 40px rgba(28, 25, 23, 0.24), inset 0 1px 0 var(--glass-edge);
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+/* ---------- 头部（拖拽区） ---------- */
+.ocr-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--c-border-soft);
+  background: var(--glass-tint-2);
+  flex: none;
+  user-select: none;
+}
+.ocr-head .grip { color: var(--c-icon); display: inline-flex; cursor: move; }
+.ocr-title { font-size: var(--fs-sec); color: var(--c-caption); }
+.ocr-x {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--c-icon);
+  cursor: pointer;
+}
+.ocr-x:hover { color: var(--c-danger); background: var(--c-danger-bg); }
+
+/* ---------- 互斥的两种模式 ---------- */
+.ocr-seg {
+  display: flex;
+  gap: 2px;
+  margin: 10px 12px;
+  padding: 2px;
+  border: 1px solid var(--glass-edge);
+  border-radius: var(--radius-md);
+  background: var(--glass-card);
+  flex: none;
+}
+.ocr-seg span {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 26px;
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-sec);
+  color: var(--c-text-3);
+  cursor: pointer;
+  transition: background 0.14s, color 0.14s;
+}
+.ocr-seg span:hover { background: var(--glass-card-strong); color: var(--c-text); }
+.ocr-seg span.on {
+  background: #fff;
+  color: var(--c-primary-text);
+  font-weight: 600;
+  box-shadow: 0 1px 3px rgba(15, 17, 21, 0.1);
+}
+
+.ocr-notice {
+  margin: 0 12px 8px;
+  padding: 7px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--c-primary-soft);
+  border: 1px solid var(--c-primary-border);
+  color: var(--c-primary-text);
+  font-size: var(--fs-cap);
+  line-height: 1.6;
+  word-break: break-all;
+  flex: none;
+}
+
+.ocr-privacy {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 12px 8px;
+  padding: 7px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--c-info-bg);
+  border: 1px solid var(--c-info-border);
+  color: var(--c-info);
+  font-size: var(--fs-cap);
+  line-height: 1.6;
+  flex: none;
+}
+.ocr-privacy .ico { flex: none; }
+
+/* ---------- 结果面板 ---------- */
+.ocr-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 0 12px 12px;
+}
+.ocr-lab { font-size: var(--fs-cap); color: var(--c-caption); margin-bottom: 5px; }
+.ocr-line {
+  font-size: var(--fs-body);
+  line-height: 1.8;
+  color: var(--c-text);
+  white-space: pre-wrap;
+  word-break: break-word;
+  padding: 9px 11px;
+  border-radius: var(--radius-md);
+  background: var(--c-surface-2);
+  border: 1px solid var(--c-border-soft);
+  user-select: text;
+}
+.ocr-trans {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-top: 8px;
+  padding: 9px 11px;
+  border-radius: var(--radius-md);
+  background: var(--glass-card);
+  border: 1px solid var(--glass-edge);
+}
+.ocr-who { font-size: var(--fs-cap); color: var(--c-caption); }
+.ocr-trans .tt {
+  font-size: var(--fs-sub);
+  line-height: 1.8;
+  color: var(--c-text);
+  white-space: pre-wrap;
+  word-break: break-word;
+  user-select: text;
+}
+.ocr-err { font-size: var(--fs-sec); line-height: 1.7; color: var(--c-danger); }
+
+/* ---------- 原图覆盖 ---------- */
+.ocr-stage {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 0 12px 12px;
+}
+.ocr-shot {
+  position: relative;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  border: 1px solid var(--c-border-strong);
+  background: #000;
+}
+.ocr-shot-img { display: block; width: 100%; height: auto; }
+/* 译文压在原文位置上：半透明底 + 一点点模糊，盖住原文又能看出原来在哪 */
+.otrans {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  padding: 0 4px;
+  font-size: var(--fs-cap);
+  line-height: 1.35;
+  color: var(--c-highlight-text);
+  background: rgba(255, 222, 89, 0.92);
+  border-radius: 3px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}
+.otrans.center {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  white-space: normal;
+}
+/* 行数对不上时不硬贴：整块从第一行开始往下铺，其余原图仍然看得见 */
+.otrans.block {
+  left: 4px;
+  right: 4px;
+  height: auto;
+  min-height: 0;
+  padding: 5px 6px;
+  white-space: pre-wrap;
+  align-items: flex-start;
+  line-height: 1.5;
+}
+
+/* ---------- 动作与引擎 ---------- */
+.ocr-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 10px 12px;
+  border-top: 1px solid var(--c-border-soft);
+  flex: none;
+}
+.ocr-engine {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--c-surface-2);
+  border-top: 1px solid var(--c-border-soft);
+  font-size: var(--fs-cap);
+  color: var(--c-caption);
+  flex: none;
+}
+
+.emptybox {
+  border: 1px dashed var(--c-border-strong);
+  border-radius: var(--radius-md);
+  padding: 20px 14px;
+  text-align: center;
+  font-size: var(--fs-sec);
+  line-height: 1.8;
+  color: var(--c-caption);
+  background: var(--c-surface-2);
+}

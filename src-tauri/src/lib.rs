@@ -51,7 +51,8 @@ pub fn run() {
         // 一个冲突会让另外两个一起失效。注册放到 setup 里逐个做，结果存进 HotkeyState。
         .plugin(hotkey.build())
         .manage(hotkeys::HotkeyState::default())
-        .manage(std::sync::Mutex::<Option<screenshot::ShotSession>>::new(None));
+        .manage(std::sync::Mutex::<Option<screenshot::ShotSession>>::new(None))
+        .manage(screenshot::OcrState::default());
 
     builder
         .setup(move |app| {
@@ -129,6 +130,7 @@ pub fn run() {
             commands::plugins_dir_path,
             commands::run_action_plugin,
             commands::test_connection,
+            commands::save_text_file,
             anki::anki_status,
             wordbook::wordbook_list,
             wordbook::wordbook_add,
@@ -145,6 +147,8 @@ pub fn run() {
             screenshot::finish_region,
             screenshot::cancel_screenshot,
             screenshot::start_screenshot,
+            screenshot::ocr_last,
+            screenshot::ocr_close,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

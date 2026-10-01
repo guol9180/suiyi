@@ -53,6 +53,89 @@ pub struct OcrPayload {
     pub lines: Vec<OcrLine>,
 }
 
+/// 一次截图识别的完整结果，供结果面板使用。
+///
+/// 有了裁出来的那块图与每行的矩形，「原图覆盖」才能把译文画回原来的位置：
+/// 行坐标与 crop_url 是同一个像素空间，前端按百分比定位即可，不用碰 DPI 换算。
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OcrResult {
+    /// 裁剪后的选区图（PNG data URL）
+    pub crop_url: String,
+    pub crop_w: i32,
+    pub crop_h: i32,
+    /// 识别出的原文
+    pub text: String,
+    /// 行级矩形，坐标系与 crop_url 一致
+    pub lines: Vec<OcrLine>,
+    /// 识别引擎：windows 或 plugin:插件名
+    pub engine: String,
+    /// 识别用的语言标签（BCP-47）。系统 OCR 走 en-US，插件不报语言时为空
+    pub lang: String,
+}
+
+/// 最近一次识别结果。结果窗口挂载时直接取它，不依赖事件先到
+#[derive(Default)]
+pub struct OcrState(pub Mutex<Option<OcrResult>>);
+
+/// 结果面板尺寸，与设计稿的第 3 节面板接近
+const OCR_W: f64 = 460.0;
+const OCR_H: f64 = 600.0;
+
+/// 在光标附近弹出截图识别结果面板
+fn show_ocr_panel(app: &AppHandle) -> Result<(), String> {
+    let cursor = app.cursor_position().map_err(|e| e.to_string())?;
+    let sf = app
+        .primary_monitor()
+        .ok()
+        .flatten()
+        .map(|m| m.scale_factor())
+        .unwrap_or(1.0);
+
+    // 光标右下方一点，不压住刚框出来的那块
+    let mut lx = cursor.x / sf + 16.0;
+    let mut ly = cursor.y / sf + 16.0;
+    if let Ok(Some(m)) = app.primary_monitor() {
+        let size = m.size();
+        let (vw, vh) = (size.width as f64 / sf, size.height as f64 / sf);
+        if lx + OCR_W > vw {
+            lx = (vw - OCR_W - 16.0).max(8.0);
+        }
+        if ly + OCR_H > vh {
+            ly = (vh - OCR_H - 16.0).max(8.0);
+        }
+    }
+    let (lx, ly) = (lx.max(8.0), ly.max(8.0));
+
+    match app.get_webview_window("ocr") {
+        Some(win) => {
+            let _ = win.set_position(tauri::LogicalPosition::new(lx, ly));
+            let _ = win.show();
+            let _ = win.set_focus();
+            Ok(())
+        }
+        None => WebviewWindowBuilder::new(app, "ocr", WebviewUrl::App("ocr.html".into()))
+            .title("随译 · 截图识别")
+            .inner_size(OCR_W, OCR_H)
+            .position(lx, ly)
+            .min_inner_size(380.0, 360.0)
+            .decorations(false)
+            .transparent(true)
+            .shadow(true)
+            .resizable(true)
+            .effects(tauri::utils::config::WindowEffectsConfig {
+                effects: vec![tauri::utils::WindowEffect::Acrylic],
+                state: None,
+                radius: Some(14.0),
+                color: None,
+                interactive: false,
+            })
+            .build()
+            .map(|_| ())
+            .map_err(|e| format!("创建结果面板失败: {e}")),
+    }
+}
+
 /// 热键入口
 pub fn trigger_screenshot(app: AppHandle) {
     crate::selection::log_line("screenshot: Alt+S 触发");
@@ -64,8 +147,29 @@ pub fn trigger_screenshot(app: AppHandle) {
 /// 前端按钮入口（与热键同流程）
 #[tauri::command]
 pub fn start_screenshot(app: AppHandle) -> Result<(), String> {
+    // 上一轮的识别面板先收起来，别让新框选和旧结果同屏
+    if let Some(win) = app.get_webview_window("ocr") {
+        let _ = win.hide();
+    }
     trigger_screenshot(app);
     Ok(())
+}
+
+/// 最近一次识别结果。结果面板挂载时先取它，避免事件比页面先到而丢内容。
+#[tauri::command]
+pub fn ocr_last(ocr_state: tauri::State<'_, OcrState>) -> Option<OcrResult> {
+    ocr_state.0.lock().ok().and_then(|g| g.clone())
+}
+
+/// 关掉结果面板并清掉暂存结果
+#[tauri::command]
+pub fn ocr_close(app: AppHandle, ocr_state: tauri::State<'_, OcrState>) {
+    if let Some(win) = app.get_webview_window("ocr") {
+        let _ = win.hide();
+    }
+    if let Ok(mut g) = ocr_state.0.lock() {
+        *g = None;
+    }
 }
 
 fn run_screenshot(app: AppHandle) {
@@ -270,6 +374,7 @@ pub fn cancel_screenshot(
 pub fn finish_region(
     app: AppHandle,
     state: tauri::State<'_, Mutex<Option<ShotSession>>>,
+    ocr_state: tauri::State<'_, OcrState>,
     x: f64,
     y: f64,
     w: f64,
@@ -319,11 +424,12 @@ pub fn finish_region(
             "screenshot: OCR 插件失败（{e}），回落到系统 OCR"
         ));
     }
-    let lines = match plugin_result.ok().flatten() {
-        Some(l) => l,
+    let (engine, lang, lines) = match plugin_result.ok().flatten() {
+        // 插件不回传语言，留空让界面别乱猜
+        Some((name, l)) => (format!("plugin:{name}"), String::new(), l),
         // 系统 OCR：英文优先，取不到语言包时回退用户语言
         None => match ocr_bytes(&png, "en-US") {
-            Ok(l) => l,
+            Ok(l) => ("windows".to_string(), "en-US".to_string(), l),
             Err(e) => {
                 crate::selection::log_line(&format!("screenshot: OCR 失败 {e}"));
                 return Err(format!("OCR 识别失败: {e}"));
@@ -333,28 +439,58 @@ pub fn finish_region(
     let text = lines.iter().map(|l| l.text.as_str()).collect::<Vec<_>>().join("\n");
     crate::selection::log_line(&format!("screenshot: OCR 完成 {} 行 / {} 字符", lines.len(), text.chars().count()));
 
-    // 存一份裁剪会话（供后续「重新识别」等），并投递弹窗
+    // 选区图存成 data URL：结果面板的「原图覆盖」要把它铺回去。
+    // 行坐标与它在同一个像素空间，前端按百分比定位就够，不用碰 DPI 换算。
+    use base64::Engine as _;
+    let result = OcrResult {
+        crop_url: format!(
+            "data:image/png;base64,{}",
+            base64::engine::general_purpose::STANDARD.encode(&png)
+        ),
+        crop_w: session.w,
+        crop_h: session.h,
+        text: text.clone(),
+        lines: lines.clone(),
+        engine,
+        lang,
+    };
+
+    // 裁剪会话留给「重新识别」，结果留给结果面板
     if let Ok(mut g) = state.lock() {
         *g = Some(ShotSession { data_url: String::new(), ..session });
     }
-    if text.trim().is_empty() {
-        return Ok(OcrPayload { text: String::new(), lines });
+    if let Ok(mut g) = ocr_state.0.lock() {
+        *g = Some(result.clone());
     }
 
-    // 弹窗在光标附近弹出并自动翻译
-    let _ = crate::selection::ensure_popup_at_cursor(&app);
-    std::thread::sleep(std::time::Duration::from_millis(150));
-    let _ = app.emit(
-        "popup-set-source",
-        serde_json::json!({ "text": text, "autoTranslate": true, "kind": "screenshot" }),
-    );
+    // 结果面板就近弹出。识别为空也照样打开：面板里那个「未识别到文字」
+    // 的状态比什么都不弹更有用，用户可以直接重新框选。
+    match show_ocr_panel(&app) {
+        Ok(()) => {
+            std::thread::sleep(std::time::Duration::from_millis(150));
+            let _ = app.emit("ocr-set-source", &result);
+        }
+        Err(e) => {
+            // 面板开不出来就退回弹窗，至少别让用户白框一次
+            crate::selection::log_line(&format!("screenshot: 结果面板打开失败（{e}），退回弹窗"));
+            if !text.trim().is_empty() {
+                let _ = crate::selection::ensure_popup_at_cursor(&app);
+                std::thread::sleep(std::time::Duration::from_millis(150));
+                let _ = app.emit(
+                    "popup-set-source",
+                    serde_json::json!({ "text": text, "autoTranslate": true, "kind": "screenshot" }),
+                );
+            }
+        }
+    }
     Ok(OcrPayload { text, lines })
 }
 
 // ==================== 屏幕捕获（GDI） ====================
 
 /// 用 OCR 插件识别选区。没有可用插件时返回 Ok(None)，由调用方回落到系统 OCR。
-fn plugin_ocr(app: &AppHandle, png: &[u8]) -> Result<Option<Vec<OcrLine>>, String> {
+/// 返回 (插件名, 行)。插件名要给结果面板显示识别引擎用。
+fn plugin_ocr(app: &AppHandle, png: &[u8]) -> Result<Option<(String, Vec<OcrLine>)>, String> {
     let dir = app
         .path()
         .app_config_dir()
@@ -382,8 +518,10 @@ fn plugin_ocr(app: &AppHandle, png: &[u8]) -> Result<Option<Vec<OcrLine>>, Strin
         text.chars().count()
     ));
 
-    // 插件只给文字、没有行级坐标；坐标留给「原图覆盖」的后续增强
-    Ok(Some(
+    // 插件只给文字、没有行级坐标。这里如实留零，
+    // 原图覆盖模式据此改成整块铺在选区上，而不是假装知道每行在哪
+    Ok(Some((
+        p.name.clone(),
         text.lines()
             .map(str::trim)
             .filter(|l| !l.is_empty())
@@ -395,7 +533,7 @@ fn plugin_ocr(app: &AppHandle, png: &[u8]) -> Result<Option<Vec<OcrLine>>, Strin
                 h: 0.0,
             })
             .collect(),
-    ))
+    )))
 }
 
 #[cfg(windows)]

@@ -45,6 +45,48 @@ pub(crate) fn config_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
         .map_err(|e| format!("获取配置目录失败: {e}"))
 }
 
+/// 把文件名里可能跑出目录的东西去掉：路径分隔符、控制字符、Windows 保留字符
+fn safe_file_name(name: &str) -> String {
+    let cleaned: String = name
+        .chars()
+        .map(|c| match c {
+            '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|' => '_',
+            c if (c as u32) < 0x20 => '_',
+            c => c,
+        })
+        .collect();
+    let trimmed = cleaned.trim().trim_matches('.').to_string();
+    if trimmed.is_empty() {
+        "suiyi.txt".to_string()
+    } else {
+        trimmed
+    }
+}
+
+/// 把一段文本存成文件，返回落盘的完整路径。
+/// 优先「下载」目录，其次「文档」，最后退回配置目录；不弹系统对话框，
+/// 存完把路径告诉用户，比多装一个对话框插件更省事。
+#[tauri::command]
+pub fn save_text_file(
+    app: tauri::AppHandle,
+    name: String,
+    content: String,
+) -> Result<String, String> {
+    let dir = app
+        .path()
+        .download_dir()
+        .ok()
+        .filter(|d| d.is_dir())
+        .or_else(|| app.path().document_dir().ok().filter(|d| d.is_dir()))
+        .or_else(|| config_dir(&app).ok())
+        .ok_or("找不到可写入的目录")?;
+
+    std::fs::create_dir_all(&dir).map_err(|e| format!("创建目录失败: {e}"))?;
+    let path = dir.join(safe_file_name(&name));
+    std::fs::write(&path, content).map_err(|e| format!("写入文件失败: {e}"))?;
+    Ok(path.to_string_lossy().to_string())
+}
+
 /// 列出全部服务（含全局设置；首次启动时落盘默认内容）
 #[tauri::command]
 pub fn list_services(app: tauri::AppHandle) -> Result<ServicesFile, String> {
@@ -202,6 +244,8 @@ pub async fn translate_text(
     to: String,
     // 调用来源：selection / screenshot / manual / input，用于历史归类
     kind: Option<String>,
+    // 截图识别要按行盖回原文位置，行数对得上才能一行对一行
+    preserve_lines: Option<bool>,
 ) -> Result<DonePayload, String> {
     let dir = config_dir(&app)?;
 
@@ -249,6 +293,11 @@ pub async fn translate_text(
         svc.prompt_template.as_deref()
     };
     let prompt = translator::build_prompt(template, &from, &to, &text);
+    let prompt = if preserve_lines.unwrap_or(false) {
+        format!("{prompt}\n\n保持原有换行：逐行翻译，每行对应一行译文，输出行数必须与原文一致。")
+    } else {
+        prompt
+    };
     let params = TranslateParams {
         service_id: &service_id,
         base_url: &svc.base_url,
@@ -670,6 +719,19 @@ pub fn reset_hotkeys(app: tauri::AppHandle) -> Result<Vec<crate::hotkeys::Hotkey
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn file_name_cannot_escape_the_target_directory() {
+        // 路径分隔符与上跳都要被抹掉，否则保存能写到目录之外
+        assert_eq!(safe_file_name("../../evil.txt"), "_.._evil.txt");
+        assert_eq!(safe_file_name("a/b\\c.txt"), "a_b_c.txt");
+        assert_eq!(safe_file_name("C:\\Windows\\x.txt"), "C__Windows_x.txt");
+        assert_eq!(safe_file_name(".."), "suiyi.txt");
+        assert_eq!(safe_file_name("   "), "suiyi.txt");
+        // 正常名字原样保留，中文也不动
+        assert_eq!(safe_file_name("suiyi-ocr-2026-10-01.txt"), "suiyi-ocr-2026-10-01.txt");
+        assert_eq!(safe_file_name("截图识别.txt"), "截图识别.txt");
+    }
 
     #[test]
     fn parses_openai_and_zai_model_shapes() {
