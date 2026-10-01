@@ -4,7 +4,7 @@
 //
 // 只报「真溢出」：父级自己可滚（overflow 非 visible）时，超出算滚动区正常内容。
 
-const [url, w, h, waitMsArg, shotPath] = process.argv.slice(2);
+const [url, w, h, waitMsArg, shotPath, scrollSel] = process.argv.slice(2);
 const W = Number(w || 900);
 const H = Number(h || 620);
 const WAIT = Number(waitMsArg || 3500);
@@ -83,6 +83,20 @@ const evaluate = async (expr) => {
 
 await send("Runtime.enable");
 await sleep(WAIT);
+
+// 无头模式下 URL 锚点不会真的滚过去，要截图某一节得自己滚
+if (scrollSel) {
+  const ok = await evaluate(
+    `(() => {
+      const el = document.querySelector(${JSON.stringify(scrollSel)});
+      if (!el) return "找不到 " + ${JSON.stringify(scrollSel)};
+      el.scrollIntoView({ block: "start" });
+      return "已滚到 " + ${JSON.stringify(scrollSel)};
+    })()`,
+  );
+  console.log("滚动：" + ok);
+  await sleep(500);
+}
 
 // 覆盖层要拖出一个选区才有东西可看；只按下+移动，不松开，选区就留在画面上
 const DRAG = `(() => {
