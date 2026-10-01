@@ -440,6 +440,79 @@ select.inp { appearance: auto; }
 .plrow .nm b { display: block; font-size: var(--fs-sec); font-weight: 600; }
 .plrow .nm span { font-size: var(--fs-sec); color: var(--c-caption); }
 
+/* ---------- 生词本 ---------- */
+.wrow {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 2px;
+  border-bottom: 1px solid var(--c-border-soft);
+}
+.wrow:last-of-type { border-bottom: none; }
+.wrow .wt {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  min-width: 0;
+  flex: none;
+  max-width: 38%;
+}
+.wrow .wt b { font-size: var(--fs-body); font-weight: 600; }
+.wrow .wt .rd {
+  font-family: var(--font-mono);
+  font-size: var(--fs-cap);
+  color: var(--c-caption);
+}
+/* 释义那列吃掉剩余宽度，过长省略，不把状态标签挤出去 */
+.wrow .wm {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--fs-sec);
+  color: var(--c-text-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* 删除只在悬停或键盘聚焦时出现，静态下不抢视线 */
+.wdel {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  flex: none;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--c-icon);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.14s, color 0.14s, background 0.14s;
+}
+.wrow:hover .wdel,
+.wdel:focus-visible { opacity: 1; }
+.wdel:hover { color: var(--c-danger); background: var(--c-danger-bg); }
+
+.wfoot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+  padding: 9px 12px;
+  border-radius: var(--radius-md);
+  background: var(--c-surface-2);
+}
+.wadd {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+.wadd .inp { flex: 1; min-width: 150px; }
+
 /*
  * 窄窗口（预览面板、或把窗口拖到最小以下）折成一栏。
  * 断点取在应用最小窗口 900px 之下，正常使用时不会触发。

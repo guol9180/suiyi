@@ -10,6 +10,7 @@ pub mod screenshot;
 pub mod selection;
 pub mod speech;
 pub mod translator;
+pub mod wordbook;
 pub mod writeback;
 
 use tauri::utils::config::WindowEffectsConfig;
@@ -129,7 +130,10 @@ pub fn run() {
             commands::run_action_plugin,
             commands::test_connection,
             anki::anki_status,
-            anki::anki_add,
+            wordbook::wordbook_list,
+            wordbook::wordbook_add,
+            wordbook::wordbook_sync,
+            wordbook::wordbook_remove,
             writeback::replace_selection,
             speech::speak_text,
             speech::stop_speaking,

@@ -56,6 +56,39 @@ export interface AnkiAddResult {
   error: string | null;
 }
 
+/** 生词本里的一条词。syncedAt 为空表示还在待同步队列里 */
+export interface WordEntry {
+  id: number;
+  createdAt: number;
+  /** 词条本身，Anki 卡片的正面 */
+  term: string;
+  /** 音标或读音，可为空串 */
+  reading: string;
+  /** 释义或译文，Anki 卡片的背面 */
+  meaning: string;
+  source: string;
+  syncedAt?: number;
+  noteId?: number;
+  /** 最近一次同步失败的原因 */
+  lastError?: string;
+}
+
+export interface WordbookStats {
+  total: number;
+  pending: number;
+}
+
+/** 生词本的完整视图：一次调用同时拿到列表、计数与本次同步结果 */
+export interface WordbookView {
+  entries: WordEntry[];
+  stats: WordbookStats;
+  /** 本次操作有词条被送进 Anki */
+  synced: boolean;
+  /** 词条之前就在 Anki 里 */
+  duplicate: boolean;
+  error: string | null;
+}
+
 /** 词典结构化结果（服务结果类型为「词典结构」时返回） */
 export interface Sense {
   pos: string;

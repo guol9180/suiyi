@@ -5,13 +5,13 @@ import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import {
-  ankiAdd,
   listPlugins,
   listServices,
   replaceSelection,
   runActionPlugin,
   speakText,
   stopSpeaking,
+  wordbookAdd,
 } from "../api";
 import {
   SOURCE_LANGS,
@@ -237,15 +237,15 @@ export default function PopupPage() {
     }
   }
 
-  /** 把「原文 → 第一条译文」推进 Anki 生词本 */
+  /** 把「原文 → 第一条译文」推进生词本（先落本地，Anki 没开也留得住） */
   async function addToAnki() {
     const done = cards.find((c) => c.status === "done" && c.text);
     if (!done || !source.trim()) return;
     try {
-      const r = await ankiAdd(source.trim(), done.text);
-      if (r.error) setNotice(`加入生词本失败：${r.error}`);
-      else if (r.duplicate) setNotice("这条已经在生词本里了");
-      else setNotice("已加入生词本");
+      const r = await wordbookAdd(source.trim(), done.text, { source: "selection" });
+      if (r.duplicate) setNotice(r.error ?? "这条已经在生词本里了");
+      else if (r.synced) setNotice("已加入生词本并同步到 Anki");
+      else setNotice("已加入生词本，等 Anki 可用时自动同步");
     } catch (e) {
       setNotice(String(e));
     }

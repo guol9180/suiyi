@@ -20,9 +20,11 @@
       (function () {
         var q = new URLSearchParams(location.search);
          var isPopup = q.get("win") === "popup";
-         var isOverlay = q.get("win") === "overlay";
+        var isOverlay = q.get("win") === "overlay";
         var conflict = q.get("conflict") === "1";
         var failOne = q.get("fail") === "1";
+        // ?ankioff=1 让 Anki 探测失败，用来看「待同步 / 自动排队」那套状态
+        var ankiOk = q.get("ankioff") !== "1";
 
         // 覆盖层要一张「冻结帧」当背景，桩里画一张文档样子的图顶着
         var OVERLAY_SHOT =
@@ -104,12 +106,22 @@
           list_plugins: function () { return PLUGINS; },
           plugins_dir_path: function () { return "C:\\Users\\PC\\AppData\\Roaming\\com.suiyi.dev\\plugins"; },
           list_history: function () { return HISTORY; },
-          anki_status: function () { return { available: true, version: 6, deckExists: true, error: null }; },
+          anki_status: function () {
+            return ankiOk
+              ? { available: true, version: 6, deckExists: true, error: null }
+              : { available: false, version: null, deckExists: false, error: "连接 Anki 失败: 拒绝连接" };
+          },
+          wordbook_list: function () { return bookView(); },
+          wordbook_add: wordbookAddStub,
+          wordbook_sync: wordbookSyncStub,
+          wordbook_remove: function (args) {
+            WORDS = WORDS.filter(function (w) { return w.id !== args.id; });
+            return bookView();
+          },
           hotkey_status: function () { return HOTKEYS; },
           retry_hotkeys: function () { return HOTKEYS; },
           set_hotkey: setHotkeyStub,
           reset_hotkeys: resetHotkeysStub,
-          anki_add: function () { return { added: true, duplicate: false, noteId: 42, error: null }; },
           speak_text: function () { return null; },
           stop_speaking: function () { return null; },
           test_connection: function () { return { ok: true, elapsedMs: 412, models: ["glm-5.3-flash"], error: null }; },
@@ -124,6 +136,53 @@
             return { serviceId: args.serviceId, text: o.text, elapsedMs: o.elapsedMs };
           },
         };
+
+        // 生词本桩：数据形状与 src-tauri/src/wordbook.rs 的 WordEntry 一致，
+        // 这样界面上的每个状态（已同步 / 待同步 / 重复 / 失败）都能真的走到
+        var WORDS = [
+          { id: 3, createdAt: Date.now() - 3600 * 1000, term: "retrieval", reading: "",
+            meaning: "检索", source: "selection", syncedAt: Date.now() - 3500 * 1000, noteId: 101 },
+          { id: 2, createdAt: Date.now() - 7200 * 1000, term: "ablations", reading: "",
+            meaning: "消融实验", source: "manual" },
+          { id: 1, createdAt: Date.now() - 26 * 3600 * 1000, term: "lazy dog", reading: "",
+            meaning: "懒狗", source: "input", syncedAt: Date.now() - 25 * 3600 * 1000, noteId: 88 },
+        ];
+        var wordSeq = 100;
+        function bookView(extra) {
+          var v = {
+            entries: WORDS.slice().sort(function (a, b) { return b.createdAt - a.createdAt; }),
+            stats: {
+              total: WORDS.length,
+              pending: WORDS.filter(function (w) { return !w.syncedAt; }).length,
+            },
+            synced: false, duplicate: false, error: null,
+          };
+          if (extra) for (var k in extra) v[k] = extra[k];
+          return v;
+        }
+        function wordbookAddStub(args) {
+          var term = String(args.term || "").trim();
+          var meaning = String(args.meaning || "").trim();
+          if (!term || !meaning) throw new Error("词条或释义为空，无法加入生词本");
+          var hit = WORDS.filter(function (w) {
+            return w.term.toLowerCase() === term.toLowerCase()
+              && w.meaning.toLowerCase() === meaning.toLowerCase();
+          })[0];
+          if (hit) return bookView({ duplicate: true, error: "这个词条已经在生词本里了" });
+          // ankiOk=false 时只落本地，界面应显示待同步
+          var entry = { id: ++wordSeq, createdAt: Date.now(), term: term, reading: "",
+            meaning: meaning, source: args.source || "manual" };
+          if (ankiOk) { entry.syncedAt = Date.now(); entry.noteId = 900 + entry.id; }
+          WORDS.push(entry);
+          return bookView({ synced: !!entry.syncedAt });
+        }
+        function wordbookSyncStub() {
+          var n = 0;
+          WORDS.forEach(function (w) {
+            if (!w.syncedAt && ankiOk) { w.syncedAt = Date.now(); w.noteId = 900 + w.id; n++; }
+          });
+          return bookView({ synced: n > 0, error: ankiOk ? null : "连接 Anki 失败: 拒绝连接" });
+        }
 
         var callbacks = {};
         var seq = 0;
@@ -202,7 +261,10 @@
 
           var want = (location.hash || "").replace("#", "");
           if (!want) return;
-          var SIDE = { general: "通用", hotkey: "热键", services: "服务配置", history: "历史记录", plugins: "插件", about: "关于" };
+          var SIDE = {
+            general: "通用", hotkey: "热键", services: "服务配置",
+            history: "历史记录", wordbook: "生词本", plugins: "插件", about: "关于",
+          };
           setTimeout(function () {
             var t = document.querySelectorAll(".tabbar button")[1];
             if (t) t.click();

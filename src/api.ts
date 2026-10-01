@@ -2,7 +2,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { GlobalSettings, ServiceConfig, ServicesFile } from "./types";
 import type { HistoryEntry, HistoryKind } from "./types";
-import type { AnkiAddResult, AnkiStatus } from "./types";
+import type { AnkiStatus, WordbookView } from "./types";
 import type { PluginInfo } from "./types";
 
 export function listServices(): Promise<ServicesFile> {
@@ -128,9 +128,34 @@ export function ankiStatus(): Promise<AnkiStatus> {
   return invoke("anki_status");
 }
 
-/** 把词条加入 Anki 生词本 */
-export function ankiAdd(front: string, back: string): Promise<AnkiAddResult> {
-  return invoke("anki_add", { front, back });
+/**
+ * 生词本。加词是先落本地再推 Anki，所以 Anki 没开也不会丢词，
+ * 每个调用都返回完整视图，前端不用再补一次查询。
+ */
+export function wordbookList(): Promise<WordbookView> {
+  return invoke("wordbook_list");
+}
+
+export function wordbookAdd(
+  term: string,
+  meaning: string,
+  opts: { reading?: string; source?: string } = {},
+): Promise<WordbookView> {
+  return invoke("wordbook_add", {
+    term,
+    meaning,
+    reading: opts.reading ?? null,
+    source: opts.source ?? null,
+  });
+}
+
+/** 批量补发待同步的词条 */
+export function wordbookSync(): Promise<WordbookView> {
+  return invoke("wordbook_sync");
+}
+
+export function wordbookRemove(id: number): Promise<WordbookView> {
+  return invoke("wordbook_remove", { id });
 }
 
 export function listPlugins(): Promise<PluginInfo[]> {

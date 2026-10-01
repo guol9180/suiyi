@@ -2,7 +2,6 @@
 import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import "./Settings.css";
 import {
-  ankiAdd,
   ankiStatus,
   createSamplePlugin,
   clearHistory,
@@ -29,6 +28,7 @@ import {
   type ConnectionTest,
   type HotkeyStatus,
 } from "../api";
+import { wordbookAdd, wordbookList, wordbookRemove, wordbookSync } from "../api";
 import { invoke } from "@tauri-apps/api/core";
 import { Icon } from "../components/Icon";
 import { getVersion, lastOf, statusCodeOf, subscribe } from "../lastResult";
@@ -48,16 +48,18 @@ import {
   type ResultType,
   type ServiceConfig,
   type ServicesFile,
+  type WordbookView,
 } from "../types";
 
-const SIDEBAR_MAIN = ["通用", "热键", "服务配置", "历史记录", "插件"];
+const SIDEBAR_MAIN = ["通用", "热键", "服务配置", "历史记录", "生词本", "插件"];
 
-type Page = "general" | "hotkeys" | "services" | "history" | "plugins";
+type Page = "general" | "hotkeys" | "services" | "history" | "wordbook" | "plugins";
 const SIDEBAR_PAGES: Record<string, Page> = {
   通用: "general",
   热键: "hotkeys",
   服务配置: "services",
   历史记录: "history",
+  生词本: "wordbook",
   插件: "plugins",
 };
 
@@ -69,7 +71,6 @@ const HOTKEYS: { id: string; name: string; accel: string; desc: string }[] = [
 ];
 /** 未实现的入口收进「即将推出」分组并带里程碑锁标，不再平铺成一排空壳 */
 const SIDEBAR_SOON: { name: string; milestone: string }[] = [
-  { name: "生词本", milestone: "M3" },
   { name: "语音合成", milestone: "M4" },
 ];
 const SIDEBAR_TAIL = ["关于"];
@@ -147,6 +148,13 @@ export default function SettingsPage() {
   /** 时间范围：近 7 天，或者全部 */
   const [histRange, setHistRange] = useState<"all" | "7d">("all");
   const [histId, setHistId] = useState<number | null>(null);
+  /** 生词本：列表与待同步计数来自同一次后端调用，不会出现两边对不上 */
+  const [book, setBook] = useState<WordbookView | null>(null);
+  const [bookBusy, setBookBusy] = useState(false);
+  /** 手动添加词条的输入 */
+  const [newTerm, setNewTerm] = useState("");
+  const [newMeaning, setNewMeaning] = useState("");
+  const [adding, setAdding] = useState(false);
 
   /** 服务与时间两个维度在本地过滤，不用再跑一次后端查询 */
   const visibleHistory = history.filter((h) => {
@@ -213,6 +221,22 @@ export default function SettingsPage() {
   useEffect(() => {
     if (page === "hotkeys") void loadHotkeys();
   }, [page, loadHotkeys]);
+
+  /** 生词本页：进页面时同时刷新列表与 Anki 连接状态 */
+  const loadBook = useCallback(async () => {
+    try {
+      setBook(await wordbookList());
+    } catch (e) {
+      setError(String(e));
+    }
+  }, []);
+
+  useEffect(() => {
+    if (page === "wordbook") {
+      void loadBook();
+      void handleAnkiTest();
+    }
+  }, [page, loadBook]);
 
   // 录制中：抓下一次按键组合，Esc 取消。只按修饰键时继续等。
   useEffect(() => {
@@ -332,10 +356,14 @@ export default function SettingsPage() {
   /** 把这条记录加进 Anki 生词本：正面原文、背面译文 */
   async function handleAddToAnki(entry: HistoryEntry) {
     try {
-      const r = await ankiAdd(entry.source, entry.translated || entry.error || "");
-      if (r.duplicate) flash("这条已经在生词本里了");
-      else if (r.added) flash("已加入生词本");
-      else setError(r.error ?? "加入生词本失败");
+      // 走生词本：先落本地，Anki 没开也留得住，之后能批量补发
+      const r = await wordbookAdd(entry.source, entry.translated || entry.error || "", {
+        source: entry.kind,
+      });
+      setBook(r);
+      if (r.duplicate) flash(r.error ?? "这条已经在生词本里了");
+      else if (r.synced) flash("已加入生词本并同步到 Anki");
+      else flash("已加入生词本，等 Anki 可用时自动同步");
     } catch (e) {
       setError(String(e));
     }
@@ -477,6 +505,54 @@ export default function SettingsPage() {
       setAnki({ available: false, version: null, deckExists: false, error: String(e) });
     } finally {
       setAnkiTesting(false);
+    }
+  }
+
+  /** 批量补发待同步的词条；一条都没成功时把原因说清楚 */
+  async function handleBookSync() {
+    setBookBusy(true);
+    try {
+      const r = await wordbookSync();
+      setBook(r);
+      if (r.stats.pending === 0) flash(`已全部同步，共 ${r.stats.total} 条`);
+      else if (r.error) setError(`同步未完成：${r.error}`);
+      else flash(`已同步，还有 ${r.stats.pending} 条待补发`);
+      void handleAnkiTest();
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setBookBusy(false);
+    }
+  }
+
+  async function handleBookAdd() {
+    const term = newTerm.trim();
+    const meaning = newMeaning.trim();
+    if (!term || !meaning) {
+      setError("词条和释义都要填");
+      return;
+    }
+    try {
+      const r = await wordbookAdd(term, meaning, { source: "manual" });
+      setBook(r);
+      setNewTerm("");
+      setNewMeaning("");
+      setAdding(false);
+      if (r.duplicate) flash(r.error ?? "这个词条已经在生词本里了");
+      else if (r.synced) flash("已加入并同步到 Anki");
+      else flash("已加入生词本，等 Anki 可用时自动同步");
+      void handleAnkiTest();
+    } catch (e) {
+      setError(String(e));
+    }
+  }
+
+  async function handleBookRemove(id: number) {
+    try {
+      setBook(await wordbookRemove(id));
+      flash("已从生词本移除");
+    } catch (e) {
+      setError(String(e));
     }
   }
 
@@ -853,6 +929,113 @@ export default function SettingsPage() {
                   <div className="empty-hint">← 选择左侧记录查看详情</div>
                 )}
               </div>
+            </div>
+          </div>
+        )}
+
+        {page === "wordbook" && (
+          <div className="panel" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <div className="card">
+              <div className="card-head">
+                <span className="hname">生词本</span>
+                {anki?.available ? (
+                  <span className="chip ok mini">
+                    Anki 已连接{anki.version ? ` · v${anki.version}` : ""}
+                  </span>
+                ) : ankiTesting ? (
+                  <span className="chip mini">
+                    <span className="spin" />
+                    正在检测 Anki
+                  </span>
+                ) : (
+                  <span className="chip warn mini">Anki 未连接</span>
+                )}
+                <span className="m">共 {book?.stats.total ?? 0} 条</span>
+                <span style={{ flex: 1 }} />
+                <button className="btn mini" disabled={bookBusy} onClick={() => void handleBookSync()}>
+                  <Icon name="refresh" size="sm" />
+                  同步
+                </button>
+              </div>
+
+              {!book || book.entries.length === 0 ? (
+                <div className="empty-hint">
+                  还没有词条。翻译时点「生词本」，或在下面手动添加。
+                </div>
+              ) : (
+                book.entries.map((w) => (
+                  <div className="wrow" key={w.id}>
+                    <span className={`dot${w.syncedAt ? "" : " warn"}`} />
+                    <span className="wt">
+                      <b>{w.term}</b>
+                      {w.reading && <span className="rd">{w.reading}</span>}
+                    </span>
+                    <span className="wm" title={w.meaning}>
+                      {w.meaning} · {formatTime(w.createdAt)}
+                    </span>
+                    {w.syncedAt ? (
+                      <span className="chip ok mini">已同步</span>
+                    ) : (
+                      <span className="chip warn mini" title={w.lastError ?? undefined}>
+                        待同步
+                      </span>
+                    )}
+                    <button
+                      className="wdel"
+                      title="从生词本移除"
+                      onClick={() => void handleBookRemove(w.id)}
+                    >
+                      <Icon name="trash" size="sm" />
+                    </button>
+                  </div>
+                ))
+              )}
+
+              {adding && (
+                <div className="wadd">
+                  <input
+                    className="inp"
+                    placeholder="词条，如 retrieval"
+                    value={newTerm}
+                    onChange={(e) => setNewTerm(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") void handleBookAdd();
+                    }}
+                  />
+                  <input
+                    className="inp"
+                    placeholder="释义，如 检索"
+                    value={newMeaning}
+                    onChange={(e) => setNewMeaning(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") void handleBookAdd();
+                    }}
+                  />
+                  <button className="btn primary mini" onClick={() => void handleBookAdd()}>
+                    加入
+                  </button>
+                  <button className="btn mini" onClick={() => setAdding(false)}>
+                    取消
+                  </button>
+                </div>
+              )}
+
+              <div className="wfoot">
+                {book && book.stats.pending > 0 ? (
+                  <span className="chip warn mini">{book.stats.pending} 条待同步</span>
+                ) : (
+                  <span className="chip ok mini">全部已同步</span>
+                )}
+                <span style={{ flex: 1 }} />
+                <button className="btn mini" onClick={() => setAdding((v) => !v)}>
+                  <Icon name="plus" size="sm" />
+                  手动添加词条
+                </button>
+              </div>
+            </div>
+
+            <div className="thint">
+              Anki 未启动时自动排队，下次连接后批量补发。词条先存在本机，Anki 没开也不会丢。
             </div>
           </div>
         )}

@@ -326,14 +326,5 @@ pub async fn anki_status(app: tauri::AppHandle) -> Result<AnkiStatus, String> {
     Ok(status(&file.anki_url, &file.anki_deck).await)
 }
 
-/// 把词条加入生词本
-#[tauri::command]
-pub async fn anki_add(
-    app: tauri::AppHandle,
-    front: String,
-    back: String,
-) -> Result<AnkiAddResult, String> {
-    let dir = crate::commands::config_dir(&app)?;
-    let file = crate::config::load_services(&dir)?;
-    add_note(&file.anki_url, &file.anki_deck, &front, &back).await
-}
+// 加词条的命令在 wordbook.rs：本地先记一条，再往 Anki 推。
+// 这里只保留 add_note 这个纯协议函数，供生词本调用。
