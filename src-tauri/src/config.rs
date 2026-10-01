@@ -90,11 +90,21 @@ pub struct ServicesFile {
     /// AnkiConnect 地址与目标牌组
     pub anki_url: String,
     pub anki_deck: String,
+    /// 朗读用的系统音色 id 与语速倍数。空 id 表示跟随系统默认音色。
+    #[serde(default)]
+    pub speech_voice: String,
+    #[serde(default = "default_speech_rate")]
+    pub speech_rate: f64,
     /// 用户改过的全局热键，键是动作 id（selection / screenshot / input），
     /// 值是 "alt+d" 这种加速度字符串。没写过的动作走默认值。
     #[serde(default)]
     pub hotkeys: std::collections::BTreeMap<String, String>,
     pub services: Vec<ServiceConfig>,
+}
+
+/// 老配置文件里没有 speech_rate，缺省按原速
+fn default_speech_rate() -> f64 {
+    crate::speech::DEFAULT_RATE
 }
 
 /// 输入框转译可选的目标语言，与前端 types.ts 的 TARGET_LANGS 保持一致
@@ -110,6 +120,8 @@ impl Default for ServicesFile {
             input_target_lang: DEFAULT_INPUT_TARGET_LANG.into(),
             anki_url: crate::anki::DEFAULT_ANKI_URL.into(),
             anki_deck: crate::anki::DEFAULT_ANKI_DECK.into(),
+            speech_voice: String::new(),
+            speech_rate: crate::speech::DEFAULT_RATE,
             hotkeys: std::collections::BTreeMap::new(),
             services: Vec::new(),
         }

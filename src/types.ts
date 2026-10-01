@@ -28,6 +28,8 @@ export interface ServicesFile {
   inputTargetLang: string;
   ankiUrl: string;
   ankiDeck: string;
+  speechVoice: string;
+  speechRate: number;
   services: ServiceConfig[];
 }
 
@@ -39,6 +41,31 @@ export interface GlobalSettings {
   /** AnkiConnect 地址与目标牌组 */
   ankiUrl: string;
   ankiDeck: string;
+  /** 朗读用的系统音色 id，空串表示系统默认 */
+  speechVoice: string;
+  /** 语速倍数 */
+  speechRate: number;
+}
+
+/** 系统里的一个本地语音 */
+export interface SpeechVoice {
+  id: string;
+  name: string;
+  /** BCP-47 语言标签，例如 zh-CN */
+  language: string;
+  gender: string;
+}
+
+/** 一次朗读会话的实时状态，进度与时长都来自系统 */
+export interface SpeechState {
+  active: boolean;
+  playing: boolean;
+  paused: boolean;
+  positionMs: number;
+  durationMs: number;
+  rate: number;
+  voice: string;
+  text: string;
 }
 
 export interface AnkiStatus {

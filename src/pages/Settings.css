@@ -316,6 +316,8 @@ select.inp { appearance: auto; }
 
 /* ---------- 历史记录页 ---------- */
 .panel.wide { max-width: none; }
+/* 朗读条要横着一行放下，单独给它一档更宽的面板 */
+.panel.mid { max-width: 760px; }
 .hist-tools {
   display: flex;
   align-items: center;
@@ -512,6 +514,107 @@ select.inp { appearance: auto; }
   margin-top: 10px;
 }
 .wadd .inp { flex: 1; min-width: 150px; }
+
+/* ---------- 朗读条 ---------- */
+.tts {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 10px 13px;
+  border: 1px solid var(--glass-edge);
+  border-radius: var(--radius-lg);
+  background: var(--glass-card);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+}
+.tts .play {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  flex: none;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: var(--c-primary-strong);
+  color: #fff;
+  cursor: pointer;
+}
+.tts .play:hover { background: var(--c-primary-hover); }
+.tts .play:disabled { background: var(--c-idle-dot); cursor: not-allowed; }
+.tts .play .ico { width: 14px; height: 14px; }
+/* 进度条只做展示：MCI 那边没有实现定位，做成可拖反而是在骗人 */
+.tts .track {
+  flex: 1;
+  min-width: 110px;
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: #dce3ee;
+  overflow: hidden;
+}
+.tts .track i {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: var(--c-primary-strong);
+  transition: width 0.25s linear;
+}
+.tts .clock {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: var(--fs-cap);
+  color: var(--c-text-3);
+  font-variant-numeric: tabular-nums;
+}
+/* 停止做成图标键，给朗读条省出一行的宽度 */
+.tts-stop {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  flex: none;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--c-icon);
+  cursor: pointer;
+  transition: color 0.14s, background 0.14s;
+}
+.tts-stop:hover { color: var(--c-danger); background: var(--c-danger-bg); }
+/* 音色名可能很长，截断而不是把整条挤换行 */
+.tts .vname {
+  max-width: 170px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---------- 音色列表 ---------- */
+.voicelist {
+  margin-top: 10px;
+  max-height: 220px;
+  overflow: auto;
+  border: 1px solid var(--c-border-soft);
+  border-radius: var(--radius-md);
+}
+.vrow {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 11px;
+  border-bottom: 1px solid var(--c-border-soft);
+  font-size: var(--fs-sec);
+  color: var(--c-text-2);
+  cursor: pointer;
+}
+.vrow:last-child { border-bottom: none; }
+.vrow:hover { background: var(--c-surface-2); }
+.vrow.on { background: var(--c-primary-soft); color: var(--c-primary-strong); font-weight: 600; }
+.vrow .m { margin-left: auto; font-size: var(--fs-cap); color: var(--c-caption); }
 
 /*
  * 窄窗口（预览面板、或把窗口拖到最小以下）折成一栏。

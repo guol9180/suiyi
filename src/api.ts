@@ -2,7 +2,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { GlobalSettings, ServiceConfig, ServicesFile } from "./types";
 import type { HistoryEntry, HistoryKind } from "./types";
-import type { AnkiStatus, WordbookView } from "./types";
+import type { AnkiStatus, SpeechState, SpeechVoice, WordbookView } from "./types";
 import type { PluginInfo } from "./types";
 
 export function listServices(): Promise<ServicesFile> {
@@ -91,14 +91,42 @@ export function replaceSelection(text: string): Promise<void> {
   return invoke("replace_selection", { text });
 }
 
-/** 用 Windows 本地语音朗读文本（离线，不消耗翻译额度） */
-export function speakText(text: string): Promise<void> {
-  return invoke("speak_text", { text });
+/**
+ * 用 Windows 本地语音朗读文本（离线，不消耗翻译额度）。
+ * 不传 rate/voice 时后端按设置里的音色与语速来，各处朗读保持一致。
+ */
+export function speakText(
+  text: string,
+  opts: { rate?: number; voice?: string } = {},
+): Promise<SpeechState> {
+  return invoke("speak_text", {
+    text,
+    rate: opts.rate ?? null,
+    voice: opts.voice ?? null,
+  });
+}
+
+/** 当前朗读进度。进度与时长都来自系统，不是估算出来的 */
+export function speechState(): Promise<SpeechState> {
+  return invoke("speech_state");
+}
+
+export function pauseSpeaking(): Promise<SpeechState> {
+  return invoke("pause_speaking");
+}
+
+export function resumeSpeaking(): Promise<SpeechState> {
+  return invoke("resume_speaking");
 }
 
 /** 停止当前朗读 */
-export function stopSpeaking(): Promise<void> {
+export function stopSpeaking(): Promise<SpeechState> {
   return invoke("stop_speaking");
+}
+
+/** 系统里可用的本地语音 */
+export function listSpeechVoices(): Promise<SpeechVoice[]> {
+  return invoke("list_speech_voices");
 }
 
 export function listHistory(opts: {

@@ -13,12 +13,16 @@ import {
   listHistory,
   listPlugins,
   listServices,
+  listSpeechVoices,
+  pauseSpeaking,
   pluginsDirPath,
   reorderServices,
   resetHotkeys,
   retryHotkeys,
+  resumeSpeaking,
   setHotkey,
   speakText,
+  speechState,
   stopSpeaking,
   saveService,
   saveSettings,
@@ -31,6 +35,7 @@ import {
 import { wordbookAdd, wordbookList, wordbookRemove, wordbookSync } from "../api";
 import { invoke } from "@tauri-apps/api/core";
 import { Icon } from "../components/Icon";
+import { SpeechBar } from "../components/SpeechBar";
 import { getVersion, lastOf, statusCodeOf, subscribe } from "../lastResult";
 import {
   DEFAULT_PROMPT,
@@ -48,18 +53,21 @@ import {
   type ResultType,
   type ServiceConfig,
   type ServicesFile,
+  type SpeechState,
+  type SpeechVoice,
   type WordbookView,
 } from "../types";
 
-const SIDEBAR_MAIN = ["通用", "热键", "服务配置", "历史记录", "生词本", "插件"];
+const SIDEBAR_MAIN = ["通用", "热键", "服务配置", "历史记录", "生词本", "语音合成", "插件"];
 
-type Page = "general" | "hotkeys" | "services" | "history" | "wordbook" | "plugins";
+type Page = "general" | "hotkeys" | "services" | "history" | "wordbook" | "speech" | "plugins";
 const SIDEBAR_PAGES: Record<string, Page> = {
   通用: "general",
   热键: "hotkeys",
   服务配置: "services",
   历史记录: "history",
   生词本: "wordbook",
+  语音合成: "speech",
   插件: "plugins",
 };
 
@@ -69,11 +77,22 @@ const HOTKEYS: { id: string; name: string; accel: string; desc: string }[] = [
   { id: "screenshot", name: "截图识别", accel: "alt+s", desc: "冻结鼠标所在显示器，框选后离线识别" },
   { id: "input", name: "输入框转译", accel: "alt+t", desc: "翻译当前输入框内容并原位写回" },
 ];
-/** 未实现的入口收进「即将推出」分组并带里程碑锁标，不再平铺成一排空壳 */
-const SIDEBAR_SOON: { name: string; milestone: string }[] = [
-  { name: "语音合成", milestone: "M4" },
-];
+/** 尚未实现的入口收进「即将推出」分组并带里程碑锁标，不再平铺成一排空壳 */
+const SIDEBAR_SOON: { name: string; milestone: string }[] = [];
 const SIDEBAR_TAIL = ["关于"];
+
+/** 没有朗读会话时的状态，字段与后端 SpeechState 一致 */
+const IDLE_SPEECH: SpeechState = {
+  active: false,
+  playing: false,
+  paused: false,
+  positionMs: 0,
+  durationMs: 0,
+  rate: 1,
+  voice: "",
+  text: "",
+};
+const DEFAULT_PREVIEW = "这是一段试听文本，用来确认音色与语速。";
 
 /** 历史时间显示成「今天 14:22」这种更好读的形式 */
 /** 把 "alt+d" 这种加速度拆成键帽上该显示的字符 */
@@ -124,6 +143,8 @@ export default function SettingsPage() {
     inputTargetLang: "English",
     ankiUrl: "http://127.0.0.1:8765",
     ankiDeck: "随译",
+    speechVoice: "",
+    speechRate: 1,
   });
   const [anki, setAnki] = useState<AnkiStatus | null>(null);
   const [ankiTesting, setAnkiTesting] = useState(false);
@@ -155,6 +176,11 @@ export default function SettingsPage() {
   const [newTerm, setNewTerm] = useState("");
   const [newMeaning, setNewMeaning] = useState("");
   const [adding, setAdding] = useState(false);
+  /** 朗读会话的实时状态（进度、时长都来自系统）与系统可用音色 */
+  const [speech, setSpeech] = useState<SpeechState>(IDLE_SPEECH);
+  const [voices, setVoices] = useState<SpeechVoice[]>([]);
+  const [preview, setPreview] = useState(DEFAULT_PREVIEW);
+  const [pickingVoice, setPickingVoice] = useState(false);
 
   /** 服务与时间两个维度在本地过滤，不用再跑一次后端查询 */
   const visibleHistory = history.filter((h) => {
@@ -178,6 +204,8 @@ export default function SettingsPage() {
         inputTargetLang: f.inputTargetLang || "English",
         ankiUrl: f.ankiUrl || "http://127.0.0.1:8765",
         ankiDeck: f.ankiDeck || "随译",
+        speechVoice: f.speechVoice || "",
+        speechRate: f.speechRate || 1,
       });
       const sorted = sortServices(f.services);
       setSelectedId((cur) => cur ?? sorted[0]?.id ?? null);
@@ -237,6 +265,30 @@ export default function SettingsPage() {
       void handleAnkiTest();
     }
   }, [page, loadBook]);
+
+  /**
+   * 朗读进行中按 300ms 轮询一次后端。进度是 MCI 的真实位置，
+   * 播完了后端会自己把会话清空，这里跟着回到静止态。
+   */
+  useEffect(() => {
+    if (!speech.active) return;
+    const timer = window.setInterval(() => {
+      void speechState()
+        .then(setSpeech)
+        .catch(() => setSpeech(IDLE_SPEECH));
+    }, 300);
+    return () => window.clearInterval(timer);
+  }, [speech.active]);
+
+  useEffect(() => {
+    if (page !== "speech") return;
+    void listSpeechVoices()
+      .then(setVoices)
+      .catch(() => setVoices([]));
+    void speechState()
+      .then(setSpeech)
+      .catch(() => setSpeech(IDLE_SPEECH));
+  }, [page]);
 
   // 录制中：抓下一次按键组合，Esc 取消。只按修饰键时继续等。
   useEffect(() => {
@@ -556,6 +608,62 @@ export default function SettingsPage() {
     }
   }
 
+  /** 按当前音色与语速朗读一段文本 */
+  async function startSpeech(text: string) {
+    const body = text.trim();
+    if (!body) {
+      setError("先写一段试听文本");
+      return;
+    }
+    try {
+      setSpeech(
+        await speakText(body, {
+          rate: settings.speechRate,
+          voice: settings.speechVoice,
+        }),
+      );
+    } catch (e) {
+      setError(String(e));
+    }
+  }
+
+  /** 播放键：没在朗读就开一段，正在朗读就暂停，暂停中就续播 */
+  async function handleSpeechToggle() {
+    if (!speech.active) {
+      await startSpeech(preview);
+      return;
+    }
+    try {
+      setSpeech(speech.playing ? await pauseSpeaking() : await resumeSpeaking());
+    } catch (e) {
+      setError(String(e));
+    }
+  }
+
+  async function handleSpeechStop() {
+    try {
+      setSpeech(await stopSpeaking());
+    } catch {
+      // 本来就没在播放，停止失败不需要打扰用户
+    }
+  }
+
+  /** 改语速：先存设置；正在朗读就按新语速重来一段，否则改了听不出区别 */
+  async function handleSpeechRate(rate: number) {
+    const next = { ...settings, speechRate: rate };
+    setSettings(next);
+    void saveGlobal(next);
+    if (speech.active) await startSpeech(speech.text || preview);
+  }
+
+  async function handleSpeechVoice(voiceId: string) {
+    const next = { ...settings, speechVoice: voiceId };
+    setSettings(next);
+    void saveGlobal(next);
+    setPickingVoice(false);
+    if (speech.active) await startSpeech(speech.text || preview);
+  }
+
   function clearKey() {
     if (!draft?.id) return;
     void deleteApiKey(draft.id)
@@ -582,13 +690,18 @@ export default function SettingsPage() {
             </div>
           );
         })}
-        <div className="side-group">即将推出</div>
-        {SIDEBAR_SOON.map(({ name, milestone }) => (
-          <div key={name} className="side-item soon" title={`${milestone} 里程碑开放`}>
-            {name}
-            <span className="lk"><Icon name="lock" size="sm" />{milestone}</span>
-          </div>
-        ))}
+        {/* 全都落地之后这一组自然消失，不留一个空标题 */}
+        {SIDEBAR_SOON.length > 0 && (
+          <>
+            <div className="side-group">即将推出</div>
+            {SIDEBAR_SOON.map(({ name, milestone }) => (
+              <div key={name} className="side-item soon" title={`${milestone} 里程碑开放`}>
+                {name}
+                <span className="lk"><Icon name="lock" size="sm" />{milestone}</span>
+              </div>
+            ))}
+          </>
+        )}
         {SIDEBAR_TAIL.map((item) => (
           <div key={item} className="side-item">{item}</div>
         ))}
@@ -1036,6 +1149,84 @@ export default function SettingsPage() {
 
             <div className="thint">
               Anki 未启动时自动排队，下次连接后批量补发。词条先存在本机，Anki 没开也不会丢。
+            </div>
+          </div>
+        )}
+
+        {page === "speech" && (
+          <div className="panel mid" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <div className="card">
+              <div className="card-head">
+                <span className="hname">语音合成</span>
+                <span className="chip mile mini">Windows 本地语音</span>
+                <span className="m">离线，不消耗翻译额度</span>
+                <span style={{ flex: 1 }} />
+                <button className="btn mini" onClick={() => void startSpeech(preview)}>
+                  <Icon name="speaker" size="sm" />
+                  试听
+                </button>
+              </div>
+
+              <SpeechBar
+                state={speech}
+                canPlay={preview.trim().length > 0}
+                voiceLabel={
+                  settings.speechVoice
+                    ? (() => {
+                        const v = voices.find((x) => x.id === settings.speechVoice);
+                        return v ? `${v.name} · ${v.language}` : "已选音色不可用";
+                      })()
+                    : "系统默认"
+                }
+                onToggle={() => void handleSpeechToggle()}
+                onStop={() => void handleSpeechStop()}
+                onRate={(r) => void handleSpeechRate(r)}
+                onPickVoice={() => setPickingVoice((v) => !v)}
+              />
+
+              {pickingVoice && (
+                <div className="voicelist">
+                  <div
+                    className={`vrow${settings.speechVoice ? "" : " on"}`}
+                    onClick={() => void handleSpeechVoice("")}
+                  >
+                    系统默认音色
+                    <span className="m">跟随 Windows</span>
+                  </div>
+                  {voices.map((v) => (
+                    <div
+                      key={v.id}
+                      className={`vrow${settings.speechVoice === v.id ? " on" : ""}`}
+                      onClick={() => void handleSpeechVoice(v.id)}
+                    >
+                      {v.name}
+                      <span className="m">{v.language}</span>
+                    </div>
+                  ))}
+                  {voices.length === 0 && (
+                    <div className="vrow" style={{ cursor: "default" }}>
+                      系统里没有读到可用语音
+                      <span className="m">在 Windows 设置里添加语音包</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div className="f" style={{ marginTop: 12 }}>
+                <label>试听文本</label>
+                <textarea
+                  className="inp"
+                  rows={2}
+                  value={preview}
+                  onChange={(e) => setPreview(e.target.value)}
+                  placeholder="写一段用来试听音色与语速的文本"
+                />
+              </div>
+            </div>
+
+            <div className="thint">
+              朗读用 Windows 自带语音，离线、不经过翻译链路、不消耗翻译额度。
+              音色与语速存在本机，划词弹窗和历史记录里的朗读也按这一套走。
             </div>
           </div>
         )}

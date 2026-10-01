@@ -49,6 +49,7 @@
         var SERVICES = {
           version: 1, concurrency: 2, timeoutSecs: 15, inputTargetLang: "中文",
           ankiUrl: "http://127.0.0.1:8765", ankiDeck: "随译生词",
+          speechVoice: "", speechRate: 1,
           services: [
             { id: "zai", name: "ZAI", kind: "translation", protocol: "open_ai_compatible", enabled: true,
               baseUrl: "https://api.z.ai/api/paas/v4", model: "glm-5.3-flash", promptTemplate: null,
@@ -101,7 +102,13 @@
 
         var MOCK = {
           list_services: function () { return SERVICES; },
-          get_settings: function () { return { concurrency: 2, timeoutSecs: 15, inputTargetLang: "中文", ankiUrl: "http://127.0.0.1:8765", ankiDeck: "随译生词" }; },
+          get_settings: function () {
+            return {
+              concurrency: 2, timeoutSecs: 15, inputTargetLang: "中文",
+              ankiUrl: "http://127.0.0.1:8765", ankiDeck: "随译生词",
+              speechVoice: SPEECH_VOICE, speechRate: 1,
+            };
+          },
           get_api_key: function () { return "sk-xxxxxxxxxxxxxxxxxxxx"; },
           list_plugins: function () { return PLUGINS; },
           plugins_dir_path: function () { return "C:\\Users\\PC\\AppData\\Roaming\\com.suiyi.dev\\plugins"; },
@@ -122,8 +129,12 @@
           retry_hotkeys: function () { return HOTKEYS; },
           set_hotkey: setHotkeyStub,
           reset_hotkeys: resetHotkeysStub,
-          speak_text: function () { return null; },
-          stop_speaking: function () { return null; },
+          speak_text: speakTextStub,
+          speech_state: speechStateStub,
+          pause_speaking: pauseSpeechStub,
+          resume_speaking: resumeSpeechStub,
+          stop_speaking: function () { SPEECH = null; return idleSpeech(); },
+          list_speech_voices: function () { return VOICES; },
           test_connection: function () { return { ok: true, elapsedMs: 412, models: ["glm-5.3-flash"], error: null }; },
           get_screenshot: function () { return { dataUrl: OVERLAY_SHOT }; },
           finish_region: function () { return null; },
@@ -182,6 +193,62 @@
             if (!w.syncedAt && ankiOk) { w.syncedAt = Date.now(); w.noteId = 900 + w.id; n++; }
           });
           return bookView({ synced: n > 0, error: ankiOk ? null : "连接 Anki 失败: 拒绝连接" });
+        }
+
+        // 朗读桩：speak_text 只记状态，不碰音频设备，验收时不会出声。
+        // 进度按真实流逝时间算，界面上的 0:05 / 0:08 是桩里算出来的，不是写死的。
+        var VOICES = [
+          { id: "HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Speech_OneCore\\Voices\\TTS\\zh-CN\\Huihui",
+            name: "Microsoft Huihui", language: "zh-CN", gender: "Female" },
+          { id: "HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Speech_OneCore\\Voices\\TTS\\zh-CN\\Yaoyao",
+            name: "Microsoft Yaoyao", language: "zh-CN", gender: "Female" },
+          { id: "HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Speech_OneCore\\Voices\\TTS\\zh-CN\\Kangkang",
+            name: "Microsoft Kangkang", language: "zh-CN", gender: "Male" },
+        ];
+        var SPEECH_VOICE = "";
+        var SPEECH = null;
+        function idleSpeech() {
+          return { active: false, playing: false, paused: false, positionMs: 0,
+            durationMs: 0, rate: 1, voice: "", text: "" };
+        }
+        function speechView() {
+          if (!SPEECH) return idleSpeech();
+          var pos = SPEECH.paused
+            ? SPEECH.elapsed
+            : SPEECH.elapsed + (Date.now() - SPEECH.startedAt);
+          if (pos >= SPEECH.durationMs) { SPEECH = null; return idleSpeech(); }
+          return { active: true, playing: !SPEECH.paused, paused: SPEECH.paused,
+            positionMs: pos, durationMs: SPEECH.durationMs,
+            rate: SPEECH.rate, voice: SPEECH.voice, text: SPEECH.text };
+        }
+        function speakTextStub(args) {
+          var text = String(args.text || "").trim();
+          if (!text) throw new Error("没有可朗读的文本");
+          SPEECH_VOICE = args.voice || SPEECH_VOICE;
+          // 桩里按字数估一个时长，只为让进度条动起来；真实时长由 MCI 给
+          var duration = Math.min(20000, Math.max(2000, text.length * 260));
+          SPEECH = { text: text, rate: args.rate || 1, voice: args.voice || SPEECH_VOICE,
+            durationMs: duration, elapsed: 0, startedAt: Date.now(), paused: false };
+          return speechView();
+        }
+        function speechStateStub() { return speechView(); }
+        function pauseSpeechStub() {
+          if (!SPEECH) throw new Error("当前没有正在朗读的内容");
+          if (!SPEECH.paused) {
+            SPEECH.elapsed += Date.now() - SPEECH.startedAt;
+            SPEECH.paused = true;
+          }
+          return speechView();
+        }
+        function resumeSpeechStub() {
+          if (!SPEECH) throw new Error("当前没有暂停中的朗读");
+          if (SPEECH.paused) { SPEECH.startedAt = Date.now(); SPEECH.paused = false; }
+          return speechView();
+        }
+        // ?playing=1 预置一段暂停中的朗读（0:05 / 0:08），截图与验收不用去点按钮
+        if (q.get("playing") === "1") {
+          SPEECH = { text: "这是一段试听文本，用来确认音色与语速。", rate: 1, voice: "",
+            durationMs: 8000, elapsed: 5000, startedAt: Date.now(), paused: true };
         }
 
         var callbacks = {};
@@ -263,7 +330,8 @@
           if (!want) return;
           var SIDE = {
             general: "通用", hotkey: "热键", services: "服务配置",
-            history: "历史记录", wordbook: "生词本", plugins: "插件", about: "关于",
+            history: "历史记录", wordbook: "生词本", speech: "语音合成",
+            plugins: "插件", about: "关于",
           };
           setTimeout(function () {
             var t = document.querySelectorAll(".tabbar button")[1];
@@ -271,6 +339,13 @@
             setTimeout(function () {
               var label = SIDE[want];
               if (label) { var item = byText(".side-item", label); if (item) item.click(); }
+              // ?voices=1：顺手把音色列表展开，方便看这一块
+              if (q.get("voices") === "1") {
+                setTimeout(function () {
+                  var btn = byText(".tts .btn", "切换音色");
+                  if (btn) btn.click();
+                }, 400);
+              }
             }, 150);
           }, 200);
         });

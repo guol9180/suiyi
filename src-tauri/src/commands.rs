@@ -32,6 +32,11 @@ pub struct GlobalSettings {
     /// AnkiConnect 地址与目标牌组
     pub anki_url: String,
     pub anki_deck: String,
+    /// 朗读用的系统音色 id（空串为系统默认）与语速倍数
+    #[serde(default)]
+    pub speech_voice: String,
+    #[serde(default = "crate::speech::default_rate")]
+    pub speech_rate: f64,
 }
 
 pub(crate) fn config_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
@@ -158,6 +163,8 @@ pub fn get_settings(app: tauri::AppHandle) -> Result<GlobalSettings, String> {
         input_target_lang: file.input_target_lang,
         anki_url: file.anki_url,
         anki_deck: file.anki_deck,
+        speech_voice: file.speech_voice,
+        speech_rate: file.speech_rate,
     })
 }
 
@@ -176,6 +183,12 @@ pub fn save_settings(app: tauri::AppHandle, settings: GlobalSettings) -> Result<
     };
     file.anki_url = settings.anki_url.trim().to_string();
     file.anki_deck = settings.anki_deck.trim().to_string();
+    // 音色只在系统里找不到时才会回落到默认，具体匹配由合成器负责；
+    // 语速同样按支持的区间夹一次，脏数据不进配置文件
+    file.speech_voice = settings.speech_voice.trim().to_string();
+    file.speech_rate = settings
+        .speech_rate
+        .clamp(crate::speech::MIN_RATE, crate::speech::MAX_RATE);
     save_services(&dir, &file)
 }
 
