@@ -428,6 +428,7 @@ backdrop-filter:var(--glass-blur);-webkit-backdrop-filter:var(--glass-blur)}
 .hist-list{flex:1;min-width:0;border-right:1px solid var(--c-border-soft)}
 .hist-tools{display:flex;align-items:center;gap:8px;padding:11px 12px;border-bottom:1px solid var(--c-border-soft);flex-wrap:wrap}
 .hist-tools .inp{width:190px;height:28px;font-size:12px}
+.hist-sep{flex:none;width:1px;height:16px;background:var(--c-border-strong);margin:0 3px}
 .hrow{padding:10px 12px 10px 10px;border-bottom:1px solid var(--c-border-soft);border-left:2px solid transparent;cursor:pointer}
 .hrow:hover{background:var(--c-surface-2)}
 .hrow.on{background:var(--c-primary-soft);border-left-color:var(--c-primary-strong)}
@@ -1129,9 +1130,11 @@ backdrop-filter:var(--glass-blur);-webkit-backdrop-filter:var(--glass-blur)}
           <div class="hist-list">
             <div class="hist-tools">
               <span class="inp ghost"><svg class="ico sm"><use href="#i-search"/></svg><span style="margin-left:6px">搜索原文或译文</span></span>
-              <span class="chip acc">全部</span><span class="chip">ZAI</span><span class="chip">DeepSeek</span>
-              <span style="flex:1"></span>
-              <span class="chip mile">近 7 天</span>
+              <span class="chip acc">全部</span><span class="chip">划词</span><span class="chip">截图</span><span class="chip">手输</span><span class="chip">输入框</span>
+              <span class="hist-sep"></span>
+              <span class="chip acc">全部服务</span><span class="chip">ZAI</span><span class="chip">DeepSeek</span>
+              <span class="hist-sep"></span>
+              <span class="chip">全部时间</span><span class="chip acc">近 7 天</span>
             </div>
             <div class="hrow on">
               <div class="hl1"><span class="dot"></span><span class="t">Despite their success, transformers…</span>

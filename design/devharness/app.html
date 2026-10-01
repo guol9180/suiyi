@@ -42,11 +42,13 @@
           zai: { text: "敏捷的棕色狐狸跳过了那只懒狗。", elapsedMs: 900 },
           deepseek: { text: "那只敏捷的棕色狐狸一跃而过懒狗。", elapsedMs: 1100 },
         };
+        // 后端 created_at 是毫秒，这里也按毫秒给，否则时间筛选会得到错误结果
+        var NOW = Date.now();
         var HISTORY = [
-          { id: 1, createdAt: 1790770000, kind: "selection", source: "Despite their success, transformers still struggle with long-context reasoning.", translated: "尽管取得了成功，Transformer 在处理长上下文推理时仍显吃力。", serviceName: "ZAI", elapsedMs: 900, ok: true },
-          { id: 2, createdAt: 1790769000, kind: "screenshot", source: "The quick brown fox jumps over the lazy dog.", translated: "敏捷的棕色狐狸跳过了那只懒狗。", serviceName: "DeepSeek", elapsedMs: 1100, ok: true },
-          { id: 3, createdAt: 1790768000, kind: "input", source: "请把这句话翻译成英文，谢谢。", translated: "", serviceName: "智谱 GLM", elapsedMs: 15000, ok: false, error: "请求超时：15 秒内没有响应" },
-          { id: 4, createdAt: 1790767000, kind: "manual", source: "Streaming responses reduce perceived latency.", translated: "流式响应会降低用户感知到的延迟。", serviceName: "ZAI", elapsedMs: 780, ok: true },
+          { id: 1, createdAt: NOW - 3600e3, kind: "selection", source: "Despite their success, transformers still struggle with long-context reasoning.", translated: "尽管取得了成功，Transformer 在处理长上下文推理时仍显吃力。", serviceName: "ZAI", elapsedMs: 900, ok: true },
+          { id: 2, createdAt: NOW - 26 * 3600e3, kind: "screenshot", source: "The quick brown fox jumps over the lazy dog.", translated: "敏捷的棕色狐狸跳过了那只懒狗。", serviceName: "DeepSeek", elapsedMs: 1100, ok: true },
+          { id: 3, createdAt: NOW - 50 * 3600e3, kind: "input", source: "请把这句话翻译成英文，谢谢。", translated: "", serviceName: "智谱 GLM", elapsedMs: 15000, ok: false, error: "请求超时：15 秒内没有响应" },
+          { id: 4, createdAt: NOW - 12 * 86_400e3, kind: "manual", source: "Streaming responses reduce perceived latency.", translated: "流式响应会降低用户感知到的延迟。", serviceName: "ZAI", elapsedMs: 780, ok: true },
         ];
         var PLUGINS = [
           { id: "local-glossary", name: "术语表优先", version: "0.1.0", description: "命中自定义术语表时直接返回译文。", author: "随译", kind: "translation", permissions: ["clipboard:read"], dir: "C:\\Users\\PC\\AppData\\Roaming\\com.suiyi.dev\\plugins\\local-glossary", main: "main.js", enabled: true, ok: true, error: null },

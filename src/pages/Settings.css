@@ -292,6 +292,8 @@ select.inp { appearance: auto; }
   min-width: 180px;
 }
 .hist-tools .search .inp { height: 30px; font-size: var(--fs-sec); }
+/* 三组筛选之间的细分隔线，替代"用圆点分隔"的写法 */
+.hist-sep { flex: none; width: 1px; height: 16px; background: var(--c-border-strong); margin: 0 3px; }
 .hist { display: flex; min-height: 380px; margin-top: 10px; }
 .hist-list {
   flex: 1.15 1 0;

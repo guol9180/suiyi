@@ -132,10 +132,21 @@ export default function SettingsPage() {
   const [retrans, setRetrans] = useState<{ id: number; service: string; text: string } | null>(null);
   const [histQuery, setHistQuery] = useState("");
   const [histKind, setHistKind] = useState<HistoryKind | "">("");
+  /** 按服务筛选；空串表示全部 */
+  const [histService, setHistService] = useState("");
+  /** 时间范围：近 7 天，或者全部 */
+  const [histRange, setHistRange] = useState<"all" | "7d">("all");
   const [histId, setHistId] = useState<number | null>(null);
 
+  /** 服务与时间两个维度在本地过滤，不用再跑一次后端查询 */
+  const visibleHistory = history.filter((h) => {
+    if (histService && h.serviceName !== histService) return false;
+    if (histRange === "7d" && Date.now() - h.createdAt > 7 * 86_400_000) return false;
+    return true;
+  });
+
   const selectedEntry =
-    history.find((h) => h.id === histId) ?? history[0] ?? null;
+    visibleHistory.find((h) => h.id === histId) ?? visibleHistory[0] ?? null;
 
   const sortServices = (list: ServiceConfig[]) => [...list].sort((a, b) => a.order - b.order);
 
@@ -631,16 +642,47 @@ export default function SettingsPage() {
                   {HISTORY_KIND_LABELS[k]}
                 </span>
               ))}
+              <span className="hist-sep" />
+              <span
+                className={`chip${histService === "" ? " acc" : ""}`}
+                onClick={() => setHistService("")}
+              >
+                全部服务
+              </span>
+              {Array.from(new Set(history.map((h) => h.serviceName).filter(Boolean))).map((name) => (
+                <span
+                  key={name}
+                  className={`chip${histService === name ? " acc" : ""}`}
+                  onClick={() => setHistService(name)}
+                >
+                  {name}
+                </span>
+              ))}
+              <span className="hist-sep" />
+              <span
+                className={`chip${histRange === "all" ? " acc" : ""}`}
+                onClick={() => setHistRange("all")}
+              >
+                全部时间
+              </span>
+              <span
+                className={`chip${histRange === "7d" ? " acc" : ""}`}
+                onClick={() => setHistRange("7d")}
+              >
+                近 7 天
+              </span>
             </div>
 
             <div className="hist">
               <div className="hist-list">
-                {history.length === 0 && (
+                {visibleHistory.length === 0 && (
                   <div className="empty-hint">
-                    {histQuery || histKind ? "没有匹配的记录" : "还没有翻译记录"}
+                    {histQuery || histKind || histService || histRange === "7d"
+                      ? "没有匹配的记录"
+                      : "还没有翻译记录"}
                   </div>
                 )}
-                {history.map((h) => (
+                {visibleHistory.map((h) => (
                   <div
                     key={h.id}
                     className={`hrow${selectedEntry?.id === h.id ? " on" : ""}`}
