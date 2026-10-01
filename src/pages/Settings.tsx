@@ -101,6 +101,16 @@ function accelKeys(accel: string): string[] {
   return accel.split("+").map((p) => named[p] ?? p.toUpperCase());
 }
 
+/**
+ * 热键被别的程序占用时给一个替代组合。
+ * 默认加 Ctrl+Alt；连 Ctrl+Alt 都占了就换成 Ctrl+Shift，规则简单可预期。
+ */
+function suggestionFor(accel: string): string {
+  const key = accel.split("+").pop() ?? "";
+  if (accel.includes("ctrl") && accel.includes("alt")) return `ctrl+shift+${key}`;
+  return `ctrl+alt+${key}`;
+}
+
 function formatTime(ms: number): string {
   const d = new Date(ms);
   const today = new Date();
@@ -608,6 +618,21 @@ export default function SettingsPage() {
     }
   }
 
+  /** 采用建议的替代热键；如果建议的组合也被占用就说清楚，不让用户以为改成功了 */
+  async function useSuggestedHotkey(id: string, accel: string) {
+    try {
+      const next = await setHotkey(id, accel);
+      setHotkeys(next);
+      if (next.find((h) => h.id === id)?.registered) {
+        flash(`已改为 ${accelKeys(accel).join(" + ")}`);
+      } else {
+        setError("建议的组合也被占用了，换一个再试");
+      }
+    } catch (e) {
+      setError(String(e));
+    }
+  }
+
   /** 按当前音色与语速朗读一段文本 */
   async function startSpeech(text: string) {
     const body = text.trim();
@@ -846,6 +871,23 @@ export default function SettingsPage() {
                     <span className="hk-rec">按下新组合，Esc 取消</span>
                   ) : (
                     <button className="btn mini" onClick={() => setRecording(h.id)}>录制</button>
+                  )}
+                  {st && !st.registered && (
+                    <span className="hk-suggest">
+                      <Icon name="alert" size="sm" />
+                      已被其他程序占用，建议改用
+                      {accelKeys(suggestionFor(st.accelerator || h.accel)).map((k, i) => (
+                        <span className="kbd" key={i}>{k}</span>
+                      ))}
+                      <button
+                        className="btn mini"
+                        onClick={() =>
+                          void useSuggestedHotkey(h.id, suggestionFor(st.accelerator || h.accel))
+                        }
+                      >
+                        采用建议
+                      </button>
+                    </span>
                   )}
                 </div>
               );

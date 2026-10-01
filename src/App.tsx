@@ -18,7 +18,11 @@ export default function App() {
         </button>
       </nav>
       <div className="tab-body">
-        {tab === "translate" ? <TranslatePage /> : <SettingsPage />}
+        {tab === "translate" ? (
+          <TranslatePage onOpenSettings={() => setTab("settings")} />
+        ) : (
+          <SettingsPage />
+        )}
       </div>
     </div>
   );

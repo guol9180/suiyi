@@ -101,7 +101,15 @@
         }
 
         var MOCK = {
-          list_services: function () { return SERVICES; },
+          list_services: function () {
+            // ?noservice=1：一个服务都没有，用来看翻译页的空态
+            if (q.get("noservice") === "1") {
+              var empty = JSON.parse(JSON.stringify(SERVICES));
+              empty.services = [];
+              return empty;
+            }
+            return SERVICES;
+          },
           get_settings: function () {
             return {
               concurrency: 2, timeoutSecs: 15, inputTargetLang: "中文",

@@ -226,6 +226,18 @@ textarea.inp { height: auto; min-height: 86px; padding: 9px 11px; line-height: 1
 /* ---------- 提示条 ---------- */
 .t-cap { font-size: var(--fs-cap); line-height: 1.6; color: var(--c-caption); }
 
+/* ---------- 空态：虚线框，中间给说明与下一步动作 ---------- */
+.emptybox {
+  border: 1px dashed var(--c-border-strong);
+  border-radius: var(--radius-md);
+  padding: 22px 14px;
+  text-align: center;
+  font-size: var(--fs-sec);
+  line-height: 1.8;
+  color: var(--c-caption);
+  background: var(--c-surface-2);
+}
+
 /* ---------- 词典结果卡 ---------- */
 .dict-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 6px; }
 .dict-head .w { font-size: var(--fs-display); font-weight: 600; }

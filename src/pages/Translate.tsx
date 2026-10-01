@@ -58,7 +58,7 @@ function errText(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
 }
 
-export default function TranslatePage() {
+export default function TranslatePage(props: { onOpenSettings?: () => void } = {}) {
   const [services, setServices] = useState<ServiceConfig[]>([]);
   const [from, setFrom] = useState("自动检测");
   const [to, setTo] = useState("简体中文");
@@ -247,6 +247,23 @@ export default function TranslatePage() {
       </div>
 
       <div className="cards">
+        {/* 一个服务都没启用时的空态：设计稿附录 A 的「无服务」是带下一步动作的，
+            这里同样给一个能直接点的入口，不让用户自己找路 */}
+        {services.length === 0 && cards.length === 0 && (
+          <div className="emptybox">
+            还没有可用的翻译服务
+            <br />
+            请到「设置 → 服务配置」启用并填写 API Key
+            {props.onOpenSettings && (
+              <span style={{ display: "block", marginTop: 10 }}>
+                <button className="btn primary mini" onClick={props.onOpenSettings}>
+                  <Icon name="sliders" size="sm" />
+                  打开设置
+                </button>
+              </span>
+            )}
+          </div>
+        )}
         {cards.map((c) => (
           <div key={c.id} className="rescard">
             <div className="rh">

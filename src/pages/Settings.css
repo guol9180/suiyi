@@ -288,6 +288,8 @@ select.inp { appearance: auto; }
   gap: 10px;
   padding: 11px 2px;
   border-bottom: 1px solid var(--c-border-soft);
+  /* 冲突建议要单独占一行，所以允许折行 */
+  flex-wrap: wrap;
 }
 .hkrow:last-of-type { border-bottom: none; }
 .hkrow .n { font-size: var(--fs-sec); font-weight: 600; white-space: nowrap; }
@@ -295,6 +297,17 @@ select.inp { appearance: auto; }
 .hkrow .key { display: inline-flex; gap: 4px; flex: none; }
 /* 录制中的提示与底部的恢复默认 */
 .hk-rec { flex: none; font-size: var(--fs-cap); color: var(--c-primary-text); }
+/* 被占用时给一个能直接采用的替代组合，而不是只让用户自己试 */
+.hk-suggest {
+  flex-basis: 100%;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  font-size: var(--fs-cap);
+  color: var(--c-warn);
+}
+.hk-suggest .kbd { font-size: var(--fs-cap); }
 .hk-foot { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
 .hk-foot .thint { flex: 1; min-width: 0; margin-top: 0; }
 

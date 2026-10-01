@@ -910,7 +910,7 @@ backdrop-filter:var(--glass-blur);-webkit-backdrop-filter:var(--glass-blur)}
               <div class="side-item">语音合成</div>
               <div class="side-item">插件</div>
             <div class="side-item">关于</div>
-              <div class="side-foot">随译 v0.3.1<br>译文由你配置的服务提供</div>
+              <div class="side-foot">随译 v0.3.2<br>译文由你配置的服务提供</div>
           </div>
           <div class="main">
             <div class="card list-col">
@@ -1465,6 +1465,10 @@ backdrop-filter:var(--glass-blur);-webkit-backdrop-filter:var(--glass-blur)}
         <li>配色、字阶与毛玻璃参数已同步到 <code>src/styles/tokens.css</code>，本稿与实现一一对应。</li>
         <li>底色使用多层径向渐变叠加并缓慢位移，任何时候都不是一块纯色；卡片与按钮用 <code>backdrop-filter</code> 做毛玻璃。</li>
         <li>窗口宽度在 900–2560 之间时，设置页主内容区封顶 980px 并居中，两侧留白随窗口变化。</li>
+        <li>品牌蓝只有当文字用时才换 <code>--c-primary-text</code>：<code>#3964FE</code> 作文字在应用底上只有 4.38:1，达不到 4.5:1。按钮底仍然是 <code>#3964FE</code> 配白字。</li>
+        <li>热键冲突态给出替代组合与「采用建议」；「恢复默认热键」只在确实改过键时出现，没改过就不摆一个按不动的按钮。</li>
+        <li>截图框选不画四角把手：松开即提交、不能二次调整，画出可拖拽的把手会承诺做不到的事。</li>
+        <li>组件小字在实现里落在 6 级字阶的 11px 与 12px 两档；稿中个别 11.5px 是早期写法，以实现为准。</li>
       </ul>
     </div>
   </section>
