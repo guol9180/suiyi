@@ -157,7 +157,7 @@
           set_api_key: function () { return null; },
           delete_api_key: function () { return null; },
           // 设置页的「从剪贴板粘贴」用；真机上是真的读系统剪贴板
-          read_clipboard_text: function () { return "sk-demo1234567890abcdefghijJe1L"; },
+          read_clipboard_text: function () { return "sk-demo1234567890abcdefghijXk7Q"; },
           save_service: function (args) {
             var svc = args.service;
             if (!svc.id) svc.id = "svc-" + Date.now();
@@ -204,7 +204,7 @@
               return {
                 ok: false, elapsedMs: 318, models: [],
                 error: "服务返回 401 Unauthorized: {\"error\":{\"message\":\"Authentication Fails, "
-                  + "Your api key: ****Je1L is invalid (request_id: 471a0080-8b94-4d0b-b324)\","
+                  + "Your api key: ****Xk7Q is invalid (request_id: 471a0080-8b94-4d0b-b324)\","
                   + "\"type\":\"authentication_error\",\"param\":null,\"code\":\"invalid_request_error\"}}",
               };
             }

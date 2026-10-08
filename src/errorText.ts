@@ -2,7 +2,7 @@
  * 把服务端返回的原始错误翻成人话。
  *
  * 起因：DeepSeek 对错误的 Key 回的是
- *   401 Unauthorized: {"error":{"message":"Authentication Fails, Your api key: ****Je1L is invalid …"}}
+ *   401 Unauthorized: {"error":{"message":"Authentication Fails, Your api key: ****Xk7Q is invalid …"}}
  * 用户看到这一串只会得出「它说我没授权」。
  *
  * 这里的取舍：**标题只写结论，原文一律保留**。诊断要靠原文，所以折叠起来而不是丢掉；
@@ -16,14 +16,14 @@ export interface ErrorInfo {
   hint?: string;
   /** HTTP 状态码，抓不到为空串 */
   code: string;
-  /** 服务端回显的 Key 尾号（如 Je1L），抓不到为空串 */
+  /** 服务端回显的 Key 尾号（如 Xk7Q），抓不到为空串 */
   tail: string;
   /** 原始错误文本 */
   raw: string;
 }
 
 const CODE_RE = /\b(4\d{2}|5\d{2})\b/;
-/** DeepSeek 写 "api key: ****Je1L is invalid"，OpenAI 写 "sk-***xYz" */
+/** DeepSeek 写 "api key: ****Xk7Q is invalid"，OpenAI 写 "sk-***xYz" */
 const KEY_TAIL_RE = /\*{2,}\s*([A-Za-z0-9_-]{2,12})\b/;
 
 function tailOf(raw: string): string {
