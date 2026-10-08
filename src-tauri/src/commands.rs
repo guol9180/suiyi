@@ -656,8 +656,9 @@ pub fn hotkey_status(
 #[tauri::command]
 pub fn retry_hotkeys(app: tauri::AppHandle) -> Vec<crate::hotkeys::HotkeyStatus> {
     let pairs = current_hotkey_pairs(&app);
-    let list = crate::hotkeys::apply(&app, &pairs);
-    app.state::<crate::hotkeys::HotkeyState>().store(list.clone());
+    // 只补没注册上的：已经能用的键不动，免得重试时把它们也卸掉重来
+    let list = crate::hotkeys::retry_pending(&app, &pairs);
+    crate::hotkeys::publish(&app, list.clone());
     list
 }
 
@@ -709,7 +710,7 @@ pub fn set_hotkey(
         list = crate::hotkeys::apply(&app, &pairs);
     }
 
-    app.state::<crate::hotkeys::HotkeyState>().store(list.clone());
+    crate::hotkeys::publish(&app, list.clone());
     Ok(list)
 }
 
@@ -722,7 +723,7 @@ pub fn reset_hotkeys(app: tauri::AppHandle) -> Result<Vec<crate::hotkeys::Hotkey
     save_services(&dir, &file)?;
     let pairs = crate::hotkeys::effective(&file.hotkeys);
     let list = crate::hotkeys::apply(&app, &pairs);
-    app.state::<crate::hotkeys::HotkeyState>().store(list.clone());
+    crate::hotkeys::publish(&app, list.clone());
     Ok(list)
 }
 

@@ -1,6 +1,6 @@
 [package]
 name = "suiyi"
-version = "0.5.1"
+version = "0.6.0"
 description = "随译 SuiYi · 桌面 AI 翻译助手"
 authors = ["suiyi-dev"]
 edition = "2021"
@@ -48,6 +48,7 @@ windows = { version = "0.61", features = [
     "Win32_Media_Audio",
     "Win32_Media_Multimedia",
     "Win32_System_Com",
+    "Win32_System_Threading",
     "Win32_UI_Input_KeyboardAndMouse",
     "Win32_UI_WindowsAndMessaging",
 ] }

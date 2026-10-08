@@ -40,6 +40,7 @@ import { Icon } from "../components/Icon";
 import { SpeechBar } from "../components/SpeechBar";
 import { cleanKey, presetOf, PROVIDERS, type ProviderPreset } from "../providers";
 import { describeError } from "../errorText";
+import { suggestionFor } from "../hotkeySuggest";
 import { getVersion, lastOf, statusCodeOf, subscribe } from "../lastResult";
 import {
   DEFAULT_PROMPT,
@@ -103,16 +104,6 @@ const DEFAULT_PREVIEW = "这是一段试听文本，用来确认音色与语速�
 function accelKeys(accel: string): string[] {
   const named: Record<string, string> = { ctrl: "Ctrl", alt: "Alt", shift: "Shift", super: "Win" };
   return accel.split("+").map((p) => named[p] ?? p.toUpperCase());
-}
-
-/**
- * 热键被别的程序占用时给一个替代组合。
- * 默认加 Ctrl+Alt；连 Ctrl+Alt 都占了就换成 Ctrl+Shift，规则简单可预期。
- */
-function suggestionFor(accel: string): string {
-  const key = accel.split("+").pop() ?? "";
-  if (accel.includes("ctrl") && accel.includes("alt")) return `ctrl+shift+${key}`;
-  return `ctrl+alt+${key}`;
 }
 
 function formatTime(ms: number): string {
@@ -1593,46 +1584,58 @@ export default function SettingsPage() {
               </div>
 
               <div className="f">
-                <label>
-                  API Key（仅存于系统凭据管理器）
-                  <span className="key-state">
-                    {hasKey
-                      ? <span className="chip ok"><Icon name="check" size="sm" />已保存</span>
-                      : <span className="chip">未设置</span>}
-                  </span>
-                </label>
-                <div className="keyrow">
-                  <input className="inp mono" type="password" value={apiKeyInput}
-                    onChange={(e) => setApiKeyInput(e.target.value)}
-                    placeholder={hasKey ? "已保存，留空则不修改；输入新值则覆盖" : "sk-..."} />
-                  <button className="btn mini" onClick={() => void pasteKey()} disabled={pasting}>
-                    <Icon name="copy" size="sm" />{pasting ? "读取中" : "从剪贴板粘贴"}
-                  </button>
-                  {hasKey && (
-                    <button className="btn mini" onClick={clearKey}>清除</button>
-                  )}
-                </div>
-                <div className="keyfoot">
-                  {consoleUrl ? (
-                    // 这里要的是能看清的次要动作，不是 22px 的图标按钮（前车之鉴：
-                    // mini-as-link 是给上下箭头用的定宽图标位，塞文字会溢出去压住输入框）
-                    <button className="btn mini" onClick={() => void openUrl(consoleUrl)}>
-                      获取 API Key（打开 {preset?.name} 控制台）
-                    </button>
-                  ) : (
-                    <span className="fhint">
-                      {draft.requiresKey ? "自定义端点：直接填服务商给你的 Key" : "本地服务，不需要密钥"}
+                <label className="key-label">
+                  <span>API Key（仅存于系统凭据管理器）</span>
+                  {draft.requiresKey && (
+                    <span className="key-state">
+                      {hasKey
+                        ? <span className="chip ok"><Icon name="check" size="sm" />已保存</span>
+                        : <span className="chip">未设置</span>}
                     </span>
                   )}
-                  {keyNote && <span className="fhint">{keyNote}</span>}
-                </div>
-                <label className="kcheck">
-                  <Toggle
-                    on={!draft.requiresKey}
-                    onClick={() => setDraft({ ...draft, requiresKey: !draft.requiresKey })}
-                  />
-                  <span>这家服务不需要密钥（本地服务，请求不带 Authorization）</span>
+                  <span style={{ flex: 1 }} />
+                  {/* 本地服务（Ollama 这类）没有密钥可填。做成标签行右侧的小开关，
+                      不再单独占一行——那一行会把表单的节奏打断。 */}
+                  <span
+                    className="key-nokey"
+                    title="本地服务（Ollama 等）不需要密钥，请求不会带 Authorization 头"
+                  >
+                    无需密钥
+                    <Toggle
+                      on={!draft.requiresKey}
+                      onClick={() => setDraft({ ...draft, requiresKey: !draft.requiresKey })}
+                    />
+                  </span>
                 </label>
+                {draft.requiresKey ? (
+                  <>
+                    <div className="keyrow">
+                      <input className="inp mono" type="password" value={apiKeyInput}
+                        onChange={(e) => setApiKeyInput(e.target.value)}
+                        placeholder={hasKey ? "已保存，留空则不修改；输入新值则覆盖" : "sk-..."} />
+                      <button className="btn mini" onClick={() => void pasteKey()} disabled={pasting}>
+                        <Icon name="copy" size="sm" />{pasting ? "读取中" : "从剪贴板粘贴"}
+                      </button>
+                      {hasKey && (
+                        <button className="btn mini" onClick={clearKey}>清除</button>
+                      )}
+                    </div>
+                    <div className="keyfoot">
+                      {consoleUrl ? (
+                        // 这里要的是能看清的次要动作，不是 22px 的图标按钮（前车之鉴：
+                        // mini-as-link 是给上下箭头用的定宽图标位，塞文字会溢出去压住输入框）
+                        <button className="btn mini" onClick={() => void openUrl(consoleUrl)}>
+                          获取 API Key（打开 {preset?.name} 控制台）
+                        </button>
+                      ) : (
+                        <span className="fhint">自定义端点：直接填服务商给你的 Key</span>
+                      )}
+                      {keyNote && <span className="fhint">{keyNote}</span>}
+                    </div>
+                  </>
+                ) : (
+                  <div className="fhint">本地服务：请求不带 Authorization 头，不用填密钥</div>
+                )}
               </div>
 
               {/* 测试连接：Key 是否有效、网关是否可达、模型是否可见 */}

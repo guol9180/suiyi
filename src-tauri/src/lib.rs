@@ -87,20 +87,16 @@ pub fn run() {
                 .unwrap_or_default();
             let pairs = hotkeys::effective(&config);
             let status = hotkeys::apply(&handle, &pairs);
-            handle.state::<hotkeys::HotkeyState>().store(status);
+            hotkeys::publish(&handle, status);
 
-            // 旧实例退出需要时间，先失败的在后台补注册
+            // 旧实例退出、别的程序让出热键都需要时间：后台退避重试到全部注册成功为止，
+            // 冲突消失（比如用户关掉 PixPin）时自动接管默认键。
             #[cfg(desktop)]
             {
                 let handle = handle.clone();
                 let pairs = pairs.clone();
                 std::thread::spawn(move || {
-                    hotkeys::retry_until_ready(
-                        &handle,
-                        &pairs,
-                        6,
-                        std::time::Duration::from_millis(2500),
-                    );
+                    hotkeys::retry_until_ready(&handle, &pairs);
                 });
             }
 

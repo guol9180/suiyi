@@ -59,7 +59,13 @@ pub fn trigger_selection_translate(app: AppHandle) {
                 t
             }
             None => {
-                log_line("capture: 未取到选中文本（剪贴板无变化或为空），流程结束");
+                // 不再静默退出：贴一条说明到光标旁边，用户才知道该改什么
+                let reason = explain_capture_failure(&app);
+                log_line(&format!("capture: 未取到选中文本（{reason}）"));
+                if let Err(e) = ensure_popup_at_cursor(&app) {
+                    log_line(&format!("popup: 弹窗创建/定位失败: {e}"));
+                }
+                let _ = app.emit("popup-notice", serde_json::json!({ "text": reason }));
                 return;
             }
         };
@@ -134,6 +140,104 @@ pub(crate) fn simulate_ctrl_c() -> Result<(), String> {
 #[cfg(windows)]
 pub(crate) fn simulate_ctrl_v() -> Result<(), String> {
     simulate_ctrl_key(VK_V, "V")
+}
+
+/// 取词失败的原因。不猜，按顺序问三个问题：
+/// 1. 前台是不是我们自己的窗口（截图覆盖层/结果面板开着时按 Alt+D 必然取不到）；
+/// 2. 目标进程能不能用普通权限打开 —— 打不开通常意味着它以管理员身份运行，
+///    Windows 的 UIPI 会把我们模拟的 Ctrl+C 直接拦掉；
+/// 3. 都正常，那就是这个程序不响应模拟按键，或者真的没有选中文字。
+#[cfg(windows)]
+fn explain_capture_failure(app: &AppHandle) -> String {
+    use windows::Win32::UI::WindowsAndMessaging::{
+        GetForegroundWindow, GetWindowTextW, GetWindowThreadProcessId,
+    };
+    let _ = app;
+    unsafe {
+        let hwnd = GetForegroundWindow();
+        if hwnd.0.is_null() {
+            return "没取到选中文字：当前没有可复制的前台窗口".into();
+        }
+        let mut pid = 0u32;
+        GetWindowThreadProcessId(hwnd, Some(&mut pid));
+        let mut buf = [0u16; 256];
+        let n = GetWindowTextW(hwnd, &mut buf).max(0) as usize;
+        let title = String::from_utf16_lossy(&buf[..n.min(buf.len())]);
+
+        if pid == std::process::id() {
+            log_line(&format!("capture: 前台是我们自己的窗口 title={title:?}"));
+            return "截图框选（或结果面板）还开着，先关掉它再取词".into();
+        }
+
+        let name = process_name(pid);
+        let elevated = !can_query_process(pid);
+        log_line(&format!(
+            "capture: 前台窗口 title={title:?} pid={pid} 进程={} 疑似提权={elevated}",
+            name.clone().unwrap_or_else(|| "未知".into())
+        ));
+        if elevated {
+            let who = name.map(|n| format!("「{n}」")).unwrap_or_default();
+            return format!(
+                "没取到选中文字：目标程序{who}可能以管理员身份运行，模拟按键会被系统拦住。\
+                 可以让随译也用管理员身份启动，或改用截图识别（Alt+S）"
+            );
+        }
+        "没取到选中文字：确认目标窗口里确实有选中的文本（有些程序不响应模拟的 Ctrl+C）".into()
+    }
+}
+
+#[cfg(not(windows))]
+fn explain_capture_failure(_app: &AppHandle) -> String {
+    "没取到选中文字：确认目标窗口里确实有选中的文本".into()
+}
+
+/// 用 PROCESS_QUERY_LIMITED_INFORMATION 探一下：普通权限打不开，多半是提权或受保护进程
+#[cfg(windows)]
+fn can_query_process(pid: u32) -> bool {
+    use windows::Win32::Foundation::CloseHandle;
+    use windows::Win32::System::Threading::{OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION};
+    unsafe {
+        match OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid) {
+            Ok(h) => {
+                let _ = CloseHandle(h);
+                true
+            }
+            Err(_) => false,
+        }
+    }
+}
+
+#[cfg(windows)]
+fn process_name(pid: u32) -> Option<String> {
+    use windows::core::PWSTR;
+    use windows::Win32::Foundation::CloseHandle;
+    use windows::Win32::System::Threading::{
+        OpenProcess, QueryFullProcessImageNameW, PROCESS_NAME_FORMAT,
+        PROCESS_QUERY_LIMITED_INFORMATION,
+    };
+    unsafe {
+        let h = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid).ok()?;
+        let mut buf = [0u16; 1024];
+        let mut len = buf.len() as u32;
+        let ok = QueryFullProcessImageNameW(
+            h,
+            PROCESS_NAME_FORMAT(0),
+            PWSTR(buf.as_mut_ptr()),
+            &mut len,
+        )
+        .is_ok();
+        let _ = CloseHandle(h);
+        if !ok || len == 0 {
+            return None;
+        }
+        let path = String::from_utf16_lossy(&buf[..len as usize]);
+        Some(
+            path.rsplit(['\\', '/'])
+                .next()
+                .unwrap_or(&path)
+                .to_string(),
+        )
+    }
 }
 
 /// 剪贴板法抓取选中文本

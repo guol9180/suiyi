@@ -47,6 +47,8 @@ export default function OcrResultPage() {
   const [pieces, setPieces] = useState<Piece[]>([]);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
+  /** 3 秒还没等到识别结果：面板不再显示「正在读取…」，给明确的重新框选/关闭 */
+  const [waitedLong, setWaitedLong] = useState(false);
   /** 每次新的识别结果进来就换一个批次号，过期的翻译结果直接丢掉 */
   const batchRef = useRef(0);
 
@@ -88,16 +90,37 @@ export default function OcrResultPage() {
     [],
   );
 
+  /**
+   * 关闭面板。走 Rust 的 ocr_close 命令而不是 getCurrentWindow().hide()：
+   * 命令是我们自己注册的，不受 capability 权限集影响；`hide()` 依赖 core:window 权限，
+   * 一旦那个窗口漏在权限集外就会「点关闭没反应、Esc 也没用」——之前就是这样卡住的。
+   */
+  const closePanel = useCallback(async () => {
+    try {
+      await invoke("ocr_close");
+    } catch {
+      await getCurrentWindow().hide().catch(() => {});
+    }
+  }, []);
+
   // 挂载时先取一次最近结果：事件可能比页面先到，只靠监听会丢
   useEffect(() => {
-    void invoke<OcrResult | null>("ocr_last").then((r) => {
-      if (r) setResult(r);
-    });
+    void invoke<OcrResult | null>("ocr_last")
+      .then((r) => {
+        if (r) setResult(r);
+      })
+      .catch(() => setNotice("读取识别结果失败，可以重新框选"));
+    // 3 秒还没结果就别一直显示「正在读取」：给一条明确的出路
+    const timer = window.setTimeout(() => {
+      setResult((prev) => prev ?? null);
+      setWaitedLong(true);
+    }, 3000);
     const un = listen<OcrResult>("ocr-set-source", (e) => {
       setResult(e.payload);
       setNotice("");
     });
     return () => {
+      window.clearTimeout(timer);
       void un.then((f) => f());
     };
   }, []);
@@ -122,11 +145,11 @@ export default function OcrResultPage() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") void getCurrentWindow().hide();
+      if (e.key === "Escape") void closePanel();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  }, [closePanel]);
 
   const first = pieces.find((p) => !p.error && p.text);
   const engineLabel =
@@ -213,7 +236,7 @@ export default function OcrResultPage() {
           {busy && <span className="chip mile mini">翻译中</span>}
           {!busy && first && <span className="chip ok mini">{(first.elapsedMs / 1000).toFixed(1)}s</span>}
           <span style={{ flex: 1 }} />
-          <button className="ocr-x" title="关闭" onClick={() => void getCurrentWindow().hide()}>
+          <button className="ocr-x" title="关闭" onClick={() => void closePanel()}>
             <Icon name="close" size="sm" />
           </button>
         </div>
@@ -238,7 +261,21 @@ export default function OcrResultPage() {
         {mode === "panel" ? (
           <div className="ocr-body">
             {!result ? (
-              <div className="emptybox">正在读取识别结果…</div>
+              waitedLong ? (
+                <div className="emptybox">
+                  没拿到识别结果
+                  <br />
+                  可能上次框选已经结束，重新框一次即可
+                  <div className="ocr-fallback">
+                    <button className="btn mini" onClick={() => void retry()}>
+                      <Icon name="frame" size="sm" />重新框选
+                    </button>
+                    <button className="btn mini" onClick={() => void closePanel()}>关闭</button>
+                  </div>
+                </div>
+              ) : (
+                <div className="emptybox">正在读取识别结果…</div>
+              )
             ) : !result.text.trim() ? (
               <div className="emptybox">
                 未识别到文字

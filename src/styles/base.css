@@ -15,6 +15,43 @@ body {
   font-size: var(--fs-body);
   line-height: 1.75;
   -webkit-font-smoothing: antialiased;
+  /* 提示、标签、按钮文字都不是输入区，别让光标变成 I 形 */
+  cursor: default;
+  /* 界面本身一律不可选中：拖拽时不会把按钮文字刷蓝；内容区在下面单独放开 */
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/*
+ * 内容区保留可选中：这些地方用户真的要复制。
+ * 译文、原文、词典释义、历史详情、错误原文、代码块，以及所有输入框。
+ */
+.rt,
+.src-text,
+.ocr-line,
+.ocr-trans .tt,
+.dict-head,
+.dict-sense,
+.hist-detail,
+.traw pre,
+.codebox,
+pre,
+code,
+input,
+textarea,
+select {
+  user-select: text;
+  -webkit-user-select: text;
+  cursor: auto;
+}
+
+input,
+textarea { cursor: text; }
+select.inp,
+input[type="range"],
+input[type="checkbox"],
+input[type="radio"] {
+  cursor: pointer;
 }
 
 /* 焦点环只在键盘导航时出现 */

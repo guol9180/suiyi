@@ -64,6 +64,22 @@
   border-color: var(--c-primary);
   font-weight: 600;
 }
+
+/* 热键冲突横幅：压在标签栏下面一条，别抢主内容的注意力 */
+.hotkey-banner {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 16px;
+  font-size: var(--fs-sec);
+  color: var(--c-warn);
+  background: var(--c-warn-bg);
+  border-bottom: 1px solid var(--c-warn-border);
+  flex: none;
+}
+.hotkey-banner .btn.mini { flex: none; }
 .tab-body {
   position: relative;
   z-index: 1;

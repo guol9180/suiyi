@@ -1,22 +1,24 @@
 //! M2 截图识别：Alt+S 冻结屏幕 → 覆盖层框选 → 裁剪 → Windows.Media.OCR → 弹窗翻译
 //!
 //! 流程：
-//! 1. 热键触发：定位鼠标所在的那块显示器，用 GDI 抓它的画面（冻结帧），JPEG 编码存入会话；
-//! 2. 在该显示器上铺一层无边框置顶覆盖层，前端加载冻结帧供框选；
+//! 1. 热键触发：把所有显示器的并集矩形当一块画布，用 GDI 一次抓完（冻结帧），JPEG 编码存入会话；
+//! 2. 在该并集矩形上铺一层无边框置顶覆盖层，前端加载冻结帧供框选；
 //! 3. 松开鼠标：前端回传逻辑坐标 → Rust 换算物理坐标裁剪原图 → OCR；
 //! 4. 隐藏覆盖层，OCR 文本投递给划词弹窗自动翻译。
 //!
-//! 多屏策略：只截鼠标当前所在的显示器。跨屏整抓在混合 DPI 下坐标换算容易错位，
-//! 而且用户框选时本来也只关心眼前这一块屏。
+//! 多屏策略：整抓虚拟桌面（所有显示器的并集），覆盖层也铺满并集，因此可以在任意一块屏
+//! 起框、跨屏拖选，和 PixPin 的手感一致。混合 DPI 下帧图仍按物理像素 1:1：
+//! 覆盖层窗口只有一个小数缩放系数，帧图铺满窗口即可，裁剪时乘这个系数换算成物理像素。
 
 use std::sync::Mutex;
 use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
 
 /// 进行中的截图会话（同一时刻最多一个）
 pub struct ShotSession {
-    /// 抓取区域（物理像素）：x, y, w, h，等于鼠标所在显示器的矩形
+    /// 抓取区域（物理像素）：x, y, w, h，等于所有显示器的并集矩形
     pub vs: (i32, i32, i32, i32),
-    /// 该显示器的缩放系数
+    /// 覆盖层窗口的缩放系数（show_overlay 时写入）。前端给的 clientX/Y 是 CSS 像素，
+    /// 乘它就是相对于并集原点的物理像素。
     pub sf: f64,
     pub w: i32,
     pub h: i32,
@@ -85,25 +87,36 @@ const OCR_H: f64 = 600.0;
 /// 在光标附近弹出截图识别结果面板
 fn show_ocr_panel(app: &AppHandle) -> Result<(), String> {
     let cursor = app.cursor_position().map_err(|e| e.to_string())?;
-    let sf = app
-        .primary_monitor()
+    // 面板跟着鼠标所在的显示器走。多屏下如果按主屏边界去 clamp，
+    // 在副屏框选的用户会看到面板跳到另一块屏上。
+    let target = app
+        .monitor_from_point(cursor.x, cursor.y)
         .ok()
         .flatten()
-        .map(|m| m.scale_factor())
-        .unwrap_or(1.0);
+        .or_else(|| app.primary_monitor().ok().flatten());
 
     // 光标右下方一点，不压住刚框出来的那块
-    let mut lx = cursor.x / sf + 16.0;
-    let mut ly = cursor.y / sf + 16.0;
-    if let Ok(Some(m)) = app.primary_monitor() {
+    let mut lx = cursor.x + 16.0;
+    let mut ly = cursor.y + 16.0;
+    if let Some(m) = &target {
+        let sf = m.scale_factor();
+        let pos = m.position();
         let size = m.size();
-        let (vw, vh) = (size.width as f64 / sf, size.height as f64 / sf);
-        if lx + OCR_W > vw {
-            lx = (vw - OCR_W - 16.0).max(8.0);
+        // 该显示器矩形在逻辑坐标下的范围
+        let mx = pos.x as f64 / sf;
+        let my = pos.y as f64 / sf;
+        let mw = size.width as f64 / sf;
+        let mh = size.height as f64 / sf;
+        lx = cursor.x / sf + 16.0;
+        ly = cursor.y / sf + 16.0;
+        if lx + OCR_W > mx + mw {
+            lx = mx + mw - OCR_W - 16.0;
         }
-        if ly + OCR_H > vh {
-            ly = (vh - OCR_H - 16.0).max(8.0);
+        if ly + OCR_H > my + mh {
+            ly = my + mh - OCR_H - 16.0;
         }
+        lx = lx.max(mx + 8.0);
+        ly = ly.max(my + 8.0);
     }
     let (lx, ly) = (lx.max(8.0), ly.max(8.0));
 
@@ -203,29 +216,53 @@ fn run_screenshot(app: AppHandle) {
     }
 }
 
-/// 抓取鼠标所在显示器的画面，组装一次截图会话
-fn build_session(app: &AppHandle) -> Result<ShotSession, String> {
-    let cursor = app
-        .cursor_position()
-        .map_err(|e| format!("获取鼠标位置失败: {e}"))?;
-    let monitor = app
-        .monitor_from_point(cursor.x, cursor.y)
-        .map_err(|e| format!("匹配显示器失败: {e}"))?
-        .ok_or("找不到鼠标所在的显示器")?;
+/// 多块显示器的并集矩形（物理像素）。负坐标（屏幕在主的左侧/上方）与屏幕之间的空隙
+/// 都按原样保留：BitBlt 抓的就是整块虚拟桌面，空隙会抓成黑色，用户也不会去框那里。
+/// 抽成纯函数是为了能单测——这行算式错了，跨屏裁剪就会整块错位。
+fn union_rect(rects: &[(i32, i32, u32, u32)]) -> Option<(i32, i32, i32, i32)> {
+    let mut it = rects.iter();
+    let (x0, y0, w0, h0) = *it.next()?;
+    let (mut min_x, mut min_y) = (x0, y0);
+    let (mut max_x, mut max_y) = (x0 + w0 as i32, y0 + h0 as i32);
+    for (x, y, w, h) in it {
+        min_x = min_x.min(*x);
+        min_y = min_y.min(*y);
+        max_x = max_x.max(*x + *w as i32);
+        max_y = max_y.max(*y + *h as i32);
+    }
+    Some((min_x, min_y, max_x - min_x, max_y - min_y))
+}
 
-    let pos = monitor.position();
-    let size = monitor.size();
-    let sf = monitor.scale_factor();
-    let (vx, vy) = (pos.x, pos.y);
-    let (vw, vh) = (size.width as i32, size.height as i32);
+/// 抓取所有显示器并集区域的画面，组装一次截图会话
+fn build_session(app: &AppHandle) -> Result<ShotSession, String> {
+    let monitors = app
+        .available_monitors()
+        .map_err(|e| format!("枚举显示器失败: {e}"))?;
+    let rects: Vec<(i32, i32, u32, u32)> = monitors
+        .iter()
+        .map(|m| {
+            let p = m.position();
+            let s = m.size();
+            (p.x, p.y, s.width, s.height)
+        })
+        .collect();
+    let (vx, vy, vw, vh) = union_rect(&rects).ok_or("没有检测到显示器")?;
     if vw <= 0 || vh <= 0 {
         return Err(format!("显示器尺寸无效: {vw}x{vh}"));
     }
 
     let rgba = capture_rect(vx, vy, vw, vh)?;
     let data_url = rgba_to_jpeg_dataurl(&rgba, vw, vh)?;
+    // 先按主屏缩放系数顶着，真正的值在覆盖层窗口建好之后写入（见 show_overlay）
+    let sf = app
+        .primary_monitor()
+        .ok()
+        .flatten()
+        .map(|m| m.scale_factor())
+        .unwrap_or(1.0);
     crate::selection::log_line(&format!(
-        "screenshot: 抓取显示器 ({vx},{vy}) {vw}x{vh} sf={sf}"
+        "screenshot: 抓取虚拟桌面 ({vx},{vy}) {vw}x{vh}（{} 块屏）",
+        rects.len()
     ));
     Ok(ShotSession {
         vs: (vx, vy, vw, vh),
@@ -261,11 +298,11 @@ fn dump_frame(app: &AppHandle) {
 
 /// 创建/复用覆盖层窗口，正好盖住鼠标所在的那块显示器
 fn show_overlay(app: &AppHandle) -> Result<(), String> {
-    let (vsx, vsy, vsw, vsh, sf) = {
+    let (vsx, vsy, vsw, vsh) = {
         let state = app.state::<Mutex<Option<ShotSession>>>();
         let g = state.lock().map_err(|e| e.to_string())?;
         let s = g.as_ref().ok_or("会话不存在")?;
-        (s.vs.0, s.vs.1, s.vs.2, s.vs.3, s.sf)
+        (s.vs.0, s.vs.1, s.vs.2, s.vs.3)
     };
 
     let win = match app.get_webview_window("overlay") {
@@ -307,6 +344,14 @@ fn show_overlay(app: &AppHandle) -> Result<(), String> {
     win.show().map_err(|e| format!("覆盖层显示失败: {e}"))?;
     win.set_focus().map_err(|e| format!("覆盖层聚焦失败: {e}"))?;
 
+    // 覆盖层窗口自己的缩放系数：前端回传的是 CSS 像素，乘它才是物理像素偏移。
+    // 混合 DPI 下窗口只有一个系数，而帧图铺满窗口正好是 1:1 物理像素，所以裁剪不会错位。
+    let sf = win.scale_factor().unwrap_or(1.0);
+    if let Ok(mut g) = app.state::<Mutex<Option<ShotSession>>>().lock() {
+        if let Some(s) = g.as_mut() {
+            s.sf = sf;
+        }
+    }
     log_overlay_geometry(&win, sf, vsx, vsy, vsw, vsh);
     Ok(())
 }
@@ -369,9 +414,13 @@ pub fn cancel_screenshot(
     Ok(())
 }
 
-/// 框选完成：逻辑坐标 → 物理裁剪 → OCR → 投递弹窗
+/// 框选完成：逻辑坐标 → 物理裁剪 → OCR → 投递结果面板。
+///
+/// 这个命令必须是 async：里面的裁剪、PNG 编码和 WinRT OCR 都是同步阻塞活儿，
+/// 同步命令跑在主线程上，会把整个应用（包括刚建出来的结果面板）一起冻住 ——
+/// 表现就是「窗口白屏、点不动、只能任务管理器杀掉」。
 #[tauri::command]
-pub fn finish_region(
+pub async fn finish_region(
     app: AppHandle,
     state: tauri::State<'_, Mutex<Option<ShotSession>>>,
     ocr_state: tauri::State<'_, OcrState>,
@@ -467,7 +516,8 @@ pub fn finish_region(
     // 的状态比什么都不弹更有用，用户可以直接重新框选。
     match show_ocr_panel(&app) {
         Ok(()) => {
-            std::thread::sleep(std::time::Duration::from_millis(150));
+            // 不 sleep 等前端挂载：面板自己会在挂载时用 ocr_last 兜一次，
+            // 事件比页面先到也不会丢内容，这里 sleep 只会白白卡住调用线程。
             let _ = app.emit("ocr-set-source", &result);
         }
         Err(e) => {
@@ -475,7 +525,6 @@ pub fn finish_region(
             crate::selection::log_line(&format!("screenshot: 结果面板打开失败（{e}），退回弹窗"));
             if !text.trim().is_empty() {
                 let _ = crate::selection::ensure_popup_at_cursor(&app);
-                std::thread::sleep(std::time::Duration::from_millis(150));
                 let _ = app.emit(
                     "popup-set-source",
                     serde_json::json!({ "text": text, "autoTranslate": true, "kind": "screenshot" }),
@@ -770,6 +819,32 @@ pub fn ocr_bytes(_img: &[u8], _lang: &str) -> Result<Vec<OcrLine>, String> {
 
 #[cfg(all(test, windows))]
 mod tests {
+    /// 并集矩形：副屏在主屏左侧时坐标是负的，别被 min/max 写反
+    #[test]
+    fn union_rect_handles_negative_origin() {
+        // 主屏 1920x1080 在 (0,0)，副屏 1920x1080 挂在它左边
+        let u = super::union_rect(&[(0, 0, 1920, 1080), (-1920, 0, 1920, 1080)]).unwrap();
+        assert_eq!(u, (-1920, 0, 3840, 1080));
+    }
+
+    /// 上下错位与中间空隙：并集要把两块屏都框进来
+    #[test]
+    fn union_rect_covers_offsets_and_gaps() {
+        // 副屏在右上，底部比主屏高
+        let u = super::union_rect(&[(0, 0, 1920, 1080), (1920, -704, 1920, 1080)]).unwrap();
+        assert_eq!(u, (0, -704, 3840, 1784));
+    }
+
+    /// 单屏时并集就是它自己
+    #[test]
+    fn union_rect_single_monitor() {
+        assert_eq!(
+            super::union_rect(&[(100, 200, 1600, 900)]).unwrap(),
+            (100, 200, 1600, 900)
+        );
+        assert!(super::union_rect(&[]).is_none());
+    }
+
     /// 结果面板按这套字段名取值，序列化键改了就前端就断了，在这里钉住
     #[test]
     fn ocr_result_serializes_to_the_keys_the_panel_reads() {

@@ -136,6 +136,12 @@ export default function PopupPage() {
 
   // 输入框转译写回失败：主进程把译文降级为复制，并把结果投递到这里告知用户
   useEffect(() => {
+    // 取词失败：主进程把原因投过来，别让用户对着一个空窗口猜
+    const unNotice = listen<{ text: string }>("popup-notice", (e) => {
+      setSource("");
+      setCards([]);
+      setNotice(e.payload.text || "没取到选中文字");
+    });
     const un = listen<{ original: string; translated: string; reason: string }>(
       "popup-writeback-fallback",
       (e) => {
@@ -153,6 +159,7 @@ export default function PopupPage() {
       },
     );
     return () => {
+      void unNotice.then((f) => f());
       void un.then((f) => f());
     };
   }, []);

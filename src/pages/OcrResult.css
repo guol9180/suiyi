@@ -236,3 +236,9 @@ html, body, #root { height: 100%; }
   color: var(--c-caption);
   background: var(--c-surface-2);
 }
+.ocr-fallback {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 12px;
+}

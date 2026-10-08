@@ -151,6 +151,18 @@
 .keyrow { display: flex; gap: 8px; align-items: center; }
 .keyrow .inp { flex: 1; }
 
+/* API Key 标签行：状态 chip 与「无需密钥」开关都挂在同一行，别各占一行 */
+.key-label { display: flex; align-items: center; gap: 8px; }
+.key-nokey {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--fs-cap);
+  color: var(--c-text-3);
+  cursor: default;
+}
+.key-nokey .tgl { transform: scale(0.85); }
+
 /*
  * 表单行。设计稿 v0.4 有这三条（.f / .f>label / .row2），移植到应用时漏了，
  * 结果「名称 / 协议」「模型 / 结果类型」全都竖着堆，标签还跟着正文的 13px 走。

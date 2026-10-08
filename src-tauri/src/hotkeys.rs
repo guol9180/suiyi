@@ -10,7 +10,7 @@
 use serde::Serialize;
 use std::collections::BTreeMap;
 use std::sync::Mutex;
-use tauri::{AppHandle, Manager};
+use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut};
 
 /// 三个动作与它们的出厂热键
@@ -122,7 +122,19 @@ fn explain(raw: &str) -> String {
 }
 
 /// 先卸掉旧的再逐个注册。改键后调用它，避免旧键留下残影。
+///
+/// 整个「先卸后注册」必须串行：启动时注册、后台补注册、设置页点「重试」三处会并发进来，
+/// 交错执行时 A 线程刚卸掉、B 线程先注册成功，A 再注册就会报「已被占用」——
+/// 那是我们自己抢自己，用户看到的是热键莫名其妙失效。
 pub fn apply(app: &AppHandle, pairs: &[(String, String)]) -> Vec<HotkeyStatus> {
+    let _guard = REGISTER_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    apply_locked(app, pairs)
+}
+
+/// 注册串行锁：同一个进程内所有注册入口共用
+static REGISTER_LOCK: Mutex<()> = Mutex::new(());
+
+fn apply_locked(app: &AppHandle, pairs: &[(String, String)]) -> Vec<HotkeyStatus> {
     let gs = app.global_shortcut();
     if let Ok(active) = app.state::<HotkeyState>().active.lock() {
         for (_, sc) in active.iter() {
@@ -135,41 +147,70 @@ pub fn apply(app: &AppHandle, pairs: &[(String, String)]) -> Vec<HotkeyStatus> {
 
     pairs
         .iter()
+        .map(|(id, accel)| register_one(app, id, accel))
+        .collect()
+}
+
+/// 注册单个热键。失败不抛错，把原因写进状态交给界面显示。
+fn register_one(app: &AppHandle, id: &str, accel: &str) -> HotkeyStatus {
+    let label = ENTRIES
+        .iter()
+        .find(|(eid, _, _)| *eid == id)
+        .map(|(_, l, _)| *l)
+        .unwrap_or(id);
+    let custom = accel != default_of(id);
+    let shortcut: Shortcut = match accel.parse() {
+        Ok(s) => s,
+        Err(e) => {
+            return HotkeyStatus::new(
+                id,
+                label,
+                accel,
+                false,
+                Some(format!("无法解析 {accel}：{e}")),
+                custom,
+            )
+        }
+    };
+    match app.global_shortcut().register(shortcut) {
+        Ok(_) => HotkeyStatus::new(id, label, accel, true, None, custom),
+        Err(e) => {
+            crate::selection::log_line(&format!("hotkey: {accel} 注册失败: {e}"));
+            HotkeyStatus::new(id, label, accel, false, Some(explain(&e.to_string())), custom)
+        }
+    }
+}
+
+/// 只补注册还没成功的那几个，已经可用的键一个都不动 ——
+/// 若沿用 apply 的「全卸再全注册」，冲突持续存在时每一轮都会把用户能用的键也卸掉重来。
+pub fn retry_pending(app: &AppHandle, pairs: &[(String, String)]) -> Vec<HotkeyStatus> {
+    let _guard = REGISTER_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let current = app.state::<HotkeyState>().snapshot();
+    pairs
+        .iter()
         .map(|(id, accel)| {
-            let label = ENTRIES
+            let kept = current
                 .iter()
-                .find(|(eid, _, _)| eid == id)
-                .map(|(_, l, _)| *l)
-                .unwrap_or(id.as_str());
-            let custom = accel != default_of(id);
-            let shortcut: Shortcut = match accel.parse() {
-                Ok(s) => s,
-                Err(e) => {
-                    return HotkeyStatus::new(
-                        id,
-                        label,
-                        accel,
-                        false,
-                        Some(format!("无法解析 {accel}：{e}")),
-                        custom,
-                    )
-                }
-            };
-            match gs.register(shortcut) {
-                Ok(_) => HotkeyStatus::new(id, label, accel, true, None, custom),
-                Err(e) => {
-                    crate::selection::log_line(&format!("hotkey: {accel} 注册失败: {e}"));
-                    HotkeyStatus::new(id, label, accel, false, Some(explain(&e.to_string())), custom)
-                }
-            }
+                .find(|s| &s.id == id && s.registered && &s.accelerator == accel)
+                .cloned();
+            kept.unwrap_or_else(|| register_one(app, id, accel))
         })
         .collect()
 }
 
-/// 补注册：只重试还没成功的那些，直到全部成功或试满 `rounds` 轮。
-/// 启动瞬间旧实例可能还没释放热键，所以需要重试。
-pub fn retry_until_ready(app: &AppHandle, pairs: &[(String, String)], rounds: u32, interval: std::time::Duration) {
-    for _ in 0..rounds {
+/// 保存状态并广播给界面（主窗口据此显示冲突横幅）。
+pub fn publish(app: &AppHandle, list: Vec<HotkeyStatus>) {
+    app.state::<HotkeyState>().store(list.clone());
+    let _ = app.emit("hotkey-status", &list);
+}
+
+/// 补注册：旧实例退出、别的程序让出热键都需要时间，所以退避重试到全部成功为止。
+/// 前 2 分钟每 5 秒一轮，之后每 30 秒一轮；全部注册成功就返回。
+/// 这个线程跟着进程活到底，冲突消失（比如用户关掉 PixPin）时会自动接管默认键。
+pub fn retry_until_ready(app: &AppHandle, pairs: &[(String, String)]) {
+    const FAST_ROUNDS: u32 = 24; // 24 × 5s = 2 分钟
+    let mut round = 0u32;
+    loop {
         let pending = app
             .state::<HotkeyState>()
             .snapshot()
@@ -179,11 +220,19 @@ pub fn retry_until_ready(app: &AppHandle, pairs: &[(String, String)], rounds: u3
         if pending == 0 {
             return;
         }
-        std::thread::sleep(interval);
-        let list = apply(app, pairs);
+        std::thread::sleep(if round < FAST_ROUNDS {
+            std::time::Duration::from_secs(5)
+        } else {
+            std::time::Duration::from_secs(30)
+        });
+        round += 1;
+        let list = retry_pending(app, pairs);
         let still = list.iter().filter(|s| !s.registered).count();
-        app.state::<HotkeyState>().store(list);
-        crate::selection::log_line(&format!("hotkey: 补注册一轮，仍未注册 {still} 个"));
+        publish(app, list);
+        crate::selection::log_line(&format!("hotkey: 补注册第 {round} 轮，仍未注册 {still} 个"));
+        if still == 0 {
+            return;
+        }
     }
 }
 

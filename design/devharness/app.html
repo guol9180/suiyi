@@ -21,6 +21,8 @@
        *   ?demo=keyerror            选中 DeepSeek 并测试连接（配 ?keyfail=1 看 401 人话提示）
        *   ?keyfail=1                让测试连接返回 DeepSeek 那串 401
        *   ?conflict=1               让「截图识别」显示为被占用，用来看冲突提示
+       *   ?hotkeyconflict=1         划词/输入框两条热键显示为被占用，看主窗口的冲突横幅
+       *   ?noresult=1（配 win=ocr） 结果面板拿不到结果，看「没拿到识别结果」兜底态
        */
       (function () {
         var q = new URLSearchParams(location.search);
@@ -28,6 +30,8 @@
         var isOverlay = q.get("win") === "overlay";
         var isOcr = q.get("win") === "ocr";
         var conflict = q.get("conflict") === "1";
+        // ?hotkeyconflict=1 让划词/输入框两条热键显示为被占用，用来看主窗口的冲突横幅
+        var hotkeyConflict = q.get("hotkeyconflict") === "1";
         var failOne = q.get("fail") === "1";
         // ?ankioff=1 让 Anki 探测失败，用来看「待同步 / 自动排队」那套状态
         var ankiOk = q.get("ankioff") !== "1";
@@ -115,10 +119,13 @@
           { id: "copy-markdown", name: "复制为 Markdown", version: "0.1.0", description: "把原文与译文拼成 Markdown 引用块放进剪贴板。", author: "随译", kind: "action", permissions: ["clipboard:write"], dir: "C:\\Users\\PC\\AppData\\Roaming\\com.suiyi.dev\\plugins\\copy-markdown", main: "main.js", enabled: false, ok: true, error: null },
         ];
         var HOTKEYS = [
-          { id: "selection", label: "划词翻译", accelerator: "alt+d", registered: true, error: null, custom: false },
+          // ?hotkeyconflict=1：划词与输入框两条被别的程序占着，用来看主窗口的冲突横幅
+          { id: "selection", label: "划词翻译", accelerator: "alt+d",
+            registered: !hotkeyConflict, error: hotkeyConflict ? "该组合已被其他程序占用" : null, custom: false },
           { id: "screenshot", label: "截图识别", accelerator: "alt+s",
             registered: !conflict, error: conflict ? "该组合已被其他程序占用" : null, custom: false },
-          { id: "input", label: "输入框转译", accelerator: "alt+t", registered: true, error: null, custom: false },
+          { id: "input", label: "输入框转译", accelerator: "alt+t",
+            registered: !hotkeyConflict, error: hotkeyConflict ? "该组合已被其他程序占用" : null, custom: false },
         ];
         function setHotkeyStub(args) {
           var hit = HOTKEYS.filter(function (h) { return h.id === args.id; })[0];
@@ -214,7 +221,8 @@
           finish_region: function () { return null; },
           cancel_screenshot: function () { return null; },
           start_screenshot: function () { return null; },
-          ocr_last: function () { return OCR_RESULT; },
+          // ?noresult=1：结果面板拿不到结果，用来看「没拿到识别结果」兜底态
+          ocr_last: function () { return q.get("noresult") === "1" ? null : OCR_RESULT; },
           ocr_close: function () { return null; },
           save_text_file: function (args) {
             return "C:\\Users\\PC\\Downloads\\" + String(args.name || "suiyi.txt");
