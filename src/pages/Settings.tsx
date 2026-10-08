@@ -510,15 +510,22 @@ export default function SettingsPage() {
     }
     try {
       const list = await saveService(draft);
+      // 新建时 id 是后端在保存那一刻才分配的，不能再用 draft.id（还是空串）。
+      // 之前这里直接拿 draft.id 去写 Key，新建服务一填 Key 就会报「服务 ID 不能为空」，
+      // 结果是服务存下来了、Key 没存——现在顺手修掉。
+      const id = draft.id || list[list.length - 1]?.id || "";
       if (apiKeyInput.trim()) {
-        await setApiKey(draft.id, apiKeyInput.trim());
+        if (!id) {
+          setError("服务已保存，但没拿到它的 ID，请重试一次");
+          return null;
+        }
+        await setApiKey(id, apiKeyInput.trim());
         setApiKeyInput("");
         setKeyNote("");
       }
       setFile((f) => (f ? { ...f, services: list } : f));
-      const id = draft.id || list[list.length - 1]?.id || null;
-      setSelectedId(id);
-      return id;
+      setSelectedId(id || null);
+      return id || null;
     } catch (e) {
       setError(String(e));
       return null;
