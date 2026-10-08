@@ -13,9 +13,14 @@
        *
        * 参数：
        *   ?win=main|popup|overlay   渲染主窗口（默认）、划词弹窗或截图框选覆盖层
+       *   ?win=ocr                  渲染截图识别的结果面板
        *   #services #history #plugins #hotkey #general #about   直接跳到某页
-       *   ?demo=translate   主窗口填入原文并触发一次翻译
-       *   ?conflict=1       让「截图识别」显示为被占用，用来看冲突提示
+       *   ?demo=translate           主窗口填入原文并触发一次翻译
+       *   ?demo=failservices        先跑一轮失败翻译再切设置页，看服务行的「上次失败」
+       *   ?demo=providers           打开「添加服务」的提供商卡片
+       *   ?demo=keyerror            选中 DeepSeek 并测试连接（配 ?keyfail=1 看 401 人话提示）
+       *   ?keyfail=1                让测试连接返回 DeepSeek 那串 401
+       *   ?conflict=1               让「截图识别」显示为被占用，用来看冲突提示
        */
       (function () {
         var q = new URLSearchParams(location.search);
