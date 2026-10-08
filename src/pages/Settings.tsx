@@ -166,7 +166,11 @@ export default function SettingsPage() {
   const [pluginsPath, setPluginsPath] = useState("");
   const [page, setPage] = useState<Page>("services");
   const [testing, setTesting] = useState(false);
-  const [testResult, setTestResult] = useState<ConnectionTest | null>(null);
+  /**
+   * 测试结果记着它属于哪个服务。换服务时清掉，但「保存并测试」那条链路里
+   * selectedId 会因为新建而改变，光看选中变化会把刚测出来的结果一并冲掉。
+   */
+  const [testResult, setTestResult] = useState<(ConnectionTest & { serviceId: string }) | null>(null);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   /** 三个全局热键的注册状态，切到热键页时刷新 */
   const [hotkeys, setHotkeys] = useState<HotkeyStatus[]>([]);
@@ -471,6 +475,7 @@ export default function SettingsPage() {
   useEffect(() => {
     if (!file || !selectedId) {
       setDraft(null);
+      setTestResult(null);
       return;
     }
     const s = file.services.find((x) => x.id === selectedId);
@@ -480,7 +485,8 @@ export default function SettingsPage() {
     }
     setDraft({ ...s });
     setApiKeyInput("");
-    setTestResult(null);
+    // 只丢掉「别的服务」留下的结果
+    setTestResult((prev) => (prev && prev.serviceId === s.id ? prev : null));
     void getApiKey(s.id, true)
       .then((v) => setHasKey(v !== null))
       .catch(() => setHasKey(false));
@@ -582,9 +588,9 @@ export default function SettingsPage() {
     setTesting(true);
     setTestResult(null);
     try {
-      setTestResult(await testConnection(id));
+      setTestResult({ ...(await testConnection(id)), serviceId: id });
     } catch (e) {
-      setTestResult({ ok: false, elapsedMs: 0, models: [], error: String(e) });
+      setTestResult({ ok: false, elapsedMs: 0, models: [], error: String(e), serviceId: id });
     } finally {
       setTesting(false);
     }
