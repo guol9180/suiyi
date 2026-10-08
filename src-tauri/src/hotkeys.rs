@@ -172,7 +172,12 @@ fn register_one(app: &AppHandle, id: &str, accel: &str) -> HotkeyStatus {
             )
         }
     };
-    match app.global_shortcut().register(shortcut) {
+    let gs = app.global_shortcut();
+    // 先卸一次再注册。如果我们自己已经占着这个组合（状态曾经被写歪、
+    // 或上一轮注册成功但没记上），直接 register 会返回「已被占用」，
+    // 于是永远补不回来、界面一直显示冲突。卸别人的会失败，不影响判断。
+    let _ = gs.unregister(shortcut.clone());
+    match gs.register(shortcut) {
         Ok(_) => HotkeyStatus::new(id, label, accel, true, None, custom),
         Err(e) => {
             crate::selection::log_line(&format!("hotkey: {accel} 注册失败: {e}"));
@@ -186,16 +191,49 @@ fn register_one(app: &AppHandle, id: &str, accel: &str) -> HotkeyStatus {
 pub fn retry_pending(app: &AppHandle, pairs: &[(String, String)]) -> Vec<HotkeyStatus> {
     let _guard = REGISTER_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let current = app.state::<HotkeyState>().snapshot();
+    let missing = pending_pairs(&current, pairs);
     pairs
         .iter()
         .map(|(id, accel)| {
-            let kept = current
-                .iter()
-                .find(|s| &s.id == id && s.registered && &s.accelerator == accel)
-                .cloned();
-            kept.unwrap_or_else(|| register_one(app, id, accel))
+            if missing.iter().any(|(mid, mac)| mid == id && mac == accel) {
+                register_one(app, id, accel)
+            } else {
+                current
+                    .iter()
+                    .find(|s| &s.id == id && s.registered && &s.accelerator == accel)
+                    .cloned()
+                    .unwrap_or_else(|| register_one(app, id, accel))
+            }
         })
         .collect()
+}
+
+/// 目标组合里还需要注册的那部分（纯函数，便于单测）：
+/// - 已经注册且组合一致的不再动；
+/// - 配置里已经不存在的旧组合根本不会出现在 target 里，也就绝不会被重新注册。
+fn pending_pairs(current: &[HotkeyStatus], target: &[(String, String)]) -> Vec<(String, String)> {
+    target
+        .iter()
+        .filter(|(id, accel)| {
+            !current
+                .iter()
+                .any(|s| &s.id == id && s.registered && &s.accelerator == accel)
+        })
+        .cloned()
+        .collect()
+}
+
+/// 当前该注册的组合：从 services.json 现读。
+///
+/// 必须现读，不能沿用启动时的快照。后台补注册线程若拿着旧组合重试，
+/// 用户刚改掉的键会被重新装回来、状态还会把新结果覆盖成旧结果 ——
+/// 界面于是永久显示「被其他程序占用」，看起来像自己占用了自己。
+pub fn current_pairs(app: &AppHandle) -> Vec<(String, String)> {
+    let config = crate::commands::config_dir(app)
+        .and_then(|dir| crate::config::load_services(&dir))
+        .map(|f| f.hotkeys)
+        .unwrap_or_default();
+    effective(&config)
 }
 
 /// 保存状态并广播给界面（主窗口据此显示冲突横幅）。
@@ -207,17 +245,12 @@ pub fn publish(app: &AppHandle, list: Vec<HotkeyStatus>) {
 /// 补注册：旧实例退出、别的程序让出热键都需要时间，所以退避重试到全部成功为止。
 /// 前 2 分钟每 5 秒一轮，之后每 30 秒一轮；全部注册成功就返回。
 /// 这个线程跟着进程活到底，冲突消失（比如用户关掉 PixPin）时会自动接管默认键。
-pub fn retry_until_ready(app: &AppHandle, pairs: &[(String, String)]) {
+pub fn retry_until_ready(app: &AppHandle) {
     const FAST_ROUNDS: u32 = 24; // 24 × 5s = 2 分钟
     let mut round = 0u32;
     loop {
-        let pending = app
-            .state::<HotkeyState>()
-            .snapshot()
-            .into_iter()
-            .filter(|s| !s.registered)
-            .count();
-        if pending == 0 {
+        let pairs = current_pairs(app);
+        if pending_pairs(&app.state::<HotkeyState>().snapshot(), &pairs).is_empty() {
             return;
         }
         std::thread::sleep(if round < FAST_ROUNDS {
@@ -226,8 +259,10 @@ pub fn retry_until_ready(app: &AppHandle, pairs: &[(String, String)]) {
             std::time::Duration::from_secs(30)
         });
         round += 1;
-        let list = retry_pending(app, pairs);
-        let still = list.iter().filter(|s| !s.registered).count();
+        // 睡醒后再读一次配置：等待期间用户改了键也能立刻跟上
+        let pairs = current_pairs(app);
+        let list = retry_pending(app, &pairs);
+        let still = pending_pairs(&list, &pairs).len();
         publish(app, list);
         crate::selection::log_line(&format!("hotkey: 补注册第 {round} 轮，仍未注册 {still} 个"));
         if still == 0 {
@@ -264,5 +299,57 @@ mod tests {
     fn 默认值查表能兜住未知动作() {
         assert_eq!(default_of("input"), "alt+t");
         assert_eq!(default_of("nope"), "alt+d");
+    }
+
+    /// 已经注册且组合一致的不再重复注册 —— 重复注册会返回「已被占用」，
+    /// 那是自己抢自己，界面会误报冲突。
+    #[test]
+    fn pending_pairs_keeps_registered_ones_untouched() {
+        let current = vec![
+            HotkeyStatus::new("selection", "划词翻译", "alt+d", true, None, false),
+            HotkeyStatus::new("screenshot", "截图识别", "alt+s", true, None, false),
+            HotkeyStatus::new("input", "输入框转译", "alt+t", true, None, false),
+        ];
+        let target = effective(&BTreeMap::new());
+        assert!(pending_pairs(&current, &target).is_empty());
+    }
+
+    /// 用户改过键之后，只补真正缺的那一条
+    #[test]
+    fn pending_pairs_only_returns_what_is_missing() {
+        let current = vec![
+            HotkeyStatus::new("selection", "划词翻译", "ctrl+alt+d", true, None, true),
+            HotkeyStatus::new("screenshot", "截图识别", "alt+s", true, None, false),
+            HotkeyStatus::new(
+                "input",
+                "输入框转译",
+                "alt+t",
+                false,
+                Some("该组合已被其他程序占用".into()),
+                false,
+            ),
+        ];
+        let target = vec![
+            ("selection".to_string(), "ctrl+alt+d".to_string()),
+            ("screenshot".to_string(), "alt+s".to_string()),
+            ("input".to_string(), "alt+t".to_string()),
+        ];
+        let need = pending_pairs(&current, &target);
+        assert_eq!(need.len(), 1, "应该只剩输入框那条要补");
+        assert_eq!(need[0].0, "input");
+    }
+
+    /// 只能注册 target 里的组合：旧快照里的旧键绝不能被"顺手"装回来
+    #[test]
+    fn pending_pairs_never_registers_keys_outside_target() {
+        let current = vec![HotkeyStatus::new("selection", "划词翻译", "ctrl+alt+d", true, None, true)];
+        // 用户已经把划词改成 ctrl+alt+d，target 里就没有 alt+d 了
+        let target = vec![("selection".to_string(), "ctrl+alt+d".to_string())];
+        let need = pending_pairs(&current, &target);
+        assert!(need.is_empty());
+        assert!(
+            need.iter().all(|(_, accel)| accel == "ctrl+alt+d"),
+            "任何情况下都不该冒出 target 之外的组合"
+        );
     }
 }

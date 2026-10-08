@@ -91,6 +91,38 @@ export function testConnection(serviceId: string): Promise<ConnectionTest> {
   return invoke("test_connection", { serviceId });
 }
 
+/**
+ * 只取模型列表：设置页选中服务后就自动拉一次，用户不用手填模型名。
+ * 失败时抛出的原因可直接展示（401/404 这类由前端 errorText 翻成人话）。
+ */
+export function listModels(serviceId: string): Promise<string[]> {
+  return invoke("list_models", { serviceId });
+}
+
+/** 关于页要展示的三处路径 */
+export interface AppPaths {
+  configDir: string;
+  logFile: string;
+  pluginsDir: string;
+}
+
+export function appPaths(): Promise<AppPaths> {
+  return invoke("app_paths");
+}
+
+/** 读日志尾部，供「复制诊断信息」用；读不到返回空串 */
+export function tailLog(lines = 40): Promise<string> {
+  return invoke("tail_log", { lines });
+}
+
+/**
+ * 真正退出应用。点窗口的 × 只是收起主窗口（全局热键要继续可用），
+ * 所以退出必须有一个显式入口。
+ */
+export function quitApp(): Promise<void> {
+  return invoke("quit_app");
+}
+
 /** 把译文替换回取词时所在的那个窗口 */
 export function replaceSelection(text: string): Promise<void> {
   return invoke("replace_selection", { text });

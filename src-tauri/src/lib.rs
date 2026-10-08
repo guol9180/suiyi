@@ -41,9 +41,30 @@ pub fn run() {
     let builder = tauri::Builder::default()
         // 单实例守护必须是第一个注册的插件：重复启动时聚焦已有窗口
         .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
-            if let Some(win) = app.get_webview_window("main") {
-                let _ = win.show();
-                let _ = win.set_focus();
+            // 正常情况下主窗口只是被收起来了（见 setup 里的 CloseRequested），
+            // 直接 show 回来即可；万一它被销毁过（异常路径），就按 tauri.conf
+            // 的配置重建一个 —— 保证「再点一次图标」永远能把界面叫回来。
+            match app.get_webview_window("main") {
+                Some(win) => {
+                    let _ = win.show();
+                    let _ = win.unminimize();
+                    let _ = win.set_focus();
+                }
+                None => {
+                    let cfg = app.config().app.windows.first().cloned();
+                    match cfg.map(|c| tauri::WebviewWindowBuilder::from_config(app, &c)) {
+                        Some(Ok(builder)) => match builder.build() {
+                            Ok(win) => {
+                                let _ = win.show();
+                                let _ = win.set_focus();
+                            }
+                            Err(e) => {
+                                selection::log_line(&format!("单实例: 重建主窗口失败 {e}"))
+                            }
+                        },
+                        _ => selection::log_line("单实例: 拿不到主窗口配置，无法重建"),
+                    }
+                }
             }
         }))
         .plugin(tauri_plugin_opener::init())
@@ -57,6 +78,23 @@ pub fn run() {
     builder
         .setup(move |app| {
             let handle = app.handle().clone();
+
+            // 点 × 只把主窗口收起来，不结束进程：全局热键是这个工具的核心，
+            // 关掉窗口就退出会让 Alt+D / Alt+S / Alt+T 一起失效。
+            // 于是必须保证「再点一次图标」能把窗口叫回来 —— 靠下面这段 hide，
+            // 加上单实例回调里的 show（窗口被销毁时还会重建）。
+            // 真正退出放在「关于」页的「退出随译」。
+            if let Some(main) = app.get_webview_window("main") {
+                let handle_for_close = app.handle().clone();
+                main.on_window_event(move |event| {
+                    if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                        api.prevent_close();
+                        if let Some(win) = handle_for_close.get_webview_window("main") {
+                            let _ = win.hide();
+                        }
+                    }
+                });
+            }
 
             // 预创建划词弹窗（隐藏）：首次 Alt+D 免去 webview 冷启动，秒出
             WebviewWindowBuilder::new(&handle, "popup", WebviewUrl::App("popup.html".into()))
@@ -94,9 +132,9 @@ pub fn run() {
             #[cfg(desktop)]
             {
                 let handle = handle.clone();
-                let pairs = pairs.clone();
                 std::thread::spawn(move || {
-                    hotkeys::retry_until_ready(&handle, &pairs);
+                    // 线程自己每轮从配置里重读当前生效的组合，不再吃启动时的快照
+                    hotkeys::retry_until_ready(&handle);
                 });
             }
 
@@ -113,6 +151,10 @@ pub fn run() {
             commands::read_clipboard_text,
             commands::get_settings,
             commands::save_settings,
+            commands::list_models,
+            commands::app_paths,
+            commands::tail_log,
+            commands::quit_app,
             commands::hotkey_status,
             commands::retry_hotkeys,
             commands::set_hotkey,

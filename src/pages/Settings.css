@@ -151,12 +151,17 @@
 .keyrow { display: flex; gap: 8px; align-items: center; }
 .keyrow .inp { flex: 1; }
 
-/* API Key 标签行：状态 chip 与「无需密钥」开关都挂在同一行，别各占一行 */
-.key-label { display: flex; align-items: center; gap: 8px; }
+/*
+ * API Key 标签行：状态 chip 与「无需密钥」开关都挂在同一行，别各占一行。
+ * 选择器必须带上 .f > 前缀 —— 上面那条 `.f > label { display: block }` 的
+ * 优先级是 (0,1,1)，只写 .key-label (0,1,0) 会被它压掉、flex 根本不生效。
+ */
+.f > label.key-label { display: flex; align-items: center; gap: 8px; }
 .key-nokey {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  margin-left: auto;
   font-size: var(--fs-cap);
   color: var(--c-text-3);
   cursor: default;

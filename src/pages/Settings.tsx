@@ -11,6 +11,7 @@ import {
   getApiKey,
   hotkeyStatus,
   listHistory,
+  listModels,
   listPlugins,
   listServices,
   listSpeechVoices,
@@ -37,7 +38,9 @@ import { wordbookAdd, wordbookList, wordbookRemove, wordbookSync } from "../api"
 import { invoke } from "@tauri-apps/api/core";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { Icon } from "../components/Icon";
+import { ModelSelect } from "../components/ModelSelect";
 import { SpeechBar } from "../components/SpeechBar";
+import AboutPage from "./About";
 import { cleanKey, presetOf, PROVIDERS, type ProviderPreset } from "../providers";
 import { describeError } from "../errorText";
 import { suggestionFor } from "../hotkeySuggest";
@@ -65,7 +68,15 @@ import {
 
 const SIDEBAR_MAIN = ["通用", "热键", "服务配置", "历史记录", "生词本", "语音合成", "插件"];
 
-type Page = "general" | "hotkeys" | "services" | "history" | "wordbook" | "speech" | "plugins";
+type Page =
+  | "general"
+  | "hotkeys"
+  | "services"
+  | "history"
+  | "wordbook"
+  | "speech"
+  | "plugins"
+  | "about";
 const SIDEBAR_PAGES: Record<string, Page> = {
   通用: "general",
   热键: "hotkeys",
@@ -190,12 +201,14 @@ export default function SettingsPage() {
   const [voices, setVoices] = useState<SpeechVoice[]>([]);
   const [preview, setPreview] = useState(DEFAULT_PREVIEW);
   const [pickingVoice, setPickingVoice] = useState(false);
-  /** 「添加服务」的第一步：先挑提供商，再填表单 */
-  const [picking, setPicking] = useState(false);
   /** 正在从剪贴板读 Key */
   const [pasting, setPasting] = useState(false);
   /** 粘贴回显：只出现尾号与长度，不出现全量 Key */
   const [keyNote, setKeyNote] = useState("");
+  /** 每个服务拉到的模型候选（内存缓存，来回切换不重复请求） */
+  const [modelCache, setModelCache] = useState<Record<string, string[]>>({});
+  const [modelStatus, setModelStatus] = useState<"idle" | "loading" | "error">("idle");
+  const [modelError, setModelError] = useState("");
 
   /** 服务与时间两个维度在本地过滤，不用再跑一次后端查询 */
   const visibleHistory = history.filter((h) => {
@@ -212,10 +225,39 @@ export default function SettingsPage() {
   /** 当前草稿命中的提供商预设（按 Base URL 的主机名比对）；自定义地址为 undefined */
   const preset = draft ? presetOf(draft.baseUrl) : undefined;
   const consoleUrl = preset?.keyUrl ?? null;
-  /** 模型下拉的候选：预设推荐的 + 上次测试从 /models 拉回来的 */
-  const modelOptions = Array.from(
-    new Set([...(preset?.models ?? []), ...(testResult?.models ?? [])]),
-  );
+  /** 模型下拉的候选：服务端拉回来的 + 预设推荐 */
+  const remoteModels = draft?.id ? (modelCache[draft.id] ?? []) : [];
+  const canFetchModels =
+    !!draft?.id && !!draft.baseUrl.trim() && (hasKey || !draft.requiresKey);
+
+  /**
+   * 拉模型列表。失败只记在面板里，不弹 toast——用户没点任何按钮，
+   * 不该被一个后台请求的失败打扰。
+   */
+  const fetchModels = useCallback(async (id: string) => {
+    setModelStatus("loading");
+    setModelError("");
+    try {
+      const models = await listModels(id);
+      setModelCache((c) => ({ ...c, [id]: models }));
+      setModelStatus("idle");
+      // 只在模型为空时预填服务端第一条：不覆盖用户手填的值
+      setDraft((d) =>
+        d && d.id === id && !d.model.trim() && models[0] ? { ...d, model: models[0] } : d,
+      );
+    } catch (e) {
+      setModelStatus("error");
+      setModelError(String(e));
+    }
+  }, []);
+
+  // 选中某个已配好 Key 的服务时，后台自动拉一次模型；拉过的走缓存
+  useEffect(() => {
+    const id = draft?.id;
+    if (!id || !hasKey || modelCache[id]) return;
+    if (!draft?.baseUrl.trim()) return;
+    void fetchModels(id);
+  }, [draft?.id, draft?.baseUrl, hasKey, modelCache, fetchModels]);
 
   const refresh = useCallback(async () => {
     try {
@@ -557,7 +599,8 @@ export default function SettingsPage() {
     setKeyNote("");
     setHasKey(false);
     setTestResult(null);
-    setPicking(false);
+    setModelStatus("idle");
+    setModelError("");
   }
 
   /** 从剪贴板取一次文本当 Key。清洗后只回显尾号与长度，方便和控制台对照 */
@@ -811,7 +854,13 @@ export default function SettingsPage() {
           </>
         )}
         {SIDEBAR_TAIL.map((item) => (
-          <div key={item} className="side-item">{item}</div>
+          <div
+            key={item}
+            className={`side-item${page === "about" ? " on" : ""}`}
+            onClick={() => setPage("about")}
+          >
+            {item}
+          </div>
         ))}
         <div className="side-foot">
           随译 v{__APP_VERSION__}
@@ -1407,10 +1456,12 @@ export default function SettingsPage() {
 
             <div className="thint">
               翻译类插件通过校验并启用后，会自动出现在服务列表里参与多服务对比。
-              插件目前没有网络能力，只有申请了 clipboard 权限才能读写剪贴板。
+             插件目前没有网络能力，只有申请了 clipboard 权限才能读写剪贴板。
             </div>
           </div>
         )}
+
+        {page === "about" && <AboutPage />}
 
         {page === "services" && (
           <>
@@ -1423,13 +1474,15 @@ export default function SettingsPage() {
             <button
               className="btn primary mini"
               onClick={() => {
-                setDraft({ ...EMPTY_SERVICE });
+                // 未选中服务时右侧本来就是供应商选择页，所以「添加服务」= 清空选中
+                setDraft(null);
                 setSelectedId(null);
                 setApiKeyInput("");
                 setHasKey(false);
                 setKeyNote("");
                 setTestResult(null);
-                setPicking(true);
+                setModelStatus("idle");
+                setModelError("");
               }}
             >
               <Icon name="plus" size="sm" />添加服务
@@ -1444,9 +1497,10 @@ export default function SettingsPage() {
               onClick={() => {
                 setDraft({ ...s });
                 setSelectedId(s.id);
-                setPicking(false);
                 setKeyNote("");
                 setTestResult(null);
+                setModelStatus("idle");
+                setModelError("");
               }}
             >
               <span className="arrows">
@@ -1478,7 +1532,7 @@ export default function SettingsPage() {
             </div>
           ))}
           {services.length === 0 && (
-            <div className="empty-hint">还没有服务，点右上角的「添加服务」开始配置。</div>
+            <div className="empty-hint">还没有服务，右侧选一个供应商即可开始。</div>
           )}
 
           <div className="fallback">
@@ -1515,17 +1569,13 @@ export default function SettingsPage() {
 
         {/* 编辑表单 */}
         <div className="card form-col">
-          {/* 先判 picking：选中变化那个 effect 在「新建」时会把草稿清成 null，
-              如果按 draft 优先分支，添加服务就会被那一下清空而退回空态 */}
-          {picking ? (
+          {/* 没有选中服务时，右侧直接是供应商选择页 —— 不必先点「添加服务」 */}
+          {!draft ? (
             <>
               <div className="card-head">
                 <b>选择提供商</b>
                 <span className="m">选中即填好地址、协议与推荐模型</span>
                 <span style={{ flex: 1 }} />
-                <button className="btn mini" onClick={() => { setPicking(false); setDraft(null); }}>
-                  取消
-                </button>
               </div>
               <div className="pgrid">
                 {PROVIDERS.map((p) => (
@@ -1542,8 +1592,6 @@ export default function SettingsPage() {
                 预设只填地址、模型与密钥页链接。Key 依然只进 Windows 凭据管理器，不进配置文件。
               </div>
             </>
-          ) : !draft ? (
-            <div className="empty-hint">← 选择左侧服务进行编辑，或添加新服务</div>
           ) : (
             <>
               <div className="card-head">
@@ -1719,14 +1767,22 @@ export default function SettingsPage() {
 
               <div className="row2">
                 <div className="f">
-                  <label>模型（可手填）</label>
-                  <input className="inp mono" list={`model-opts-${draft.id || "new"}`} value={draft.model}
-                    onChange={(e) => setDraft({ ...draft, model: e.target.value })}
-                    placeholder={preset?.models[0] ?? "模型名"} />
-                  <datalist id={`model-opts-${draft.id || "new"}`}>
-                    {modelOptions.map((m) => <option key={m} value={m} />)}
-                  </datalist>
-                  {preset?.modelHint && <div className="fhint">{preset.modelHint}</div>}
+                  <label>模型</label>
+                  <ModelSelect
+                    value={draft.model}
+                    onChange={(v) => setDraft({ ...draft, model: v })}
+                    remote={remoteModels}
+                    preset={preset?.models ?? []}
+                    placeholder={preset?.models[0] ?? "模型名"}
+                    hint={preset?.modelHint}
+                    // 没保存过的新服务还没有 id，拉不了模型：状态一律按 idle 显示
+                    status={draft.id ? modelStatus : "idle"}
+                    error={modelError}
+                    canFetch={canFetchModels}
+                    onRefresh={() => {
+                      if (draft.id) void fetchModels(draft.id);
+                    }}
+                  />
                 </div>
                 <div className="f" style={{ flex: "0 0 44%" }}>
                   <label>结果类型</label>

@@ -18,6 +18,7 @@
        *   ?demo=translate           主窗口填入原文并触发一次翻译
        *   ?demo=failservices        先跑一轮失败翻译再切设置页，看服务行的「上次失败」
        *   ?demo=providers           打开「添加服务」的提供商卡片
+       *   ?demo=models              选中服务并展开模型下拉（配 ?modelfail=1 看失败态）
        *   ?demo=keyerror            选中 DeepSeek 并测试连接（配 ?keyfail=1 看 401 人话提示）
        *   ?keyfail=1                让测试连接返回 DeepSeek 那串 401
        *   ?conflict=1               让「截图识别」显示为被占用，用来看冲突提示
@@ -217,6 +218,28 @@
             }
             return { ok: true, elapsedMs: 412, models: ["glm-5.3-flash"], error: null };
           },
+          // 模型列表：?modelfail=1 让它在界面上走失败分支
+          list_models: function () {
+            if (q.get("modelfail") === "1") {
+              throw new Error(
+                "服务返回 401 Unauthorized: {\"error\":{\"message\":\"Authentication Fails, "
+                  + "Your api key: ****Xk7Q is invalid\"}}",
+              );
+            }
+            return ["deepseek-flash", "deepseek-v4-pro", "deepseek-coder"];
+          },
+          app_paths: function () {
+            return {
+              configDir: "C:\\Users\\PC\\AppData\\Roaming\\com.suiyi.dev",
+              logFile: "C:\\Users\\PC\\AppData\\Roaming\\com.suiyi.dev\\debug.log",
+              pluginsDir: "C:\\Users\\PC\\AppData\\Roaming\\com.suiyi.dev\\plugins",
+            };
+          },
+          tail_log: function () {
+            return "[1791449134053] hotkey: alt+d 注册失败: 该组合已被其他程序占用\n"
+              + "[1791449164058] hotkey: 补注册第 81 轮，仍未注册 3 个";
+          },
+          quit_app: function () { return null; },
           get_screenshot: function () { return { dataUrl: OVERLAY_SHOT }; },
           finish_region: function () { return null; },
           cancel_screenshot: function () { return null; },
@@ -438,8 +461,24 @@
               tab.click();
               waitFor(function () { return byText(".side-item", "服务配置"); }, function (item) {
                 item.click();
-                waitFor(function () { return byText(".card-head .btn", "添加服务"); }, function (add) {
-                  add.click();
+                // v0.7 起未选中服务时右侧直接就是供应商选择页，「添加服务」只是清空选中
+              });
+            });
+            return;
+          }
+
+          // 选中一个已配 Key 的服务再展开模型下拉：看自动拉取与候选列表（?demo=models）
+          if (q.get("demo") === "models") {
+            waitFor(function () { return document.querySelectorAll(".tabbar button")[1]; }, function (tab) {
+              tab.click();
+              waitFor(function () { return byText(".side-item", "服务配置"); }, function (item) {
+                item.click();
+                waitFor(function () { return byText(".svc", "DeepSeek"); }, function (row) {
+                  row.click();
+                  waitFor(function () { return document.querySelector(".ms-input input"); }, function (input) {
+                    input.focus();
+                    input.click();
+                  });
                 });
               });
             });

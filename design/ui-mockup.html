@@ -3,16 +3,19 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>随译 SuiYi · 全量 UI 设计稿 v0.6</title>
+<title>随译 SuiYi · 全量 UI 设计稿 v0.7</title>
 <style>
-/* 随译 SuiYi · v0.6 全量 UI 设计稿
+/* 随译 SuiYi · v0.7 全量 UI 设计稿
    单文件、无外部资源、无脚本，离线可开。
    v0.5 变更：配色改为 DeepSeek 官网那一套（品牌蓝 #3964FE + neutral-bluish 中性色阶），
    底色从纯色填充改为几团缓慢游动的色雾，卡片、按钮、标签、浮层一律毛玻璃，
    圆角放大为 6 / 10 / 12 / 16，并补上窗口尺寸适配规则。
    v0.6 变更：添加服务改成先挑常见提供商（预设只填地址、模型与密钥页链接），
    密钥补齐「打开控制台 / 从剪贴板粘贴 / 保存并测试」三步，本地服务允许不填密钥，
-   服务端报错换成人话并给动作按钮，原文折叠保留。 */
+   服务端报错换成人话并给动作按钮，原文折叠保留。
+   v0.7 变更：新增 §8 关于页（品牌、链接、隐私、数据与诊断、快捷键速查、第三方组件）；
+   服务配置页未选中服务时右侧直接是供应商选择；模型改成自定义下拉并自动拉取服务端列表；
+   「无需密钥」收进 API Key 标签行。 */
 
 :root{
   /* 配色取自 DeepSeek 官网：品牌蓝 deepseek-500，中性色走他们的 neutral-bluish 色阶 */
@@ -519,6 +522,7 @@ backdrop-filter:var(--glass-blur);-webkit-backdrop-filter:var(--glass-blur)}
   <a href="#s5">热键</a>
   <a href="#s6">历史与词典</a>
   <a href="#s7">朗读与生词本</a>
+  <a href="#s8">关于</a>
   <a href="#appA">状态矩阵</a>
   <a href="#appB">Token 与对比度</a>
   <a href="#notes">设计说明</a>
@@ -556,7 +560,7 @@ backdrop-filter:var(--glass-blur);-webkit-backdrop-filter:var(--glass-blur)}
       <path d="M823 494L845 494L845 620L823 620Z"/>
     </g>
   </svg>
-  <h1>随译 SuiYi</h1><span class="ver">UI 设计稿 v0.6</span>
+  <h1>随译 SuiYi</h1><span class="ver">UI 设计稿 v0.7</span>
 </div>
       <div class="sub">桌面 AI 翻译助手。划词翻译、截图识别、输入框转译、多 AI 服务配置。</div>
       <div class="stack">
@@ -938,7 +942,7 @@ backdrop-filter:var(--glass-blur);-webkit-backdrop-filter:var(--glass-blur)}
               <div class="side-item">语音合成</div>
               <div class="side-item">插件</div>
             <div class="side-item">关于</div>
-              <div class="side-foot">随译 v0.6.0<br>译文由你配置的服务提供</div>
+              <div class="side-foot">随译 v0.7.0<br>译文由你配置的服务提供</div>
           </div>
           <div class="main">
             <div class="card list-col">
@@ -1354,6 +1358,136 @@ backdrop-filter:var(--glass-blur);-webkit-backdrop-filter:var(--glass-blur)}
     </div>
   </section>
 
+  <!-- ==================== 8 关于 ==================== -->
+  <section class="sec" id="s8">
+    <div class="sec-head"><span class="idx">8</span><h2>设置 · 关于</h2>
+      <span class="chip mile">已实现</span></div>
+    <div class="block">
+      <div class="win">
+        <div class="titlebar"><span class="winname">随译 · 设置 — 关于</span></div>
+        <div class="set-body">
+          <div class="side">
+            <div class="side-item">通用</div>
+            <div class="side-item">热键</div>
+            <div class="side-item">服务配置</div>
+            <div class="side-item">历史记录</div>
+            <div class="side-item">生词本</div>
+            <div class="side-item">语音合成</div>
+            <div class="side-item">插件</div>
+            <div class="side-item on">关于</div>
+            <div class="side-foot">随译 v0.7.0<br>译文由你配置的服务提供</div>
+          </div>
+          <div class="main">
+            <div class="cols">
+              <div class="panel" style="display:flex;flex-direction:column;gap:12px">
+                <div class="card">
+                  <div style="display:flex;align-items:center;gap:14px">
+                    <svg class="logo" viewBox="0 0 1024 1024" style="width:56px;height:56px;flex:none">
+                      <defs>
+                        <linearGradient id="ab-bubble" gradientUnits="userSpaceOnUse" x1="111" y1="420" x2="968" y2="420">
+                          <stop offset="0" stop-color="#855CFF"/><stop offset=".5" stop-color="#4E74FE"/><stop offset="1" stop-color="#3BA6FF"/>
+                        </linearGradient>
+                        <mask id="ab-gap" maskUnits="userSpaceOnUse" x="0" y="0" width="1024" height="1024">
+                          <rect width="1024" height="1024" fill="#fff"/>
+                          <g fill="#000" stroke="#000" stroke-width="20" stroke-linejoin="round">
+                            <rect x="111" y="107" width="857" height="677" rx="106"/>
+                            <path d="M339.5 752L339.5 890Q339.5 935 383 900L533 782Z"/>
+                          </g>
+                        </mask>
+                      </defs>
+                      <rect x="57" y="179" width="857" height="677" rx="106" fill="#C9D6FF" mask="url(#ab-gap)"/>
+                      <g fill="url(#ab-bubble)">
+                        <rect x="111" y="107" width="857" height="677" rx="106"/>
+                        <path d="M339.5 752L339.5 890Q339.5 935 383 900L533 782Z"/>
+                      </g>
+                      <path transform="translate(254.1 88.1) scale(0.4475)" fill="#FFFFFF" d="M166.9 1264.8L138.2 1152.2L158.7 1113.2L334.8 967.8C341 984.2 348.5 1002.7 357.4 1023.1C366.3 1043.6 374.4 1059.3 382 1070.2C339.6 1105.1 305.3 1133.9 279 1156.8C252.8 1179.6 232.3 1197.7 217.6 1211C202.9 1224.4 191.8 1235.1 184.3 1243.3C176.8 1251.5 171 1258.7 166.9 1264.8ZM39.9 630.9L236.5 630.9L236.5 748.7L39.9 748.7ZM357.4 359.6L862.2 359.6L862.2 465.1L357.4 465.1ZM827.4 359.6L848.9 359.6L869.4 354.5L948.2 397.5C921.6 452.8 887.8 502.8 846.8 547.5C805.9 592.2 759.6 632.3 708.1 667.8C656.6 703.3 601.6 734 543.2 760C484.9 785.9 425.3 807.4 364.5 824.5C360.4 814.2 354.8 802.6 347.6 789.7C340.5 776.7 332.8 763.9 324.6 751.3C316.4 738.6 308.2 728.2 300 720C357.4 707.1 413.2 689.8 467.5 668.3C521.7 646.8 572.4 621.4 619.5 592C666.6 562.7 707.9 529.9 743.4 493.7C778.9 457.5 806.9 419 827.4 378ZM519.2 412.8C549.2 460.6 588.3 503.6 636.4 541.9C684.5 580.1 740 612.7 802.8 639.6C865.6 666.6 933.2 686.9 1005.6 700.6C997.4 708.8 988.5 719 978.9 731.3C969.4 743.6 960.3 756.2 951.8 769.2C943.3 782.2 935.9 793.8 929.8 804C854.7 785.6 785.4 760 721.9 727.2C658.4 694.4 601.6 654.7 551.4 607.9C501.2 561.1 458.8 508.1 423.9 448.7ZM411.6 842.9L911.4 842.9L911.4 949.4L411.6 949.4ZM354.3 1026.2L980 1026.2L980 1134.8L354.3 1134.8ZM594.9 762L715.8 762L715.8 1280.2L594.9 1280.2ZM166.9 1264.8C163.5 1255.9 158 1246 150.5 1235.1C143 1224.2 135 1213.3 126.5 1202.3C117.9 1191.4 110.6 1183.2 104.4 1177.8C115.4 1168.2 126.8 1153.7 138.8 1134.2C150.7 1114.8 156.7 1091.4 156.7 1064.1L156.7 630.9L275.5 630.9L275.5 1130.7C275.5 1130.7 271.9 1133.7 264.7 1139.9C257.5 1146 248.5 1154.4 237.6 1165C226.6 1175.5 215.9 1186.6 205.3 1198.2C194.7 1209.8 185.7 1221.6 178.2 1233.6C170.7 1245.5 166.9 1255.9 166.9 1264.8Z"/>
+                      <path fill="#FFFFFF" d="M315 196C316.9 246.4 327.6 257.1 378 259C327.6 260.9 316.9 271.6 315 322C313.1 271.6 302.4 260.9 252 259C302.4 257.1 313.1 246.4 315 196Z"/>
+                      <circle cx="776" cy="559" r="111" fill="#FFFFFF"/>
+                      <g fill="#2B52E0" fill-rule="evenodd">
+                        <path d="M695 620L741 494L769 494L815 620ZM755 515.9L772.6 564L737.4 564ZM730.9 582L779.1 582L793 620L717 620Z"/>
+                        <path d="M823 494L845 494L845 620L823 620Z"/>
+                      </g>
+                    </svg>
+                    <div>
+                      <div style="font-size:var(--fs-title);font-weight:600">随译 SuiYi</div>
+                      <div class="t-cap">v0.7.0</div>
+                      <div class="t-cap" style="margin-top:6px;max-width:46em">
+                        Windows 桌面翻译工具：划词、截图、输入框三个入口，译文来自你自己配置的服务。
+                      </div>
+                    </div>
+                    <span style="flex:1"></span>
+                    <div style="text-align:right">
+                      <button class="btn mini">退出随译</button>
+                      <div class="t-cap" style="margin-top:4px">关窗口只是收起，热键仍在后台工作</div>
+                    </div>
+                  </div>
+                  <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:14px">
+                    <button class="btn mini" style="justify-content:space-between">下载页<span class="t-cap">suiyi.imhgl.com</span></button>
+                    <button class="btn mini" style="justify-content:space-between">GitHub 源码<span class="t-cap">guol9180/suiyi</span></button>
+                    <button class="btn mini" style="justify-content:space-between">更新日志<span class="t-cap">全部版本与变更</span></button>
+                    <button class="btn mini" style="justify-content:space-between">UI 设计稿<span class="t-cap">design/ui-mockup.html</span></button>
+                  </div>
+                </div>
+                <div class="card">
+                  <div class="card-head"><span class="hname">隐私</span></div>
+                  <ul style="padding-left:18px">
+                    <li class="t-cap">API Key 只存进 Windows 凭据管理器（命名空间 suiyi），配置文件里没有任何密钥。</li>
+                    <li class="t-cap">截图识别在你这台机器上完成，截图不会上传；只有识别出来的文字会发给你配置的翻译服务。</li>
+                    <li class="t-cap">翻译请求直接发往你填的 Base URL，随译中间不经过任何服务器。</li>
+                  </ul>
+                </div>
+                <div class="card">
+                  <div class="card-head"><span class="hname">数据与诊断</span><span class="m">出问题时把这几行连同日志一起给我</span>
+                    <span style="flex:1"></span>
+                    <button class="btn mini"><svg class="ico sm"><use href="#i-copy"/></svg>复制诊断信息</button></div>
+                  <div style="display:flex;align-items:center;gap:10px;padding:7px 0">
+                    <span class="t-cap" style="width:4.5em">配置目录</span>
+                    <code class="t-cap" style="flex:1">C:\Users\PC\AppData\Roaming\com.suiyi.dev</code>
+                    <button class="btn mini">在文件夹中显示</button>
+                  </div>
+                  <div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-top:1px solid var(--c-border-soft)">
+                    <span class="t-cap" style="width:4.5em">日志文件</span>
+                    <code class="t-cap" style="flex:1">…\com.suiyi.dev\debug.log</code>
+                    <button class="btn mini">在文件夹中显示</button>
+                  </div>
+                  <div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-top:1px solid var(--c-border-soft)">
+                    <span class="t-cap" style="width:4.5em">插件目录</span>
+                    <code class="t-cap" style="flex:1">…\com.suiyi.dev\plugins</code>
+                    <button class="btn mini">在文件夹中显示</button>
+                  </div>
+                </div>
+                <div class="card">
+                  <div class="card-head"><span class="hname">快捷键</span><span class="m">当前生效的组合</span></div>
+                  <div style="display:flex;align-items:center;gap:10px;padding:6px 0">
+                    <span class="t-cap" style="width:6em">划词翻译</span>
+                    <span class="kbd">Alt</span><span class="kbd">D</span>
+                  </div>
+                  <div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-top:1px solid var(--c-border-soft)">
+                    <span class="t-cap" style="width:6em">截图识别</span>
+                    <span class="kbd">Alt</span><span class="kbd">S</span>
+                  </div>
+                  <div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-top:1px solid var(--c-border-soft)">
+                    <span class="t-cap" style="width:6em">输入框转译</span>
+                    <span class="kbd">Alt</span><span class="kbd">T</span>
+                    <span class="chip err mini">未注册</span>
+                  </div>
+                </div>
+                <div class="card">
+                  <div class="card-head"><span class="hname">第三方组件</span></div>
+                  <div class="t-cap">
+                    Tauri（MIT / Apache-2.0）、React（MIT）、Tokio / reqwest（MIT / Apache-2.0）、
+                    rusqlite（MIT）、rquickjs（MIT）、keyring（MIT / Apache-2.0）。
+                    产品名与商标归各自所有者所有。
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <!-- ==================== 附录 A 状态矩阵 ==================== -->
   <section class="sec" id="appA">
     <div class="sec-head"><span class="idx">A</span><h2>附录 · 状态矩阵</h2></div>
@@ -1552,6 +1686,8 @@ backdrop-filter:var(--glass-blur);-webkit-backdrop-filter:var(--glass-blur)}
         <li>添加服务先挑提供商：预设给的是地址、推荐模型与密钥页链接，逐条标注官方文档来源与核对日期；模型始终可手填，也能用「测试连接」从服务端 <code>/models</code> 拉回候选。百炼的地址含工作空间 ID、火山方舟要填接入点 ID，这两家只给占位与提示，不猜值。</li>
         <li>本地服务（Ollama 这类）显式标成「不需要密钥」，请求不带 <code>Authorization</code> 头，而不是发一个空的 Bearer。</li>
         <li>服务端报错换成人话：401 密钥无效、402 余额不足、403 无该模型权限、404 地址或模型名不对、429 太频繁；每条配动作按钮（打开控制台、重新粘贴、改用某模型），原始 JSON 折叠在「详情」里，能抓到 Key 尾号就一并显示。</li>
+        <li>关于页只放对用户有用的三件事：这是谁、数据存在哪、出问题怎么把线索带走。诊断区给路径与日志，快捷键速查显示当前生效组合（未注册的标出来）。页面不宣称本项目许可——仓库目前没有 LICENSE，许可写在仓库层而不是界面层。</li>
+        <li>模型选择是自定义下拉而不是原生 datalist：原生控件样式跟系统走、且不能分组；这里要能显示「服务端返回 / 预设推荐」两组、要能键盘操作、还要留「刷新模型」。选中已配 Key 的服务时后台自动拉一次，失败只在面板底部显示原因，不弹 toast 打扰。</li>
       </ul>
     </div>
   </section>

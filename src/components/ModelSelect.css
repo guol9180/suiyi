@@ -1,0 +1,88 @@
+/* 模型选择：输入框 + 浮层候选。浮层跟划词弹窗一样用毛玻璃，属于"浮在内容之上"的层。 */
+
+.ms { position: relative; }
+
+.ms-input { position: relative; display: flex; align-items: center; }
+.ms-input .inp { width: 100%; padding-right: 30px; }
+.ms-toggle {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--c-icon);
+  cursor: pointer;
+}
+.ms-toggle:hover { color: var(--c-text); background: var(--c-muted-bg); }
+.ms-toggle:focus-visible { outline: 2px solid var(--c-primary-strong); outline-offset: 1px; }
+
+.ms-pop {
+  position: absolute;
+  z-index: 20;
+  left: 0;
+  right: 0;
+  top: calc(100% + 4px);
+  max-height: 232px;
+  overflow: auto;
+  padding: 4px;
+  border: 1px solid var(--glass-edge);
+  border-radius: var(--radius-md);
+  background: var(--glass-card-strong);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  box-shadow: var(--shadow-float);
+}
+
+.ms-group {
+  padding: 6px 8px 2px;
+  font-size: var(--fs-cap);
+  color: var(--c-caption);
+}
+
+.ms-opt {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 8px;
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-sec);
+  color: var(--c-text-2);
+  cursor: pointer;
+}
+.ms-opt .mono { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ms-opt .ico { color: var(--c-primary-text); }
+.ms-opt.hot { background: var(--c-muted-bg); color: var(--c-text); }
+.ms-opt.on { color: var(--c-primary-text); }
+
+.ms-empty {
+  padding: 10px 9px;
+  font-size: var(--fs-cap);
+  line-height: 1.6;
+  color: var(--c-caption);
+}
+
+.ms-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+  padding: 6px 4px 2px;
+  border-top: 1px solid var(--c-border-soft);
+}
+.ms-err {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--fs-cap);
+  color: var(--c-danger-ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

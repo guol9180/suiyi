@@ -441,6 +441,46 @@ pub fn plugins_dir_path(app: tauri::AppHandle) -> Result<String, String> {
         .to_string())
 }
 
+/// 关于页要展示的三处路径。日志与配置文件同目录（selection::log_line 就写在那儿）。
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AppPaths {
+    pub config_dir: String,
+    pub log_file: String,
+    pub plugins_dir: String,
+}
+
+#[tauri::command]
+pub fn app_paths(app: tauri::AppHandle) -> Result<AppPaths, String> {
+    let dir = config_dir(&app)?;
+    Ok(AppPaths {
+        config_dir: dir.to_string_lossy().to_string(),
+        log_file: dir.join("debug.log").to_string_lossy().to_string(),
+        plugins_dir: plugin::plugins_dir(&dir).to_string_lossy().to_string(),
+    })
+}
+
+/// 读日志文件最后几行，供「复制诊断信息」用。读不到就给空串——这是诊断辅助，
+/// 不该因为日志不存在而报错打断用户。
+#[tauri::command]
+pub fn tail_log(app: tauri::AppHandle, lines: usize) -> String {
+    let Ok(dir) = config_dir(&app) else {
+        return String::new();
+    };
+    let Ok(text) = std::fs::read_to_string(dir.join("debug.log")) else {
+        return String::new();
+    };
+    let n = lines.clamp(1, 500);
+    let all: Vec<&str> = text.lines().collect();
+    all[all.len().saturating_sub(n)..].join("\n")
+}
+
+/// 真正退出随译。关窗口只是收起来（全局热键继续可用），退出走这里。
+#[tauri::command]
+pub fn quit_app(app: tauri::AppHandle) {
+    app.exit(0);
+}
+
 /// 运行动作插件：把原文与译文交给插件的 `run({ source, translated })`，
 /// 返回值作为提示文本展示给用户（返回 null 表示不需要提示）。
 #[tauri::command]
@@ -585,38 +625,104 @@ pub async fn test_connection(
         return Ok(fail(0, "请先设置 API Key".into()));
     }
 
-    let url = format!("{}/models", svc.base_url.trim_end_matches('/'));
-    let timeout = Duration::from_secs(file.timeout_secs.clamp(3, 120).min(15));
+    let probe = probe_models(&svc.base_url, &key, file.timeout_secs).await;
+    if let Some(err) = probe.error {
+        return Ok(fail(probe.elapsed_ms, err));
+    }
+    if let Some(status) = probe.status {
+        if !status.is_success() {
+            let short: String = probe.body.chars().take(200).collect();
+            return Ok(fail(probe.elapsed_ms, format!("服务返回 {status}: {short}")));
+        }
+    }
+    Ok(ConnectionTest {
+        ok: true,
+        elapsed_ms: probe.elapsed_ms,
+        models: parse_model_ids(&probe.body),
+        error: None,
+    })
+}
+
+/// 一次 `/models` 探测的原始结果。把「请求 + 读正文」抽出来，
+/// 是为了让 test_connection（要状态码与耗时）和 list_models（只要 id 列表）
+/// 走同一条实现，不再各写一遍请求。
+struct ModelsProbe {
+    elapsed_ms: u64,
+    /// 拿到响应时的状态码；连不上时为 None
+    status: Option<reqwest::StatusCode>,
+    body: String,
+    /// 连接层错误（超时 / 连接失败），交给上层决定怎么说
+    error: Option<String>,
+}
+
+async fn probe_models(base_url: &str, key: &str, timeout_secs: u64) -> ModelsProbe {
+    let url = format!("{}/models", base_url.trim_end_matches('/'));
+    let timeout = Duration::from_secs(timeout_secs.clamp(3, 120).min(15));
     let client = reqwest::Client::new();
     let started = std::time::Instant::now();
     let mut req = client.get(&url);
     if !key.trim().is_empty() {
         req = req.header("Authorization", format!("Bearer {}", key.trim()));
     }
-    let resp = tokio::time::timeout(timeout, req.send()).await;
-    let elapsed_ms = started.elapsed().as_millis() as u64;
-
-    match resp {
-        Err(_) => Ok(fail(
-            elapsed_ms,
-            format!("连接超时（{}s）", timeout.as_secs()),
-        )),
-        Ok(Err(e)) => Ok(fail(elapsed_ms, format!("连接失败: {e}"))),
+    match tokio::time::timeout(timeout, req.send()).await {
+        Err(_) => ModelsProbe {
+            elapsed_ms: started.elapsed().as_millis() as u64,
+            status: None,
+            body: String::new(),
+            error: Some(format!("连接超时（{}s）", timeout.as_secs())),
+        },
+        Ok(Err(e)) => ModelsProbe {
+            elapsed_ms: started.elapsed().as_millis() as u64,
+            status: None,
+            body: String::new(),
+            error: Some(format!("连接失败: {e}")),
+        },
         Ok(Ok(r)) => {
             let status = r.status();
             let body = r.text().await.unwrap_or_default();
-            if !status.is_success() {
-                let short: String = body.chars().take(200).collect();
-                return Ok(fail(elapsed_ms, format!("服务返回 {status}: {short}")));
-            }
-            Ok(ConnectionTest {
-                ok: true,
-                elapsed_ms,
-                models: parse_model_ids(&body),
+            ModelsProbe {
+                elapsed_ms: started.elapsed().as_millis() as u64,
+                status: Some(status),
+                body,
                 error: None,
-            })
+            }
         }
     }
+}
+
+/// 只取模型列表：设置页选中服务后就自动拉一次，用户不必自己填模型名。
+///
+/// 与 test_connection 分开是因为语义不同：这里失败就是失败（返回 Err 给界面显示），
+/// 不需要「连接正常/耗时」那套结构。
+#[tauri::command]
+pub async fn list_models(
+    app: tauri::AppHandle,
+    service_id: String,
+) -> Result<Vec<String>, String> {
+    let file = load_services(&config_dir(&app)?)?;
+    let svc = file
+        .services
+        .iter()
+        .find(|s| s.id == service_id)
+        .ok_or_else(|| format!("服务不存在: {service_id}"))?;
+    if svc.base_url.trim().is_empty() {
+        return Err("请先填写 Base URL".into());
+    }
+    let key = keyring::get_api_key(&service_id)?.unwrap_or_default();
+    if key.trim().is_empty() && svc.requires_key {
+        return Err("请先设置 API Key".into());
+    }
+    let probe = probe_models(&svc.base_url, &key, file.timeout_secs).await;
+    if let Some(err) = probe.error {
+        return Err(err);
+    }
+    if let Some(status) = probe.status {
+        if !status.is_success() {
+            let short: String = probe.body.chars().take(200).collect();
+            return Err(format!("服务返回 {status}: {short}"));
+        }
+    }
+    Ok(parse_model_ids(&probe.body))
 }
 
 /// 从 /models 响应里挑出模型 id，兼容 `data[].id`、`models[].slug`、`models[].id`
@@ -664,11 +770,7 @@ pub fn retry_hotkeys(app: tauri::AppHandle) -> Vec<crate::hotkeys::HotkeyStatus>
 
 /// 当前该用的热键组合：配置里的自定义值 + 其余走出厂默认
 fn current_hotkey_pairs(app: &tauri::AppHandle) -> Vec<(String, String)> {
-    let config = config_dir(app)
-        .and_then(|dir| load_services(&dir))
-        .map(|f| f.hotkeys)
-        .unwrap_or_default();
-    crate::hotkeys::effective(&config)
+    crate::hotkeys::current_pairs(app)
 }
 
 /// 改一个全局热键：先落盘，再重新注册；注册不上就回滚配置，

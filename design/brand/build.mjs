@@ -15,7 +15,7 @@
  * 标记本身怎么改：直接编辑 logo.svg。色值、几何、字形来源都记在那个文件的顶部注释里。
  */
 
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import {
   copyFileSync,
   existsSync,
@@ -132,7 +132,10 @@ const EDGE = "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe"
 // 生成到 src-tauri/installer：那份目录同时放 NSIS 的安装钩子脚本，
 // 而且 tauri.conf.json 里的路径是相对 src-tauri 解析的，放一起最不容易错。
 const artDir = join(root, "src-tauri", "installer");
-const SCALE = 4;
+// 1 = 按目标尺寸直接渲染。
+// 之前是 4 倍渲染再缩回去，细笔画被重采样平均成灰色，安装向导里看着发虚；
+// 现在 Edge 直接按目标像素渲染，文字由 DirectWrite 在最终尺寸上做抗锯齿，最清楚。
+const SCALE = 1;
 const WASH = `
   radial-gradient(60% 50% at 12% 6%, rgba(121,165,255,.30), rgba(121,165,255,0) 70%),
   radial-gradient(60% 55% at 88% 94%, rgba(186,170,255,.26), rgba(186,170,255,0) 70%),
@@ -158,30 +161,34 @@ function stage(w, h, css, inner) {
 }
 
 /** 一条横排（头部/横幅）：标记 + 名称 + 一行说明 */
-function artRow(w, h, { mark, title, tagline, pad, gap }) {
+function artRow(w, h, { mark, title, tagline, pad, gap, titleSize, taglineSize }) {
   const css = `
   .stage{display:flex;align-items:center;gap:${gap}px;padding:0 ${pad}px}
   .mark svg{width:${mark}px;height:${mark}px}
-  .t{font-size:${Math.round(mark * 0.44)}px;font-weight:600;letter-spacing:.2px}
-  .g{margin-top:2px;font-size:${Math.round(mark * 0.3)}px;color:#61666b}`;
+  .t{font-size:${titleSize}px;font-weight:600;letter-spacing:.2px}
+  .g{margin-top:2px;font-size:${taglineSize}px;color:#3f4650}`;
   const inner = `<div class="mark">${inlineMark}</div>
   <div><div class="t">${title}</div><div class="g">${tagline}</div></div>`;
   return stage(w, h, css, inner);
 }
 
 /** 一竖排（侧栏/对话框）：标记居中，下面接名称、说明与可选的要点 */
-function artColumn(w, h, { mark, tagline, bullets = [], pad, foot }) {
+function artColumn(
+  w,
+  h,
+  { mark, tagline, bullets = [], pad, foot, titleSize, taglineSize, bulletSize, footSize },
+) {
   const css = `
   .stage{display:flex;flex-direction:column;align-items:center;justify-content:center;
        gap:${Math.round(mark * 0.14)}px;padding:${pad}px 16px;text-align:center;position:relative}
   .mark svg{width:${mark}px;height:${mark}px}
-  .t{font-size:${Math.round(mark * 0.28)}px;font-weight:600;letter-spacing:.3px}
-  .g{font-size:${Math.round(mark * 0.16)}px;color:#61666b;line-height:1.5}
+  .t{font-size:${titleSize}px;font-weight:600;letter-spacing:.3px}
+  .g{font-size:${taglineSize}px;color:#3f4650;line-height:1.5}
   ul{margin-top:${Math.round(mark * 0.12)}px;list-style:none;text-align:left}
-  li{font-size:${Math.round(mark * 0.17)}px;color:#353638;line-height:1.9;padding-left:14px;position:relative}
-  li::before{content:"";position:absolute;left:0;top:.62em;width:5px;height:5px;border-radius:50%;background:#3964fe}
+  li{font-size:${bulletSize}px;color:#2b323c;line-height:1.95;padding-left:16px;position:relative}
+  li::before{content:"";position:absolute;left:0;top:.72em;width:6px;height:6px;border-radius:50%;background:#3964fe}
   /* 页脚走正常流 + margin-top:auto：绝对定位会在内容高的时候压到正文上 */
-  .foot{margin-top:auto;font-size:${Math.round(mark * 0.15)}px;color:#979da6}`;
+  .foot{margin-top:auto;font-size:${footSize}px;color:#7b828c}`;
   const list = bullets.length ? `<ul>${bullets.map((b) => `<li>${b}</li>`).join("")}</ul>` : "";
   const inner = `<div class="mark">${inlineMark}</div>
   <div class="t">随译 SuiYi</div>
@@ -191,12 +198,19 @@ function artColumn(w, h, { mark, tagline, bullets = [], pad, foot }) {
   return stage(w, h, css, inner);
 }
 
-/** 用 Edge 渲染 HTML 并截成 PNG（尺寸 = CSS 尺寸 × SCALE） */
-function shot(html, w, h, pngPath) {
+/**
+ * 用 Edge 按 1:1 截出目标尺寸的 PNG。
+ *
+ * 不能直接把 `--screenshot` 的窗口开成目标尺寸：Edge 无头在 57px 高的窗口上会挂住
+ * （实测 150×57 超时，其余三个尺寸 0.9 秒就出图）。所以开一个正常大小的窗口，
+ * 用 CDP 的 clip 精确截取左上角那块 —— 文字仍是在最终像素尺寸上渲染的，边角最干净。
+ */
+async function shot(html, w, h, pngPath) {
   const tmp = mkdtempSync(join(tmpdir(), "suiyi-art-"));
   const page = join(tmp, "art.html");
   writeFileSync(page, html, "utf8");
-  const r = spawnSync(
+  const port = 9100 + (process.pid % 700);
+  const child = spawn(
     EDGE,
     [
       "--headless=new",
@@ -204,16 +218,83 @@ function shot(html, w, h, pngPath) {
       "--no-sandbox",
       "--hide-scrollbars",
       "--force-device-scale-factor=1",
+      // 关掉 LCD 子像素抗锯齿：图片会被烤成位图，彩边会留在图上
+      "--disable-lcd-text",
+      `--remote-debugging-port=${port}`,
       `--user-data-dir=${join(tmp, "profile")}`,
-      `--window-size=${w},${h}`,
-      `--screenshot=${pngPath}`,
+      "--window-size=1200,900",
       "file:///" + page.replace(/\\/g, "/"),
     ],
     { stdio: "ignore" },
   );
-  const ok = r.status === 0 && existsSync(pngPath);
-  rmSync(tmp, { recursive: true, force: true });
-  if (!ok) fail("Edge 渲染安装向导图失败（" + page + "）");
+
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  try {
+    let target = null;
+    for (let i = 0; i < 40 && !target; i++) {
+      try {
+        const list = await (await fetch(`http://127.0.0.1:${port}/json/list`)).json();
+        target = list.find((t) => t.type === "page" && t.webSocketDebuggerUrl);
+      } catch {
+        /* 还没起来 */
+      }
+      if (!target) await sleep(250);
+    }
+    if (!target) fail("Edge 调试端口没起来，无法渲染 " + w + "×" + h);
+
+    const ws = new WebSocket(target.webSocketDebuggerUrl);
+    await new Promise((r, j) => {
+      ws.addEventListener("open", r, { once: true });
+      ws.addEventListener("error", j, { once: true });
+      setTimeout(() => j(new Error("连接调试端口超时")), 10000);
+    });
+    let id = 0;
+    const pending = new Map();
+    const send = (method, params) =>
+      new Promise((r) => {
+        const myId = ++id;
+        pending.set(myId, r);
+        ws.send(JSON.stringify({ id: myId, method, params }));
+      });
+    ws.addEventListener("message", (ev) => {
+      const msg = JSON.parse(ev.data);
+      if (msg.id && pending.has(msg.id)) {
+        pending.get(msg.id)(msg);
+        pending.delete(msg.id);
+      }
+    });
+
+    // 等页面真的加载完（含字体）。连上调试端口时页面往往还没渲染完，
+    // 直接截会拿到一张空帧 —— 整张图会变成黑色。
+    await send("Page.enable");
+    for (let i = 0; i < 50; i++) {
+      const st = await send("Runtime.evaluate", {
+        expression: 'document.readyState === "complete" && document.fonts.status === "loaded"',
+        returnByValue: true,
+      });
+      if (st.result?.result?.value === true) break;
+      await sleep(100);
+    }
+    await sleep(200); // 再留一帧给合成器
+    const res = await send("Page.captureScreenshot", {
+      format: "png",
+      clip: { x: 0, y: 0, width: w, height: h, scale: 1 },
+    });
+    const data = res.result?.data;
+    if (!data) fail("截图失败（" + w + "×" + h + "）");
+    writeFileSync(pngPath, Buffer.from(data, "base64"));
+    ws.close();
+  } finally {
+    child.kill();
+    // Edge 进程退出后还会握着 profile 里的文件一会儿，删不掉就留给系统清理，
+    // 不因为一个临时目录把整个生成流程判失败
+    await new Promise((r) => setTimeout(r, 300));
+    try {
+      rmSync(tmp, { recursive: true, force: true });
+    } catch {
+      /* 忽略 */
+    }
+  }
 }
 
 /** PNG → 目标尺寸的 24bpp BMP，并校验 BMP 头 */
@@ -249,37 +330,89 @@ function toBmp(png, bmp, w, h) {
   }
 }
 
-function buildInstallerArt() {
+async function buildInstallerArt() {
   mkdirSync(artDir, { recursive: true });
   const tmpPng = join(tmpdir(), "suiyi-art-" + process.pid + ".png");
   const jobs = [
     // NSIS
-    ["header.bmp", 150, 57, artRow(150, 57, { mark: 30, title: "随译 SuiYi", tagline: "桌面翻译助手", pad: 10, gap: 8 })],
-    ["sidebar.bmp", 164, 314, artColumn(164, 314, { mark: 62, tagline: "选中即译 · 截图即译", pad: 26, foot: "译文来自你自己的服务" })],
+    [
+      "header.bmp",
+      150,
+      57,
+      artRow(150, 57, {
+        mark: 30,
+        title: "随译 SuiYi",
+        tagline: "桌面翻译助手",
+        pad: 10,
+        gap: 8,
+        titleSize: 15,
+        taglineSize: 10.5,
+      }),
+    ],
+    [
+      "sidebar.bmp",
+      164,
+      314,
+      artColumn(164, 314, {
+        mark: 62,
+        tagline: "选中即译 · 截图即译",
+        pad: 26,
+        foot: "译文来自你自己的服务",
+        titleSize: 19,
+        taglineSize: 12,
+        bulletSize: 12,
+        footSize: 10.5,
+      }),
+    ],
     // MSI（WiX）
-    ["banner.bmp", 493, 58, artRow(493, 58, { mark: 34, title: "随译 SuiYi", tagline: "选中即译 · 截图即译", pad: 18, gap: 12 })],
+    [
+      "banner.bmp",
+      493,
+      58,
+      artRow(493, 58, {
+        mark: 34,
+        title: "随译 SuiYi",
+        tagline: "选中即译 · 截图即译",
+        pad: 18,
+        gap: 12,
+        titleSize: 17,
+        taglineSize: 11.5,
+      }),
+    ],
     [
       "dialog.bmp",
       493,
       312,
       artColumn(493, 312, {
-        mark: 84,
+        // 尺寸按「不溢出」倒推：上下 padding 26 + 标记 76 + 段间距 + 标题/副标题 +
+        // 两条单行要点 + 页脚 ≈ 300，落在 312 里不会挤到贴边
+        mark: 76,
         tagline: "选中即译 · 截图即译 · 输入框直译",
-        bullets: ["Alt+D 划词翻译，Alt+S 截图识别，Alt+T 输入框转译", "翻译发给你自己配置的服务，密钥只存在本机凭据管理器", "截图识别在本机完成，截图不会上传"],
-        pad: 34,
+        bullets: [
+          "Alt+D 划词翻译，Alt+S 截图识别，Alt+T 输入框转译",
+          "密钥只存在本机凭据管理器，截图识别不上传",
+        ],
+        pad: 26,
         foot: "译文来自你自己的服务",
+        titleSize: 24,
+        taglineSize: 14,
+        bulletSize: 14,
+        footSize: 10.5,
       }),
     ],
   ];
   for (const [name, w, h, html] of jobs) {
-    shot(html, w * SCALE, h * SCALE, tmpPng);
+    await shot(html, w * SCALE, h * SCALE, tmpPng);
+    if (process.env.SUIYI_KEEP_ART_PNG) {
+      copyFileSync(tmpPng, join(tmpdir(), "suiyi-art-" + name + ".png"));
+    }
     toBmp(tmpPng, join(artDir, name), w, h);
     step(`安装向导图 ${name}（${w}×${h}，24bpp）`);
   }
   rmSync(tmpPng, { force: true });
 }
 
-buildInstallerArt();
+await buildInstallerArt();
 
 // ── 3. 同步 favicon ───────────────────────────────────────────
 for (const target of favicons) {
