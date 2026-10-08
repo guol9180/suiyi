@@ -16,6 +16,8 @@ export interface ServiceConfig {
   temperature: number | null;
   stream: boolean;
   resultType: ResultType;
+  /** 这家服务是否需要 API Key。本地服务（Ollama）设 false，请求就不带 Authorization 头 */
+  requiresKey: boolean;
   order: number;
   /** 由插件提供的服务才有；这类服务不落盘，也不能在服务列表里编辑 */
   pluginId?: string | null;
@@ -175,6 +177,7 @@ export const EMPTY_SERVICE: ServiceConfig = {
   temperature: 0.3,
   stream: true,
   resultType: "text",
+  requiresKey: true,
   order: 0,
 };
 

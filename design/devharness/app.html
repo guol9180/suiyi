@@ -84,13 +84,13 @@
           services: [
             { id: "zai", name: "ZAI", kind: "translation", protocol: "open_ai_compatible", enabled: true,
               baseUrl: "https://api.z.ai/api/paas/v4", model: "glm-5.3-flash", promptTemplate: null,
-              temperature: 0.3, stream: true, resultType: "text", order: 0 },
+              temperature: 0.3, stream: true, resultType: "text", requiresKey: true, order: 0 },
             { id: "deepseek", name: "DeepSeek", kind: "translation", protocol: "open_ai_compatible", enabled: true,
-              baseUrl: "https://api.deepseek.com/v1", model: "deepseek-chat", promptTemplate: null,
-              temperature: 0.3, stream: true, resultType: "text", order: 1 },
+              baseUrl: "https://api.deepseek.com", model: "deepseek-flash", promptTemplate: null,
+              temperature: 0.3, stream: true, resultType: "text", requiresKey: true, order: 1 },
             { id: "glm", name: "智谱 GLM", kind: "translation", protocol: "open_ai_compatible", enabled: false,
               baseUrl: "https://open.bigmodel.cn/api/paas/v4", model: "glm-4-flash", promptTemplate: null,
-              temperature: 0.3, stream: true, resultType: "text", order: 2 },
+              temperature: 0.3, stream: true, resultType: "text", requiresKey: true, order: 2 },
           ],
         };
         var TRANSLATED = {
@@ -149,6 +149,25 @@
             };
           },
           get_api_key: function () { return "sk-xxxxxxxxxxxxxxxxxxxx"; },
+          set_api_key: function () { return null; },
+          delete_api_key: function () { return null; },
+          // 设置页的「从剪贴板粘贴」用；真机上是真的读系统剪贴板
+          read_clipboard_text: function () { return "sk-demo1234567890abcdefghijJe1L"; },
+          save_service: function (args) {
+            var svc = args.service;
+            if (!svc.id) svc.id = "svc-" + Date.now();
+            var i = SERVICES.services.findIndex(function (s) { return s.id === svc.id; });
+            if (i >= 0) SERVICES.services[i] = svc; else SERVICES.services.push(svc);
+            return SERVICES.services;
+          },
+          delete_service: function (args) {
+            SERVICES.services = SERVICES.services.filter(function (s) { return s.id !== args.serviceId; });
+            return SERVICES.services;
+          },
+          reorder_services: function (args) {
+            SERVICES.services.forEach(function (s) { s.order = args.ids.indexOf(s.id); });
+            return SERVICES.services;
+          },
           list_plugins: function () { return PLUGINS; },
           plugins_dir_path: function () { return "C:\\Users\\PC\\AppData\\Roaming\\com.suiyi.dev\\plugins"; },
           list_history: function () { return HISTORY; },
@@ -174,7 +193,18 @@
           resume_speaking: resumeSpeechStub,
           stop_speaking: function () { SPEECH = null; return idleSpeech(); },
           list_speech_voices: function () { return VOICES; },
-          test_connection: function () { return { ok: true, elapsedMs: 412, models: ["glm-5.3-flash"], error: null }; },
+          test_connection: function () {
+            // ?keyfail=1：模拟服务端不认这枚 Key，文案照抄 DeepSeek 的真实回法
+            if (q.get("keyfail") === "1") {
+              return {
+                ok: false, elapsedMs: 318, models: [],
+                error: "服务返回 401 Unauthorized: {\"error\":{\"message\":\"Authentication Fails, "
+                  + "Your api key: ****Je1L is invalid (request_id: 471a0080-8b94-4d0b-b324)\","
+                  + "\"type\":\"authentication_error\",\"param\":null,\"code\":\"invalid_request_error\"}}",
+              };
+            }
+            return { ok: true, elapsedMs: 412, models: ["glm-5.3-flash"], error: null };
+          },
           get_screenshot: function () { return { dataUrl: OVERLAY_SHOT }; },
           finish_region: function () { return null; },
           cancel_screenshot: function () { return null; },
@@ -325,6 +355,16 @@
             .filter(function (e) { return (e.textContent || "").indexOf(text) >= 0; })[0];
         }
 
+        // 轮询等元素出现再点。冷启动时首屏要几百毫秒才挂上，写死延迟会点空
+        function waitFor(get, cb, left) {
+          var n = left === undefined ? 80 : left;
+          var el = null;
+          try { el = get(); } catch (e) { el = null; }
+          if (el) return cb(el);
+          if (n <= 0) return;
+          setTimeout(function () { waitFor(get, cb, n - 1); }, 250);
+        }
+
         window.addEventListener("load", function () {
           if (isPopup) {
             setTimeout(function () {
@@ -376,6 +416,37 @@
                 }, 1200);
               }, 600);
             }, 500);
+            return;
+          }
+
+          // 打开「添加服务」的提供商选择：看卡片网格（?demo=providers）
+          if (q.get("demo") === "providers") {
+            waitFor(function () { return document.querySelectorAll(".tabbar button")[1]; }, function (tab) {
+              tab.click();
+              waitFor(function () { return byText(".side-item", "服务配置"); }, function (item) {
+                item.click();
+                waitFor(function () { return byText(".card-head .btn", "添加服务"); }, function (add) {
+                  add.click();
+                });
+              });
+            });
+            return;
+          }
+
+          // 选中 DeepSeek 再点测试连接：配合 ?keyfail=1 看 401 的人话提示与动作按钮
+          if (q.get("demo") === "keyerror") {
+            waitFor(function () { return document.querySelectorAll(".tabbar button")[1]; }, function (tab) {
+              tab.click();
+              waitFor(function () { return byText(".side-item", "服务配置"); }, function (item) {
+                item.click();
+                waitFor(function () { return byText(".svc", "DeepSeek"); }, function (row) {
+                  row.click();
+                  waitFor(function () { return byText(".trow .btn", "测试连接"); }, function (test) {
+                    test.click();
+                  });
+                });
+              });
+            });
             return;
           }
 

@@ -39,9 +39,5 @@ export function lastOf(serviceId: string): LastResult | undefined {
   return results.get(serviceId);
 }
 
-/** 从错误文本里挑出 HTTP 状态码，挑不到就返回空 */
-export function statusCodeOf(error: string | undefined): string {
-  if (!error) return "";
-  const m = error.match(/\b(4\d{2}|5\d{2})\b/);
-  return m ? m[1] : "";
-}
+/** 状态码解析搬到了 errorText.ts（那边还要写人话），这里保留原导出名不破坏调用方 */
+export { statusCodeOf } from "./errorText";

@@ -16,6 +16,7 @@ import {
   listSpeechVoices,
   pauseSpeaking,
   pluginsDirPath,
+  readClipboardText,
   reorderServices,
   resetHotkeys,
   retryHotkeys,
@@ -34,8 +35,11 @@ import {
 } from "../api";
 import { wordbookAdd, wordbookList, wordbookRemove, wordbookSync } from "../api";
 import { invoke } from "@tauri-apps/api/core";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import { Icon } from "../components/Icon";
 import { SpeechBar } from "../components/SpeechBar";
+import { cleanKey, presetOf, PROVIDERS, type ProviderPreset } from "../providers";
+import { describeError } from "../errorText";
 import { getVersion, lastOf, statusCodeOf, subscribe } from "../lastResult";
 import {
   DEFAULT_PROMPT,
@@ -191,6 +195,12 @@ export default function SettingsPage() {
   const [voices, setVoices] = useState<SpeechVoice[]>([]);
   const [preview, setPreview] = useState(DEFAULT_PREVIEW);
   const [pickingVoice, setPickingVoice] = useState(false);
+  /** 「添加服务」的第一步：先挑提供商，再填表单 */
+  const [picking, setPicking] = useState(false);
+  /** 正在从剪贴板读 Key */
+  const [pasting, setPasting] = useState(false);
+  /** 粘贴回显：只出现尾号与长度，不出现全量 Key */
+  const [keyNote, setKeyNote] = useState("");
 
   /** 服务与时间两个维度在本地过滤，不用再跑一次后端查询 */
   const visibleHistory = history.filter((h) => {
@@ -203,6 +213,14 @@ export default function SettingsPage() {
     visibleHistory.find((h) => h.id === histId) ?? visibleHistory[0] ?? null;
 
   const sortServices = (list: ServiceConfig[]) => [...list].sort((a, b) => a.order - b.order);
+
+  /** 当前草稿命中的提供商预设（按 Base URL 的主机名比对）；自定义地址为 undefined */
+  const preset = draft ? presetOf(draft.baseUrl) : undefined;
+  const consoleUrl = preset?.keyUrl ?? null;
+  /** 模型下拉的候选：预设推荐的 + 上次测试从 /models 拉回来的 */
+  const modelOptions = Array.from(
+    new Set([...(preset?.models ?? []), ...(testResult?.models ?? [])]),
+  );
 
   const refresh = useCallback(async () => {
     try {
@@ -476,36 +494,97 @@ export default function SettingsPage() {
     window.setTimeout(() => setNotice(""), 2500);
   }
 
-  async function handleSave() {
-    if (!draft) return;
-    if (!draft.name.trim()) return setError("名称不能为空");
-    if (!draft.baseUrl.trim()) return setError("Base URL 不能为空");
+  /**
+   * 落盘：写服务配置 +（有输入时）写 Key，返回保存后的服务 id。
+   * 「保存并测试」与「仅保存」共用它，避免两处校验走偏。
+   */
+  async function saveDraft(): Promise<string | null> {
+    if (!draft) return null;
+    if (!draft.name.trim()) {
+      setError("名称不能为空");
+      return null;
+    }
+    if (!draft.baseUrl.trim()) {
+      setError("Base URL 不能为空");
+      return null;
+    }
     try {
       const list = await saveService(draft);
       if (apiKeyInput.trim()) {
         await setApiKey(draft.id, apiKeyInput.trim());
         setApiKeyInput("");
+        setKeyNote("");
       }
       setFile((f) => (f ? { ...f, services: list } : f));
-      setSelectedId(draft.id || list[list.length - 1]?.id || null);
-      flash("已保存");
+      const id = draft.id || list[list.length - 1]?.id || null;
+      setSelectedId(id);
+      return id;
     } catch (e) {
       setError(String(e));
+      return null;
+    }
+  }
+
+  async function handleSave() {
+    if (await saveDraft()) flash("已保存");
+  }
+
+  /** 一键走完：保存 → 存 Key → 测连接。少点两次，也少一次「忘了保存就测」 */
+  async function handleSaveAndTest() {
+    const id = await saveDraft();
+    if (!id) return;
+    await runTest(id);
+    flash("已保存并测试");
+  }
+
+  /** 选中一张提供商卡片：预填地址、协议、模型与是否需要密钥 */
+  function pickProvider(p: ProviderPreset) {
+    setDraft({
+      ...EMPTY_SERVICE,
+      name: p.name,
+      protocol: p.protocol,
+      baseUrl: p.baseUrl,
+      model: p.models[0] ?? "",
+      requiresKey: p.requiresKey,
+      temperature: 0.3,
+    });
+    setSelectedId(null);
+    setApiKeyInput("");
+    setKeyNote("");
+    setHasKey(false);
+    setTestResult(null);
+    setPicking(false);
+  }
+
+  /** 从剪贴板取一次文本当 Key。清洗后只回显尾号与长度，方便和控制台对照 */
+  async function pasteKey() {
+    setPasting(true);
+    try {
+      const cleaned = cleanKey(await readClipboardText());
+      setApiKeyInput(cleaned.value);
+      setKeyNote(cleaned.warn ? `${cleaned.note}。${cleaned.warn}` : cleaned.note);
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setPasting(false);
     }
   }
 
   /** 探测服务连通性：确认 Key、网关与模型三件事 */
-  async function handleTest() {
-    if (!draft?.id) return;
+  async function runTest(id: string) {
     setTesting(true);
     setTestResult(null);
     try {
-      setTestResult(await testConnection(draft.id));
+      setTestResult(await testConnection(id));
     } catch (e) {
       setTestResult({ ok: false, elapsedMs: 0, models: [], error: String(e) });
     } finally {
       setTesting(false);
     }
+  }
+
+  async function handleTest() {
+    if (draft?.id) await runTest(draft.id);
   }
 
   async function handleDelete() {
@@ -1344,6 +1423,9 @@ export default function SettingsPage() {
                 setSelectedId(null);
                 setApiKeyInput("");
                 setHasKey(false);
+                setKeyNote("");
+                setTestResult(null);
+                setPicking(true);
               }}
             >
               <Icon name="plus" size="sm" />添加服务
@@ -1358,6 +1440,9 @@ export default function SettingsPage() {
               onClick={() => {
                 setDraft({ ...s });
                 setSelectedId(s.id);
+                setPicking(false);
+                setKeyNote("");
+                setTestResult(null);
               }}
             >
               <span className="arrows">
@@ -1426,7 +1511,34 @@ export default function SettingsPage() {
 
         {/* 编辑表单 */}
         <div className="card form-col">
-          {!draft ? (
+          {/* 先判 picking：选中变化那个 effect 在「新建」时会把草稿清成 null，
+              如果按 draft 优先分支，添加服务就会被那一下清空而退回空态 */}
+          {picking ? (
+            <>
+              <div className="card-head">
+                <b>选择提供商</b>
+                <span className="m">选中即填好地址、协议与推荐模型</span>
+                <span style={{ flex: 1 }} />
+                <button className="btn mini" onClick={() => { setPicking(false); setDraft(null); }}>
+                  取消
+                </button>
+              </div>
+              <div className="pgrid">
+                {PROVIDERS.map((p) => (
+                  <button key={p.id} className="pcard" onClick={() => pickProvider(p)}>
+                    <span className="pname">{p.name}</span>
+                    <span className="pblurb">{p.blurb}</span>
+                    <span className={`chip mini${p.requiresKey ? "" : " ok"}`}>
+                      {p.requiresKey ? "需要 API Key" : "本地，无需密钥"}
+                    </span>
+                  </button>
+                ))}
+              </div>
+              <div className="t-cap">
+                预设只填地址、模型与密钥页链接。Key 依然只进 Windows 凭据管理器，不进配置文件。
+              </div>
+            </>
+          ) : !draft ? (
             <div className="empty-hint">← 选择左侧服务进行编辑，或添加新服务</div>
           ) : (
             <>
@@ -1463,7 +1575,8 @@ export default function SettingsPage() {
                 <label>Base URL</label>
                 <input className="inp mono" value={draft.baseUrl}
                   onChange={(e) => setDraft({ ...draft, baseUrl: e.target.value })}
-                  placeholder="https://api.deepseek.com/v1" />
+                  placeholder={preset?.baseUrlPlaceholder ?? "https://api.deepseek.com"} />
+                {preset?.baseUrlNote && <div className="fhint">{preset.baseUrlNote}</div>}
               </div>
 
               <div className="f">
@@ -1479,10 +1592,34 @@ export default function SettingsPage() {
                   <input className="inp mono" type="password" value={apiKeyInput}
                     onChange={(e) => setApiKeyInput(e.target.value)}
                     placeholder={hasKey ? "已保存，留空则不修改；输入新值则覆盖" : "sk-..."} />
+                  <button className="btn mini" onClick={() => void pasteKey()} disabled={pasting}>
+                    <Icon name="copy" size="sm" />{pasting ? "读取中" : "从剪贴板粘贴"}
+                  </button>
                   {hasKey && (
                     <button className="btn mini" onClick={clearKey}>清除</button>
                   )}
                 </div>
+                <div className="keyfoot">
+                  {consoleUrl ? (
+                    // 这里要的是能看清的次要动作，不是 22px 的图标按钮（前车之鉴：
+                    // mini-as-link 是给上下箭头用的定宽图标位，塞文字会溢出去压住输入框）
+                    <button className="btn mini" onClick={() => void openUrl(consoleUrl)}>
+                      获取 API Key（打开 {preset?.name} 控制台）
+                    </button>
+                  ) : (
+                    <span className="fhint">
+                      {draft.requiresKey ? "自定义端点：直接填服务商给你的 Key" : "本地服务，不需要密钥"}
+                    </span>
+                  )}
+                  {keyNote && <span className="fhint">{keyNote}</span>}
+                </div>
+                <label className="kcheck">
+                  <Toggle
+                    on={!draft.requiresKey}
+                    onClick={() => setDraft({ ...draft, requiresKey: !draft.requiresKey })}
+                  />
+                  <span>这家服务不需要密钥（本地服务，请求不带 Authorization）</span>
+                </label>
               </div>
 
               {/* 测试连接：Key 是否有效、网关是否可达、模型是否可见 */}
@@ -1510,18 +1647,70 @@ export default function SettingsPage() {
                     </>
                   )}
                 </div>
-                {testResult && !testResult.ok && testResult.error && (
-                  <div className="terr"><Icon name="alert" size="sm" />{testResult.error}</div>
-                )}
+                {/* 模型不在服务端返回的列表里：直接把替换按钮摆出来，别让人回去手打 */}
+                {testResult?.ok &&
+                  testResult.models.length > 0 &&
+                  !testResult.models.includes(draft.model) && (
+                    <div className="tacts">
+                      {testResult.models.slice(0, 3).map((m) => (
+                        <button key={m} className="btn mini" onClick={() => setDraft({ ...draft, model: m })}>
+                          改用 {m}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                {/* 失败：标题写结论，原文折叠保留。诊断靠原文，所以不丢 */}
+                {testResult && !testResult.ok && testResult.error && (() => {
+                  const info = describeError(testResult.error);
+                  return (
+                    <>
+                      <div className="terr">
+                        <Icon name="alert" size="sm" />
+                        <span>
+                          {info.title}
+                          {info.tail ? `（服务端看到的是 …${info.tail}）` : ""}
+                        </span>
+                      </div>
+                      {info.hint && <div className="fhint">{info.hint}</div>}
+                      <div className="tacts">
+                        {consoleUrl && (
+                          <button className="btn mini" onClick={() => void openUrl(consoleUrl)}>
+                            打开 {preset?.name} 控制台
+                          </button>
+                        )}
+                        <button className="btn mini" onClick={() => void pasteKey()} disabled={pasting}>
+                          重新粘贴 Key
+                        </button>
+                        {(preset?.models ?? [])
+                          .filter((m) => m !== draft.model)
+                          .slice(0, 1)
+                          .map((m) => (
+                            <button key={m} className="btn mini" onClick={() => setDraft({ ...draft, model: m })}>
+                              改用 {m}
+                            </button>
+                          ))}
+                      </div>
+                      <details className="traw">
+                        <summary>详情（服务端原文）</summary>
+                        <pre>{info.raw}</pre>
+                      </details>
+                    </>
+                  );
+                })()}
                 {!draft.id && <div className="thint">先保存服务，再测试连接</div>}
               </div>
 
               <div className="row2">
                 <div className="f">
                   <label>模型（可手填）</label>
-                  <input className="inp mono" value={draft.model}
+                  <input className="inp mono" list={`model-opts-${draft.id || "new"}`} value={draft.model}
                     onChange={(e) => setDraft({ ...draft, model: e.target.value })}
-                    placeholder="deepseek-chat" />
+                    placeholder={preset?.models[0] ?? "模型名"} />
+                  <datalist id={`model-opts-${draft.id || "new"}`}>
+                    {modelOptions.map((m) => <option key={m} value={m} />)}
+                  </datalist>
+                  {preset?.modelHint && <div className="fhint">{preset.modelHint}</div>}
                 </div>
                 <div className="f" style={{ flex: "0 0 44%" }}>
                   <label>结果类型</label>
@@ -1557,7 +1746,10 @@ export default function SettingsPage() {
               </div>
 
               <div className="form-foot">
-                <button className="btn primary" onClick={() => void handleSave()}>保存修改</button>
+                <button className="btn primary" onClick={() => void handleSaveAndTest()} disabled={testing}>
+                  {testing ? "测试中" : "保存并测试"}
+                </button>
+                <button className="btn mini" onClick={() => void handleSave()}>仅保存</button>
                 <span className="sec-note"><Icon name="lock" size="sm" />密钥仅存于 Windows 凭据管理器</span>
               </div>
             </>

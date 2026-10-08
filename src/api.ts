@@ -34,6 +34,11 @@ export function deleteApiKey(serviceId: string): Promise<void> {
   return invoke("delete_api_key", { serviceId });
 }
 
+/** 读一次剪贴板文本，供设置页的「从剪贴板粘贴」使用 */
+export function readClipboardText(): Promise<string> {
+  return invoke("read_clipboard_text");
+}
+
 export function getSettings(): Promise<GlobalSettings> {
   return invoke("get_settings");
 }

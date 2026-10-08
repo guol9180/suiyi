@@ -114,6 +114,7 @@ pub fn run() {
             commands::set_api_key,
             commands::get_api_key,
             commands::delete_api_key,
+            commands::read_clipboard_text,
             commands::get_settings,
             commands::save_settings,
             commands::hotkey_status,

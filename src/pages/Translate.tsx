@@ -15,6 +15,7 @@ import {
 } from "../types";
 import { Icon } from "../components/Icon";
 import { DictionaryCard } from "../components/DictionaryCard";
+import { describeError, statusCodeOf } from "../errorText";
 import "./Translate.css";
 
 /** 打开划词弹窗并投递文本（M1 将由取词服务自动调用） */
@@ -280,9 +281,14 @@ export default function TranslatePage(props: { onOpenSettings?: () => void } = {
             </div>
             {c.error ? (
               <>
-                <div className="rt rc-err">{c.error}</div>
+                {/* 卡片上只放结论，原文留着悬停可查；历史里存的是完整原文 */}
+                <div className="rt rc-err" title={c.error}>{describeError(c.error).title}</div>
                 <div className="rc-foot">
-                  <span className="muted">配额限流可在「设置 → 服务配置」用测试连接排查</span>
+                  <span className="muted">
+                    {statusCodeOf(c.error)
+                      ? `设置 → 服务配置里可以用「测试连接」查${statusCodeOf(c.error)}`
+                      : "配额限流可在「设置 → 服务配置」用测试连接排查"}
+                  </span>
                   <button className="btn mini" onClick={() => void retryOne(c.id)}>
                     <Icon name="refresh" size="sm" />重试
                   </button>

@@ -51,6 +51,10 @@ pub struct ServiceConfig {
     pub temperature: Option<f32>,
     pub stream: bool,
     pub result_type: ResultType,
+    /// 这家服务是否需要 API Key。本地服务（Ollama 之类）填 false，请求就不带 Authorization。
+    /// 老配置文件里没有这个字段，缺省按 true —— 不能因为升级就把云端服务的校验放掉。
+    #[serde(default = "default_requires_key")]
+    pub requires_key: bool,
     /// 服务列表中的排序值（拖拽排序时重排）
     pub order: u32,
     /// 由插件提供的服务填插件 id；普通服务为 None，且这类服务不落盘
@@ -72,10 +76,15 @@ impl Default for ServiceConfig {
             temperature: Some(0.3),
             stream: true,
             result_type: ResultType::Text,
+            requires_key: true,
             order: 0,
             plugin_id: None,
         }
     }
+}
+
+fn default_requires_key() -> bool {
+    true
 }
 
 /// services.json 的根结构，预留全局字段（并发数、超时、回退开关）
@@ -147,12 +156,14 @@ pub fn default_services() -> Vec<ServiceConfig> {
         kind: ServiceKind::Translation,
         protocol: Protocol::OpenAiCompatible,
         enabled: false,
-        base_url: "https://api.deepseek.com/v1".into(),
-        model: "deepseek-chat".into(),
+        // 官方文档：Base URL 不带 /v1，模型名是 deepseek-flash（旧名 deepseek-chat 已下线）
+        base_url: "https://api.deepseek.com".into(),
+        model: "deepseek-flash".into(),
         prompt_template: None,
         temperature: Some(0.3),
         stream: true,
         result_type: ResultType::Text,
+        requires_key: true,
         order: 0,
         plugin_id: None,
     }]
@@ -196,6 +207,36 @@ pub fn new_service_id() -> String {
 mod tests {
     use super::*;
 
+    /// 老配置文件里没有 requires_key：必须按 true 处理。
+    /// 升级不能把云端服务的密钥校验顺手放掉。
+    #[test]
+    fn requires_key_defaults_to_true_for_old_config() {
+        let old = r#"{
+          "version": 1,
+          "services": [
+            {"id":"a","name":"A","kind":"translation","protocol":"open_ai_compatible",
+             "enabled":true,"baseUrl":"https://example.com","model":"m"}
+          ]
+        }"#;
+        let file: ServicesFile = serde_json::from_str(old).unwrap();
+        assert!(file.services[0].requires_key, "缺字段时应当需要密钥");
+
+        // 回写时字段要落盘，下次读还是 true
+        let json = serde_json::to_string(&file.services[0]).unwrap();
+        assert!(json.contains("\"requiresKey\":true"), "实际：{json}");
+    }
+
+    /// 本地服务（Ollama 这类）显式写 false 时能被读回
+    #[test]
+    fn requires_key_false_survives_roundtrip() {
+        let raw = r#"{"id":"local","name":"Ollama","kind":"translation",
+          "protocol":"open_ai_compatible","enabled":true,
+          "baseUrl":"http://localhost:11434/v1","model":"qwen3:8b","requiresKey":false}"#;
+        let svc: ServiceConfig = serde_json::from_str(raw).unwrap();
+        assert!(!svc.requires_key);
+        assert_eq!(svc.model, "qwen3:8b");
+    }
+
     #[test]
     fn roundtrip_and_defaults() {
         let dir = std::env::temp_dir().join(format!("suiyi-test-{}", std::process::id()));
@@ -213,7 +254,10 @@ mod tests {
         save_services(&dir, &file).unwrap();
         let reloaded = load_services(&dir).unwrap();
         assert!(reloaded.services[0].enabled);
-        assert_eq!(reloaded.services[0].base_url, "https://api.deepseek.com/v1");
+        // 预置值按官方文档：Base URL 不带 /v1，模型是 deepseek-flash
+        assert_eq!(reloaded.services[0].base_url, "https://api.deepseek.com");
+        assert_eq!(reloaded.services[0].model, "deepseek-flash");
+        assert!(reloaded.services[0].requires_key);
 
         // camelCase 字段名落盘（与前端 TS 类型对齐）
         let raw = fs::read_to_string(dir.join(SERVICES_FILE)).unwrap();

@@ -164,18 +164,17 @@ async fn translate_inner(
         "messages": [{ "role": "user", "content": p.prompt }]
     });
 
-    let resp = tokio::time::timeout(
-        p.timeout,
-        client
-            .post(&url)
-            .header("Authorization", format!("Bearer {}", p.api_key))
-            .header("Content-Type", "application/json")
-            .json(&body)
-            .send(),
-    )
-    .await
-    .map_err(|_| "请求超时".to_string())?
-    .map_err(|e| format!("连接失败: {e}"))?;
+    // 本地服务（Ollama 等）没有密钥：不带 Authorization 头，
+    // 而不是发一个空的 Bearer —— 后者会被部分网关直接判 401。
+    let mut req = client.post(&url).header("Content-Type", "application/json");
+    if !p.api_key.trim().is_empty() {
+        req = req.header("Authorization", format!("Bearer {}", p.api_key.trim()));
+    }
+
+    let resp = tokio::time::timeout(p.timeout, req.json(&body).send())
+        .await
+        .map_err(|_| "请求超时".to_string())?
+        .map_err(|e| format!("连接失败: {e}"))?;
 
     if !resp.status().is_success() {
         let status = resp.status();
@@ -314,6 +313,46 @@ mod tests {
         let (text, _ms) = translate_inner(None, p).await.unwrap();
         assert_eq!(text, "hello world");
         server.join().unwrap();
+    }
+
+    /// 本地服务没有密钥：请求里不该出现 Authorization 头。
+    /// 发一个空的 `Bearer ` 会被部分网关直接判 401，所以这里盯的是「干脆不发」。
+    #[tokio::test]
+    async fn omits_authorization_header_when_key_is_empty() {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = std::thread::spawn(move || {
+            let (mut sock, _) = listener.accept().unwrap();
+            let mut req = vec![0u8; 8192];
+            let n = sock.read(&mut req).unwrap_or(0);
+            let seen = String::from_utf8_lossy(&req[..n]).to_string();
+            let body = "{\"choices\":[{\"message\":{\"content\":\"hi\"}}]}";
+            let resp = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n{body}"
+            );
+            let _ = sock.write_all(resp.as_bytes());
+            let _ = sock.flush();
+            seen
+        });
+
+        let base = format!("http://{addr}");
+        let p = TranslateParams {
+            service_id: "mock",
+            base_url: &base,
+            api_key: "",
+            model: "mock-model",
+            prompt: "p",
+            temperature: None,
+            stream: false,
+            timeout: Duration::from_secs(5),
+        };
+        let (text, _ms) = translate_inner(None, p).await.unwrap();
+        assert_eq!(text, "hi");
+        let seen = server.join().unwrap();
+        assert!(
+            !seen.to_lowercase().contains("authorization"),
+            "没有密钥时不该带 Authorization 头，实际请求：{seen}"
+        );
     }
 
     #[test]

@@ -3,13 +3,16 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>随译 SuiYi · 全量 UI 设计稿 v0.5</title>
+<title>随译 SuiYi · 全量 UI 设计稿 v0.6</title>
 <style>
-/* 随译 SuiYi · v0.5 全量 UI 设计稿
+/* 随译 SuiYi · v0.6 全量 UI 设计稿
    单文件、无外部资源、无脚本，离线可开。
    v0.5 变更：配色改为 DeepSeek 官网那一套（品牌蓝 #3964FE + neutral-bluish 中性色阶），
    底色从纯色填充改为几团缓慢游动的色雾，卡片、按钮、标签、浮层一律毛玻璃，
-   圆角放大为 6 / 10 / 12 / 16，并补上窗口尺寸适配规则。 */
+   圆角放大为 6 / 10 / 12 / 16，并补上窗口尺寸适配规则。
+   v0.6 变更：添加服务改成先挑常见提供商（预设只填地址、模型与密钥页链接），
+   密钥补齐「打开控制台 / 从剪贴板粘贴 / 保存并测试」三步，本地服务允许不填密钥，
+   服务端报错换成人话并给动作按钮，原文折叠保留。 */
 
 :root{
   /* 配色取自 DeepSeek 官网：品牌蓝 deepseek-500，中性色走他们的 neutral-bluish 色阶 */
@@ -553,7 +556,7 @@ backdrop-filter:var(--glass-blur);-webkit-backdrop-filter:var(--glass-blur)}
       <path d="M823 494L845 494L845 620L823 620Z"/>
     </g>
   </svg>
-  <h1>随译 SuiYi</h1><span class="ver">UI 设计稿 v0.5</span>
+  <h1>随译 SuiYi</h1><span class="ver">UI 设计稿 v0.6</span>
 </div>
       <div class="sub">桌面 AI 翻译助手。划词翻译、截图识别、输入框转译、多 AI 服务配置。</div>
       <div class="stack">
@@ -935,7 +938,7 @@ backdrop-filter:var(--glass-blur);-webkit-backdrop-filter:var(--glass-blur)}
               <div class="side-item">语音合成</div>
               <div class="side-item">插件</div>
             <div class="side-item">关于</div>
-              <div class="side-foot">随译 v0.4.1<br>译文由你配置的服务提供</div>
+              <div class="side-foot">随译 v0.5.0<br>译文由你配置的服务提供</div>
           </div>
           <div class="main">
             <div class="card list-col">
@@ -957,7 +960,7 @@ backdrop-filter:var(--glass-blur);-webkit-backdrop-filter:var(--glass-blur)}
                   <button class="arr" title="下移"><svg class="ico sm"><use href="#i-chev-down"/></svg></button>
                 </span>
                 <button class="tgl" role="switch" aria-checked="true" aria-label="启用 DeepSeek"></button>
-                <span class="svc-name"><span class="n">DeepSeek</span><span class="m">deepseek-chat</span></span>
+                <span class="svc-name"><span class="n">DeepSeek</span><span class="m">deepseek-flash</span></span>
                 <span class="chip ok mini">已启用</span>
               </div>
               <div class="svc">
@@ -990,7 +993,19 @@ backdrop-filter:var(--glass-blur);-webkit-backdrop-filter:var(--glass-blur)}
               <div class="f"><label>Base URL</label><div class="inp mono">https://api.z.ai/api/paas/v4</div></div>
               <div class="f">
                 <label>API Key（仅存于系统凭据管理器）<span class="key-state"><span class="chip ok">已保存</span></span></label>
-                <div class="keyrow"><div class="inp mono ghost">已保存，留空则不修改；输入新值则覆盖</div><button class="btn mini">清除</button></div>
+                <div class="keyrow">
+                  <div class="inp mono ghost">已保存，留空则不修改；输入新值则覆盖</div>
+                  <button class="btn mini"><svg class="ico sm"><use href="#i-copy"/></svg>从剪贴板粘贴</button>
+                  <button class="btn mini">清除</button>
+                </div>
+                <div class="row2" style="align-items:center;margin-top:6px">
+                  <button class="btn mini" style="justify-self:start">获取 API Key（打开 DeepSeek 控制台）</button>
+                  <span class="t-cap">已粘贴 …Je1L（35 字符）</span>
+                </div>
+                <label style="display:flex;align-items:center;gap:8px;margin-top:9px;font-size:12px;color:var(--c-text-3)">
+                  <button class="tgl" role="switch" aria-checked="false" aria-label="这家服务不需要密钥"></button>
+                  这家服务不需要密钥（本地服务，请求不带 Authorization）
+                </label>
               </div>
               <div class="testbox">
                 <div class="trow">
@@ -1018,7 +1033,8 @@ backdrop-filter:var(--glass-blur);-webkit-backdrop-filter:var(--glass-blur)}
               <div class="f"><label>流式输出 (SSE)</label>
                   <button class="tgl" role="switch" aria-checked="true" aria-label="流式输出"></button></div>
               </div>
-              <div class="form-foot"><button class="btn primary">保存修改</button>
+              <div class="form-foot"><button class="btn primary">保存并测试</button>
+                <button class="btn mini">仅保存</button>
                 <span class="sec-note"><svg class="ico sm"><use href="#i-lock"/></svg>密钥仅存于 Windows 凭据管理器</span></div>
             </div>
           </div>
@@ -1057,13 +1073,48 @@ backdrop-filter:var(--glass-blur);-webkit-backdrop-filter:var(--glass-blur)}
         </div>
       </div>
       <div class="varcell">
-        <div class="varlab"><span class="chip err mini">状态 4</span>失败</div>
+        <div class="varlab"><span class="chip err mini">状态 4</span>密钥被服务端拒绝（401）</div>
         <div class="card">
-          <div class="testbox" style="margin:0;border-color:var(--c-danger-border);background:var(--c-danger-bg)">
-            <div class="trow"><button class="btn mini"><svg class="ico sm"><use href="#i-refresh"/></svg>重试</button>
-              <span class="chip err"><svg class="ico sm"><use href="#i-alert"/></svg>403 model_access_denied</span></div>
-            <div class="gnote">Key 有效，该模型不在账号权限内。可改用 <code>glm-4-flash</code>，或确认网关地址：Z.ai 使用 <code>https://api.z.ai/api/paas/v4</code>。</div>
+          <div class="testbox" style="margin:0">
+            <div class="trow"><button class="btn mini"><svg class="ico sm"><use href="#i-bolt"/></svg>测试连接</button></div>
+            <div class="rt err" style="margin-top:8px"><svg class="ico sm"><use href="#i-alert"/></svg>密钥无效：服务端不认这枚 Key（服务端看到的是 …Je1L）</div>
+            <div class="gnote">常见原因：复制时漏了字符、Key 已在控制台删除、或用的是另一个站点的 Key。去控制台重新建一枚，回来用「从剪贴板粘贴」重贴一次。</div>
+            <div class="trow" style="margin-top:8px">
+              <button class="btn mini">打开 DeepSeek 控制台</button>
+              <button class="btn mini">重新粘贴 Key</button>
+              <button class="btn mini">改用 deepseek-v4-pro</button>
+            </div>
+            <div class="gnote">详情（服务端原文）：<code>401 Unauthorized: {"error":{"message":"Authentication Fails, Your api key: ****Je1L is invalid"}}</code></div>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="varrow">
+      <div class="varcell" style="grid-column:1 / -1">
+        <div class="varlab"><span class="chip acc mini">入口</span>添加服务：先挑提供商，再填表单</div>
+        <div class="card">
+          <div class="card-head"><span class="hname">选择提供商</span><span class="m">选中即填好地址、协议与推荐模型</span>
+            <span style="flex:1"></span><button class="btn mini">取消</button></div>
+          <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-top:10px">
+            <div class="card" style="margin:0;padding:10px 11px">
+              <b>DeepSeek</b><span class="t-cap">官方 API，flash 便宜量大</span><span class="chip mini">需要 API Key</span></div>
+            <div class="card" style="margin:0;padding:10px 11px">
+              <b>智谱 GLM</b><span class="t-cap">bigmodel.cn 开放平台</span><span class="chip mini">需要 API Key</span></div>
+            <div class="card" style="margin:0;padding:10px 11px">
+              <b>Kimi</b><span class="t-cap">月之暗面 Moonshot</span><span class="chip mini">需要 API Key</span></div>
+            <div class="card" style="margin:0;padding:10px 11px">
+              <b>阿里百炼（通义）</b><span class="t-cap">地址带工作空间 ID</span><span class="chip mini">需要 API Key</span></div>
+            <div class="card" style="margin:0;padding:10px 11px">
+              <b>火山方舟（豆包）</b><span class="t-cap">模型填接入点 ID</span><span class="chip mini">需要 API Key</span></div>
+            <div class="card" style="margin:0;padding:10px 11px">
+              <b>硅基流动</b><span class="t-cap">一个 Key 调多家开源模型</span><span class="chip mini">需要 API Key</span></div>
+            <div class="card" style="margin:0;padding:10px 11px">
+              <b>Ollama（本地）</b><span class="t-cap">跑在自己机器上</span><span class="chip ok mini">本地，无需密钥</span></div>
+            <div class="card" style="margin:0;padding:10px 11px">
+              <b>自定义 / 中转</b><span class="t-cap">OneAPI、私有网关</span><span class="chip mini">需要 API Key</span></div>
+          </div>
+          <div class="gnote">预设只填地址、模型与密钥页链接。Key 依然只进 Windows 凭据管理器，不进配置文件。</div>
         </div>
       </div>
     </div>
@@ -1498,6 +1549,9 @@ backdrop-filter:var(--glass-blur);-webkit-backdrop-filter:var(--glass-blur)}
         <li>输入框转译的撤销交给目标程序自己的 Ctrl+Z，不弹 8 秒撤销条：那 8 秒里用户可能已经改过内容，再写回一次比让用户自己撤销更容易出错。写回前的焦点快照校验与失败降级为复制照做。</li>
         <li>组件小字在实现里落在 6 级字阶的 11px 与 12px 两档；稿中个别 11.5px 是早期写法，以实现为准。</li>
         <li>品牌标记与应用图标、favicon 是同一枚（真源 <code>design/brand/logo.svg</code>）：气泡 + 译 + 星芒 + AI 徽章，底层淡靛留出纸叠的缝；页内用内联 SVG，本稿仍然零外部依赖。</li>
+        <li>添加服务先挑提供商：预设给的是地址、推荐模型与密钥页链接，逐条标注官方文档来源与核对日期；模型始终可手填，也能用「测试连接」从服务端 <code>/models</code> 拉回候选。百炼的地址含工作空间 ID、火山方舟要填接入点 ID，这两家只给占位与提示，不猜值。</li>
+        <li>本地服务（Ollama 这类）显式标成「不需要密钥」，请求不带 <code>Authorization</code> 头，而不是发一个空的 Bearer。</li>
+        <li>服务端报错换成人话：401 密钥无效、402 余额不足、403 无该模型权限、404 地址或模型名不对、429 太频繁；每条配动作按钮（打开控制台、重新粘贴、改用某模型），原始 JSON 折叠在「详情」里，能抓到 Key 尾号就一并显示。</li>
       </ul>
     </div>
   </section>

@@ -13,6 +13,7 @@ import {
   stopSpeaking,
   wordbookAdd,
 } from "../api";
+import { describeError } from "../errorText";
 import {
   SOURCE_LANGS,
   TARGET_LANGS,
@@ -379,7 +380,8 @@ export default function PopupPage() {
                 )}
               </div>
               {c.error ? (
-                <div className="rt rc-err">{c.error}</div>
+                // 弹窗窄，只放结论；完整原文留在历史记录里，这里悬停可看
+                <div className="rt rc-err" title={c.error}>{describeError(c.error).title}</div>
               ) : c.dictionary ? (
                 <DictionaryCard dict={c.dictionary} />
               ) : (

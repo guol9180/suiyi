@@ -116,6 +116,8 @@ fn plugin_services(dir: &std::path::Path) -> Vec<ServiceConfig> {
             temperature: Some(0.3),
             stream: false,
             result_type: ResultType::Text,
+            // 插件自己拿 Key（由宿主 API 决定），这里不参与凭据校验
+            requires_key: false,
             order: 10_000 + i as u32,
             plugin_id: Some(p.id.clone()),
         })
@@ -193,6 +195,16 @@ pub fn get_api_key(service_id: String, only_check: bool) -> Result<Option<String
 #[tauri::command]
 pub fn delete_api_key(service_id: String) -> Result<(), String> {
     keyring::delete_api_key(&service_id)
+}
+
+/// 读取剪贴板里的文本。设置页的「从剪贴板粘贴」用它把用户刚从控制台复制的 Key 拿进来，
+/// 省掉手打一长串的出错机会。只读一次、只回传文本；清洗与回显（只显示尾号）由前端负责。
+#[tauri::command]
+pub fn read_clipboard_text() -> Result<String, String> {
+    let mut clipboard = arboard::Clipboard::new().map_err(|e| format!("打开剪贴板失败: {e}"))?;
+    clipboard
+        .get_text()
+        .map_err(|e| format!("剪贴板里没有可读的文本（{e}）"))
 }
 
 /// 读取全局设置
@@ -276,14 +288,14 @@ pub async fn translate_text(
         record_history(&dir, kind.as_deref(), &text, "", &service_name, 0, Some(&msg));
         return Err(msg);
     }
-    let key = match keyring::get_api_key(&service_id)? {
-        Some(k) => k,
-        None => {
-            let msg = "该服务尚未设置 API Key，请到设置页填写".to_string();
-            record_history(&dir, kind.as_deref(), &text, "", &service_name, 0, Some(&msg));
-            return Err(msg);
-        }
-    };
+    // 不需要密钥的服务（Ollama 这类本地服务）允许留空；需要的服务缺 Key 时
+    // 先说清楚，而不是发一个空 Bearer 让服务端回一句看不懂的 401。
+    let key = keyring::get_api_key(&service_id)?.unwrap_or_default();
+    if key.trim().is_empty() && svc.requires_key {
+        let msg = "该服务尚未设置 API Key，请到设置页填写".to_string();
+        record_history(&dir, kind.as_deref(), &text, "", &service_name, 0, Some(&msg));
+        return Err(msg);
+    }
     // 词典结构化：没有自定义模板时用内置的 JSON 模板，并且强制非流式，
     // 否则拿不到完整 JSON 就没法解析。
     let dictionary_mode = svc.result_type == ResultType::Dictionary;
@@ -568,22 +580,20 @@ pub async fn test_connection(
     if svc.base_url.trim().is_empty() {
         return Ok(fail(0, "请先填写 Base URL".into()));
     }
-    let Some(key) = keyring::get_api_key(&service_id)? else {
+    let key = keyring::get_api_key(&service_id)?.unwrap_or_default();
+    if key.trim().is_empty() && svc.requires_key {
         return Ok(fail(0, "请先设置 API Key".into()));
-    };
+    }
 
     let url = format!("{}/models", svc.base_url.trim_end_matches('/'));
     let timeout = Duration::from_secs(file.timeout_secs.clamp(3, 120).min(15));
     let client = reqwest::Client::new();
     let started = std::time::Instant::now();
-    let resp = tokio::time::timeout(
-        timeout,
-        client
-            .get(&url)
-            .header("Authorization", format!("Bearer {key}"))
-            .send(),
-    )
-    .await;
+    let mut req = client.get(&url);
+    if !key.trim().is_empty() {
+        req = req.header("Authorization", format!("Bearer {}", key.trim()));
+    }
+    let resp = tokio::time::timeout(timeout, req.send()).await;
     let elapsed_ms = started.elapsed().as_millis() as u64;
 
     match resp {
