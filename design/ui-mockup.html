@@ -94,8 +94,7 @@ body{background:var(--c-board-bg);color:var(--c-text);font-family:var(--font-ui)
 
 .top{display:flex;justify-content:space-between;align-items:flex-start;gap:24px;flex-wrap:wrap}
 .brand{display:flex;align-items:center;gap:11px}
-.logo{width:32px;height:32px;border-radius:8px;background:var(--c-primary);color:var(--c-surface);
-  display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600;flex:none}
+.logo{width:32px;height:32px;flex:none;display:block}
 .top h1{font-size:22px;font-weight:600;letter-spacing:.2px}
 .ver{font-size:11px;color:var(--c-mile);background:var(--c-mile-bg);border:1px solid var(--c-mile-border);
   padding:2px 8px;border-radius:var(--radius-sm)}
@@ -526,7 +525,36 @@ backdrop-filter:var(--glass-blur);-webkit-backdrop-filter:var(--glass-blur)}
 
   <div class="top">
     <div>
-<div class="brand"><span class="logo">译</span><h1>随译 SuiYi</h1><span class="ver">UI 设计稿 v0.5</span></div>
+<div class="brand">
+  <!-- 品牌标：与应用图标、favicon 同一枚，真源 design/brand/logo.svg。内联在此以保持本稿零外部依赖 -->
+  <svg class="logo" viewBox="0 0 1024 1024" role="img" aria-label="随译 SuiYi">
+    <defs>
+      <linearGradient id="sy-bubble" gradientUnits="userSpaceOnUse" x1="111" y1="420" x2="968" y2="420">
+        <stop offset="0" stop-color="#855CFF"/><stop offset=".5" stop-color="#4E74FE"/><stop offset="1" stop-color="#3BA6FF"/>
+      </linearGradient>
+      <mask id="sy-gap" maskUnits="userSpaceOnUse" x="0" y="0" width="1024" height="1024">
+        <rect width="1024" height="1024" fill="#fff"/>
+        <g fill="#000" stroke="#000" stroke-width="20" stroke-linejoin="round">
+          <rect x="111" y="107" width="857" height="677" rx="106"/>
+          <path d="M339.5 752L339.5 890Q339.5 935 383 900L533 782Z"/>
+        </g>
+      </mask>
+    </defs>
+    <rect x="57" y="179" width="857" height="677" rx="106" fill="#C9D6FF" mask="url(#sy-gap)"/>
+    <g fill="url(#sy-bubble)">
+      <rect x="111" y="107" width="857" height="677" rx="106"/>
+      <path d="M339.5 752L339.5 890Q339.5 935 383 900L533 782Z"/>
+    </g>
+    <path transform="translate(254.1 88.1) scale(0.4475)" fill="#FFFFFF" d="M166.9 1264.8L138.2 1152.2L158.7 1113.2L334.8 967.8C341 984.2 348.5 1002.7 357.4 1023.1C366.3 1043.6 374.4 1059.3 382 1070.2C339.6 1105.1 305.3 1133.9 279 1156.8C252.8 1179.6 232.3 1197.7 217.6 1211C202.9 1224.4 191.8 1235.1 184.3 1243.3C176.8 1251.5 171 1258.7 166.9 1264.8ZM39.9 630.9L236.5 630.9L236.5 748.7L39.9 748.7ZM357.4 359.6L862.2 359.6L862.2 465.1L357.4 465.1ZM827.4 359.6L848.9 359.6L869.4 354.5L948.2 397.5C921.6 452.8 887.8 502.8 846.8 547.5C805.9 592.2 759.6 632.3 708.1 667.8C656.6 703.3 601.6 734 543.2 760C484.9 785.9 425.3 807.4 364.5 824.5C360.4 814.2 354.8 802.6 347.6 789.7C340.5 776.7 332.8 763.9 324.6 751.3C316.4 738.6 308.2 728.2 300 720C357.4 707.1 413.2 689.8 467.5 668.3C521.7 646.8 572.4 621.4 619.5 592C666.6 562.7 707.9 529.9 743.4 493.7C778.9 457.5 806.9 419 827.4 378ZM519.2 412.8C549.2 460.6 588.3 503.6 636.4 541.9C684.5 580.1 740 612.7 802.8 639.6C865.6 666.6 933.2 686.9 1005.6 700.6C997.4 708.8 988.5 719 978.9 731.3C969.4 743.6 960.3 756.2 951.8 769.2C943.3 782.2 935.9 793.8 929.8 804C854.7 785.6 785.4 760 721.9 727.2C658.4 694.4 601.6 654.7 551.4 607.9C501.2 561.1 458.8 508.1 423.9 448.7ZM411.6 842.9L911.4 842.9L911.4 949.4L411.6 949.4ZM354.3 1026.2L980 1026.2L980 1134.8L354.3 1134.8ZM594.9 762L715.8 762L715.8 1280.2L594.9 1280.2ZM166.9 1264.8C163.5 1255.9 158 1246 150.5 1235.1C143 1224.2 135 1213.3 126.5 1202.3C117.9 1191.4 110.6 1183.2 104.4 1177.8C115.4 1168.2 126.8 1153.7 138.8 1134.2C150.7 1114.8 156.7 1091.4 156.7 1064.1L156.7 630.9L275.5 630.9L275.5 1130.7C275.5 1130.7 271.9 1133.7 264.7 1139.9C257.5 1146 248.5 1154.4 237.6 1165C226.6 1175.5 215.9 1186.6 205.3 1198.2C194.7 1209.8 185.7 1221.6 178.2 1233.6C170.7 1245.5 166.9 1255.9 166.9 1264.8Z"/>
+    <path fill="#FFFFFF" d="M315 196C316.9 246.4 327.6 257.1 378 259C327.6 260.9 316.9 271.6 315 322C313.1 271.6 302.4 260.9 252 259C302.4 257.1 313.1 246.4 315 196Z"/>
+    <circle cx="776" cy="559" r="111" fill="#FFFFFF"/>
+    <g fill="#2B52E0" fill-rule="evenodd">
+      <path d="M695 620L741 494L769 494L815 620ZM755 515.9L772.6 564L737.4 564ZM730.9 582L779.1 582L793 620L717 620Z"/>
+      <path d="M823 494L845 494L845 620L823 620Z"/>
+    </g>
+  </svg>
+  <h1>随译 SuiYi</h1><span class="ver">UI 设计稿 v0.5</span>
+</div>
       <div class="sub">桌面 AI 翻译助手。划词翻译、截图识别、输入框转译、多 AI 服务配置。</div>
       <div class="stack">
         <span>Tauri 2</span><span>Rust 后端</span><span>React + TS 前端</span>
@@ -907,7 +935,7 @@ backdrop-filter:var(--glass-blur);-webkit-backdrop-filter:var(--glass-blur)}
               <div class="side-item">语音合成</div>
               <div class="side-item">插件</div>
             <div class="side-item">关于</div>
-              <div class="side-foot">随译 v0.4.0<br>译文由你配置的服务提供</div>
+              <div class="side-foot">随译 v0.4.1<br>译文由你配置的服务提供</div>
           </div>
           <div class="main">
             <div class="card list-col">
@@ -1469,6 +1497,7 @@ backdrop-filter:var(--glass-blur);-webkit-backdrop-filter:var(--glass-blur)}
         <li>截图识别暂不做 AI 视觉兜底：把选区图片发给模型需要多模态调用，而 DeepSeek 这类纯文本模型不支持，得先按服务能力区分。没实现就不摆这个开关。</li>
         <li>输入框转译的撤销交给目标程序自己的 Ctrl+Z，不弹 8 秒撤销条：那 8 秒里用户可能已经改过内容，再写回一次比让用户自己撤销更容易出错。写回前的焦点快照校验与失败降级为复制照做。</li>
         <li>组件小字在实现里落在 6 级字阶的 11px 与 12px 两档；稿中个别 11.5px 是早期写法，以实现为准。</li>
+        <li>品牌标记与应用图标、favicon 是同一枚（真源 <code>design/brand/logo.svg</code>）：气泡 + 译 + 星芒 + AI 徽章，底层淡靛留出纸叠的缝；页内用内联 SVG，本稿仍然零外部依赖。</li>
       </ul>
     </div>
   </section>

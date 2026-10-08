@@ -18,9 +18,9 @@
  * 底面不是一块纯色：几团会缓慢游动的色雾，和窗口里那一层同源。
  * 卡片、顶栏、代码块用毛玻璃，和应用里的卡片是同一档材质。
  *
- * 形状：6 / 10 / 14 三档。唯一的例外是品牌方块，它复刻应用图标
- * （朱砂 #A8331F 印章，圆角比例同 icon.svg），属于品牌资产，不参与页面配色体系：
- * 印章负责「这是随译」，蓝色只负责「这里可以点」。
+ * 形状：6 / 10 / 14 三档。
+ * 页头的品牌标直接用应用图标 img/icon.svg，和 exe、任务栏、favicon 是同一枚，
+ * 不在这里另画一个方块：标记负责「这是随译」，蓝色只负责「这里可以点」。
  */
 :root{
   /* 色雾：与应用 src/App.css 的 --wash-layers 同一组 */
@@ -139,10 +139,7 @@ img{display:block;max-width:100%;height:auto}
   backdrop-filter:var(--glass-blur);-webkit-backdrop-filter:var(--glass-blur);
 }
 .bar .in{max-width:1080px;margin:0 auto;padding:0 32px;height:60px;display:flex;align-items:center;gap:10px}
-.mark{
-  width:26px;height:26px;border-radius:var(--r-s);background:#a8331f;color:#fff;flex:none;
-  font-size:var(--t-meta);font-weight:600;display:inline-flex;align-items:center;justify-content:center;
-}
+.mark{width:28px;height:28px;flex:none}
 .brand{font-size:var(--t-h3);font-weight:600;letter-spacing:.2px}
 .bar .sp{flex:1}
 .bar nav{display:flex;gap:22px;font-size:var(--t-sub)}
@@ -289,7 +286,7 @@ footer a:hover{color:var(--link-hover)}
 
 <header class="bar">
   <div class="in">
-    <span class="mark" aria-hidden="true">译</span>
+    <img class="mark" src="img/icon.svg" width="28" height="28" alt="">
     <span class="brand">随译 SuiYi</span>
     <span class="sp"></span>
     <nav>
@@ -327,7 +324,7 @@ footer a:hover{color:var(--link-hover)}
   <dl class="facts">
     <div><dt>系统</dt><dd>Windows 10 1809 以上，64 位</dd></div>
     <div><dt>安装包</dt><dd>3.1 MB，未签名</dd></div>
-        <div><dt>版本</dt><dd>v0.4.0</dd></div>
+        <div><dt>版本</dt><dd>v0.4.1</dd></div>
     <div><dt>翻译服务</dt><dd>自备 API Key，兼容 OpenAI 协议</dd></div>
   </dl>
 
