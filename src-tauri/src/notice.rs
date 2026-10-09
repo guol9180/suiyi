@@ -26,7 +26,16 @@ pub struct NoticePayload {
 pub struct NoticeState(pub Mutex<Option<NoticePayload>>);
 
 /// 在光标旁显示一条提示。kind: ok | err | info
-pub fn show(app: &AppHandle, text: &str, kind: &str) -> Result<(), String> {
+///
+/// 只报信，不往上抛 Result：提示窗口建不出来（极端情况下 DWM 出错）没有补救动作，
+/// 记进日志就够了；调用点全是「这条流程的最后一句」，没有地方处理错误。
+pub fn show(app: &AppHandle, text: &str, kind: &str) {
+    if let Err(e) = show_inner(app, text, kind) {
+        crate::selection::log_line(&format!("notice: 显示失败 {e}"));
+    }
+}
+
+fn show_inner(app: &AppHandle, text: &str, kind: &str) -> Result<(), String> {
     let payload = NoticePayload {
         text: text.to_string(),
         kind: kind.to_string(),

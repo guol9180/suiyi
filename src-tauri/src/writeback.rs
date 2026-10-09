@@ -55,11 +55,9 @@ pub fn trigger_input_translate(_app: AppHandle) {
 fn degrade_to_clipboard(
     app: &AppHandle,
     cb: &mut Clipboard,
-    original: &str,
     translated: &str,
     reason: &str,
 ) {
-    let _ = original;
     if cb.set_text(translated.to_string()).is_err() {
         log_line("input: 降级失败，连剪贴板都没写进去");
         return;
@@ -228,7 +226,7 @@ fn run_input_translate(app: &AppHandle) -> Result<(), String> {
 
     // 3) 焦点快照校验：焦点变了绝不写回，降级为复制
     if foreground_hwnd() != fg_before {
-        degrade_to_clipboard(app, &mut cb, &original, &translated, "目标窗口已失焦");
+        degrade_to_clipboard(app, &mut cb, &translated, "目标窗口已失焦");
         return Ok(());
     }
 

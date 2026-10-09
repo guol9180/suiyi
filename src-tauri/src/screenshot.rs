@@ -89,11 +89,11 @@ pub struct OcrState(pub Mutex<Option<OcrResult>>);
 /// 所以先外扩再识别；外扩带进来的邻行随后按矩形过滤掉，不会混进译文。
 const OCR_PAD: i32 = 32;
 
-/// 外扩后的区域还这么小，就先放大再识别（小字对 Windows OCR 同样不友好）
-const OCR_UPSCALE_IF_BELOW: i32 = 480;
-
-/// 识别区域的外扩比。识别一次约 100~300ms，最多试三遍
+/// 重识别时最多放大到这个倍数。一次识别约 100~300ms，最多试三遍
 const OCR_MAX_SCALE: u32 = 2;
+
+/// 长边超过这个尺寸就不再试「放大后重识别」：大图本来就认得清，放大只会白占内存
+const OCR_UPSCALE_MAX_SIDE: i32 = 2000;
 
 /// 诊断落盘：识别为空时把裁剪图写到配置目录，方便事后查为什么没认出来
 const EMPTY_CROP_FILE: &str = "last-crop.png";
@@ -511,6 +511,8 @@ fn ocr_rgba(rgba: &[u8], w: i32, h: i32, lang: &str) -> Result<(Vec<OcrLine>, St
 /// 依次试原图 → 2 倍放大 → 反色，一旦认出行就不再折腾，返回实际用的放大倍数。
 ///
 /// 三遍都认不出才返回 Err（真正的识别故障）；认出来但内容为空是正常结果。
+/// 放大那一步要按像素翻四倍占内存，所以大区域直接跳过：大图放大既救不回识别率，
+/// 又会白白吃掉上百 MB。
 fn ocr_best(
     rgba: &[u8],
     w: i32,
@@ -519,10 +521,12 @@ fn ocr_best(
 ) -> Result<(Vec<OcrLine>, String, u32), String> {
     let mut best: Option<(Vec<OcrLine>, String, u32)> = None;
     let mut last_err: Option<String> = None;
-    for stage in 0..3u32 {
+    let try_upscale = w.max(h) <= OCR_UPSCALE_MAX_SIDE;
+    let stages: u32 = if try_upscale { 3 } else { 2 };
+    for stage in 0..stages {
         let (buf, aw, ah, scale) = match stage {
             0 => (rgba.to_vec(), w, h, 1),
-            1 => (
+            1 if try_upscale => (
                 scale_rgba(rgba, w, h, OCR_MAX_SCALE),
                 w * OCR_MAX_SCALE as i32,
                 h * OCR_MAX_SCALE as i32,
