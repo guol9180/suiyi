@@ -18,6 +18,12 @@ const DOWNLOAD_PAGE: &str = "https://suiyi.imhgl.com/";
 const ASSET_NAME: &str = "SuiYi-Setup-x64.exe";
 /// 安装包最小体积。比这还小一定不是完整产物（正常 3MB 左右）
 const MIN_INSTALLER_BYTES: u64 = 500 * 1024;
+/// 镜像站上的下载目录（Pages 每次部署会把最新安装包同步到这里）
+const MIRROR_BASE: &str = "https://suiyi.imhgl.com/dl/";
+/// 下载时多久没收到数据算卡死
+const STALL_TIMEOUT: Duration = Duration::from_secs(60);
+/// 每个地址最多试几次
+const DOWNLOAD_ATTEMPTS: u32 = 2;
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -57,11 +63,26 @@ fn version_gt(a: &str, b: &str) -> bool {
     false
 }
 
+/// 查版本用的客户端：JSON 很小，给个总超时足够
 fn client() -> Result<reqwest::Client, String> {
     reqwest::Client::builder()
         // GitHub API 强制要求 User-Agent，缺了会直接 403
         .user_agent("SuiYi-Updater")
         .timeout(Duration::from_secs(20))
+        .build()
+        .map_err(|e| format!("初始化网络失败: {e}"))
+}
+
+/// 下载安装包用的客户端。
+///
+/// 关键区别：**不能设总超时**。之前和查版本共用一个 20 秒总超时的客户端，
+/// 3MB 的安装包在国内网络下慢一点就必然被掐断，用户看到的就是
+/// 「下载失败：error sending request for url(...)」。这里只限制连接建立时间，
+/// 传输过程中的卡死由 STALL_TIMEOUT 判断。
+fn download_client() -> Result<reqwest::Client, String> {
+    reqwest::Client::builder()
+        .user_agent("SuiYi-Updater")
+        .connect_timeout(Duration::from_secs(20))
         .build()
         .map_err(|e| format!("初始化网络失败: {e}"))
 }
@@ -130,60 +151,110 @@ pub async fn check_update() -> Result<UpdateInfo, String> {
     })
 }
 
-/// 下载安装包到临时目录，返回本地路径。进度通过 update-progress 事件推给界面
+/// 候选下载地址：先走国内镜像（Pages 同步的那份），失败再回 GitHub 原始资产地址。
+///
+/// GitHub 的 release 资产实际落在 objects.githubusercontent.com 上，国内经常连不上；
+/// 镜像挂在项目自己的域名下，速度快得多。两个都失败才报错，并把各自的原因带回去。
+fn download_candidates(asset_url: &str) -> Vec<String> {
+    let mut urls: Vec<String> = Vec::new();
+    if let Some(name) = asset_url.rsplit('/').next() {
+        if name.ends_with(".exe") || name.ends_with(".msi") || name.ends_with(".zip") {
+            urls.push(format!("{MIRROR_BASE}{name}"));
+        }
+    }
+    urls.push(asset_url.to_string());
+    urls.dedup();
+    urls
+}
+
+/// 从候选地址里下安装包，返回本地路径与用到的地址。进度通过 update-progress 推给界面。
 #[tauri::command]
 pub async fn download_update(app: AppHandle, url: String) -> Result<String, String> {
     use futures_util::StreamExt;
     use std::io::Write;
 
-    let resp = client()?
-        .get(&url)
-        .send()
-        .await
-        .map_err(|e| format!("下载失败：{e}"))?;
-    if !resp.status().is_success() {
-        return Err(format!("下载失败：服务返回 {}", resp.status().as_u16()));
-    }
-    let total = resp.content_length().unwrap_or(0);
     let dir = std::env::temp_dir().join("suiyi-update");
     std::fs::create_dir_all(&dir).map_err(|e| format!("准备临时目录失败：{e}"))?;
     let path = dir.join(ASSET_NAME);
-    let mut file = std::fs::File::create(&path).map_err(|e| format!("创建文件失败：{e}"))?;
+    let client = download_client()?;
+    let candidates = download_candidates(&url);
+    let mut reasons: Vec<String> = Vec::new();
 
-    let mut got: u64 = 0;
-    let mut stream = resp.bytes_stream();
-    while let Some(chunk) = stream.next().await {
-        let chunk = chunk.map_err(|e| format!("下载中断：{e}"))?;
-        file.write_all(&chunk)
-            .map_err(|e| format!("写入下载文件失败：{e}"))?;
-        got += chunk.len() as u64;
-        let _ = app.emit(
-            "update-progress",
-            serde_json::json!({ "downloaded": got, "total": total }),
-        );
-    }
-    drop(file);
+    for candidate in &candidates {
+        for attempt in 1..=DOWNLOAD_ATTEMPTS {
+            let host = candidate
+                .split("//")
+                .nth(1)
+                .and_then(|s| s.split('/').next())
+                .unwrap_or(candidate)
+                .to_string();
+            crate::selection::log_line(&format!(
+                "update: 下载尝试 {attempt}/{DOWNLOAD_ATTEMPTS} ← {candidate}"
+            ));
+            let attempt_result: Result<(), String> = async {
+                let resp = client
+                    .get(candidate)
+                    .send()
+                    .await
+                    .map_err(|e| format!("连接失败（{e}）"))?;
+                if !resp.status().is_success() {
+                    return Err(format!("服务返回 {}", resp.status().as_u16()));
+                }
+                let total = resp.content_length().unwrap_or(0);
+                let mut file =
+                    std::fs::File::create(&path).map_err(|e| format!("创建文件失败：{e}"))?;
+                let mut got: u64 = 0;
+                let mut stream = resp.bytes_stream();
+                loop {
+                    // 卡死检测：传了一半没动静，比等一个总超时更早给出反馈
+                    let chunk = match tokio::time::timeout(STALL_TIMEOUT, stream.next()).await {
+                        Ok(Some(chunk)) => chunk.map_err(|e| format!("传输中断（{e}）"))?,
+                        Ok(None) => break,
+                        Err(_) => return Err(format!("超过 {} 秒没有数据", STALL_TIMEOUT.as_secs())),
+                    };
+                    file.write_all(&chunk).map_err(|e| format!("写盘失败：{e}"))?;
+                    got += chunk.len() as u64;
+                    let _ = app.emit(
+                        "update-progress",
+                        serde_json::json!({ "downloaded": got, "total": total }),
+                    );
+                }
+                drop(file);
+                if got < MIN_INSTALLER_BYTES {
+                    return Err(format!("文件不完整（只有 {} KB）", got / 1024));
+                }
+                // MZ 头：确认拿到的是 Windows 可执行文件，而不是一个错误页
+                let mut head = [0u8; 2];
+                {
+                    use std::io::Read;
+                    std::fs::File::open(&path)
+                        .and_then(|mut f| f.read_exact(&mut head))
+                        .map_err(|e| format!("读取下载文件失败：{e}"))?;
+                }
+                if &head != b"MZ" {
+                    return Err("拿到的不是可执行文件".into());
+                }
+                Ok(())
+            }
+            .await;
 
-    // 校验一下再交给安装器：下到一半的连接会得到半截文件，直接运行只会弹一个
-    // 看不懂的系统错误
-    let len = std::fs::metadata(&path).map_err(|e| format!("读取下载文件失败：{e}"))?.len();
-    if len < MIN_INSTALLER_BYTES {
-        return Err(format!(
-            "下载到的文件不完整（{} KB），请重试",
-            len / 1024
-        ));
+            match attempt_result {
+                Ok(()) => {
+                    crate::selection::log_line(&format!("update: 下载完成 ← {host}"));
+                    return Ok(path.to_string_lossy().to_string());
+                }
+                Err(e) => {
+                    crate::selection::log_line(&format!("update: {host} 第 {attempt} 次失败：{e}"));
+                    reasons.push(format!("{host}：{e}"));
+                }
+            }
+        }
     }
-    let mut head = [0u8; 2];
-    {
-        use std::io::Read;
-        std::fs::File::open(&path)
-            .and_then(|mut f| f.read_exact(&mut head))
-            .map_err(|e| format!("读取下载文件失败：{e}"))?;
-    }
-    if &head != b"MZ" {
-        return Err("下载到的不是可执行文件，请改用下载页手动安装".into());
-    }
-    Ok(path.to_string_lossy().to_string())
+
+    Err(format!(
+        "下载失败：{}。可以点「打开下载页」手动安装。",
+        reasons.join("；")
+    ))
 }
 
 /// 启动安装向导并退出随译。
@@ -225,5 +296,20 @@ mod tests {
         assert!(!version_gt("0.7.9", "0.8.0"), "旧版本不能算更新");
         // 带后缀的预发布版本按数字段比较，0.8.0-rc1 == 0.8.0，不提示更新
         assert!(!version_gt("0.8.0-rc1", "0.8.0"));
+    }
+
+    /// 下载地址：先试国内镜像（同一个文件名），再回落到 GitHub 原始地址
+    #[test]
+    fn download_candidates_prefers_the_mirror() {
+        let urls = super::download_candidates(
+            "https://github.com/guol9180/suiyi/releases/download/v0.9.0/SuiYi-Setup-x64.exe",
+        );
+        assert_eq!(urls.len(), 2, "镜像 + 原始地址：{urls:?}");
+        assert_eq!(urls[0], "https://suiyi.imhgl.com/dl/SuiYi-Setup-x64.exe");
+        assert!(urls[1].starts_with("https://github.com/"));
+
+        // 不是安装包后缀的地址不瞎拼镜像
+        let only_github = super::download_candidates("https://example.com/whatever");
+        assert_eq!(only_github, vec!["https://example.com/whatever".to_string()]);
     }
 }

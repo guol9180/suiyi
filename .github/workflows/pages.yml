@@ -31,6 +31,25 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
+      # 把最新一版的安装包同步到下载页目录：GitHub 的 release 资产落在
+      # objects.githubusercontent.com 上，国内经常连不上；镜像到自己的域名下更稳。
+      # 应用内的「下载并安装」会优先试这份镜像。
+      - name: 镜像最新安装包
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          $dir = "docs/dl"
+          New-Item -ItemType Directory -Force -Path $dir | Out-Null
+          foreach ($n in @("SuiYi-Setup-x64.exe", "SuiYi-Setup-x64.msi", "SuiYi-Portable-x64.zip")) {
+            $url = "https://github.com/guol9180/suiyi/releases/latest/download/$n"
+            try {
+              Invoke-WebRequest -Uri $url -OutFile (Join-Path $dir $n) -TimeoutSec 600
+              Write-Host "已镜像 $n"
+            } catch {
+              Write-Warning "跳过 $n：$_"
+            }
+          }
+          Get-ChildItem $dir | Select-Object Name, Length
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

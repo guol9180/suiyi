@@ -494,6 +494,42 @@ fn scale_rgba(rgba: &[u8], w: i32, h: i32, factor: u32) -> Vec<u8> {
     out.into_raw()
 }
 
+/// RGBA → RgbImage：PaddleOCR 只吃 RGB
+fn rgba_to_rgb(rgba: &[u8], w: i32, h: i32) -> Option<image::RgbImage> {
+    let img = image::RgbaImage::from_raw(w as u32, h as u32, rgba.to_vec())?;
+    Some(image::DynamicImage::ImageRgba8(img).to_rgb8())
+}
+
+/// 把识别结果裁成「用户真正框到的行」，并把坐标映射回紧框图的坐标系。
+///
+/// 两点约定：识别喂的是外扩后的区域（region），面板展示的是紧框图（crop），
+/// 所以要按矩形过滤 + 平移；scale 是识别时用过的放大倍数（Paddle 路径恒为 1）。
+fn map_lines_to_selection(
+    all: Vec<OcrLine>,
+    scale: f64,
+    sel_in_region: (f64, f64, f64, f64),
+    crop_w: i32,
+    crop_h: i32,
+) -> Vec<OcrLine> {
+    let k = if scale <= 0.0 { 1.0 } else { scale };
+    all.into_iter()
+        .filter(|l| line_belongs((l.x / k, l.y / k, l.w / k, l.h / k), sel_in_region))
+        .map(|l| {
+            let lx = (l.x / k - sel_in_region.0).clamp(0.0, crop_w as f64);
+            let ly = (l.y / k - sel_in_region.1).clamp(0.0, crop_h as f64);
+            let lw = (l.w / k).clamp(1.0, (crop_w as f64 - lx).max(1.0));
+            let lh = (l.h / k).clamp(1.0, (crop_h as f64 - ly).max(1.0));
+            OcrLine {
+                text: l.text,
+                x: lx,
+                y: ly,
+                w: lw,
+                h: lh,
+            }
+        })
+        .collect()
+}
+
 /// 反色（只翻 RGB，alpha 保持）
 fn invert_rgba(rgba: &[u8]) -> Vec<u8> {
     let mut out = rgba.to_vec();
@@ -657,36 +693,42 @@ pub async fn finish_region(
     let (engine, lang, lines) = match plugin_result.ok().flatten() {
         // 插件不回传语言，留空让界面别乱猜
         Some((name, l)) => (format!("plugin:{name}"), String::new(), l),
-        None => match ocr_best(&region_rgba, region_w, region_h, "en-US") {
-            Ok((all, used, scale)) => {
-                let k = scale as f64;
-                // 外扩带进来的邻行按矩形摘掉，再把坐标平移回紧框图的坐标系
-                let filtered: Vec<OcrLine> = all
-                    .into_iter()
-                    .filter(|l| line_belongs((l.x / k, l.y / k, l.w / k, l.h / k), sel_in_region))
-                    .map(|l| {
-                        let lx = (l.x / k - sel_in_region.0).clamp(0.0, crop_w as f64);
-                        let ly = (l.y / k - sel_in_region.1).clamp(0.0, crop_h as f64);
-                        let lw = (l.w / k).clamp(1.0, (crop_w as f64 - lx).max(1.0));
-                        let lh = (l.h / k).clamp(1.0, (crop_h as f64 - ly).max(1.0));
-                        OcrLine {
-                            text: l.text,
-                            x: lx,
-                            y: ly,
-                            w: lw,
-                            h: lh,
+        None => {
+            // 首选 PaddleOCR（PP-OCRv4，随包分发）：中文与单行框选都比系统 OCR 强得多。
+            // 模型缺失或加载失败才回落到 Windows.Media.OCR，识别不可能整个不可用。
+            let paddle = rgba_to_rgb(&region_rgba, region_w, region_h)
+                .ok_or_else(|| "选区图转换失败".to_string())
+                .and_then(|img| crate::ocr::recognize(&app, &img));
+            match paddle {
+                Ok(all) => (
+                    "paddle".to_string(),
+                    "ppocr".to_string(),
+                    map_lines_to_selection(all, 1.0, sel_in_region, crop_w, crop_h),
+                ),
+                Err(e) => {
+                    crate::selection::log_line(&format!("screenshot: PaddleOCR 不可用（{e}），回落系统 OCR"));
+                    match ocr_best(&region_rgba, region_w, region_h, "en-US") {
+                        Ok((all, used, scale)) => (
+                            "windows".to_string(),
+                            used,
+                            map_lines_to_selection(
+                                all,
+                                scale as f64,
+                                sel_in_region,
+                                crop_w,
+                                crop_h,
+                            ),
+                        ),
+                        Err(e) => {
+                            // 两种引擎都失败：面板照常打开，把原因写给它看
+                            crate::selection::log_line(&format!("screenshot: OCR 失败 {e}"));
+                            error = Some(e);
+                            ("windows".to_string(), String::new(), Vec::new())
                         }
-                    })
-                    .collect();
-                ("windows".to_string(), used, filtered)
+                    }
+                }
             }
-            Err(e) => {
-                // 识别故障不再直接吞掉：面板照常打开，把原因写给它看
-                crate::selection::log_line(&format!("screenshot: OCR 失败 {e}"));
-                error = Some(e);
-                ("windows".to_string(), String::new(), Vec::new())
-            }
-        },
+        }
     };
     let text = lines.iter().map(|l| l.text.as_str()).collect::<Vec<_>>().join("\n");
     crate::selection::log_line(&format!("screenshot: OCR 完成 {} 行 / {} 字符", lines.len(), text.chars().count()));

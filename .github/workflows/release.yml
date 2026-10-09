@@ -10,6 +10,8 @@ on:
 
 permissions:
   contents: write
+  # 发版后要触发一次 Pages 部署，把新安装包同步到下载页的 /dl 镜像目录
+  actions: write
 
 jobs:
   windows:
@@ -36,8 +38,19 @@ jobs:
         with:
           workspaces: src-tauri
 
+      # OCR 模型与 ONNX Runtime 约 34MB，按哈希缓存，避免每次 CI 重新下载
+      - name: 缓存 OCR 模型
+        uses: actions/cache@v4
+        with:
+          path: src-tauri/ocr
+          key: ocr-assets-v1-${{ runner.os }}-${{ hashFiles('scripts/fetch-ocr-assets.mjs') }}
+
       - name: 安装前端依赖
         run: pnpm install --frozen-lockfile
+
+      # 后端测试要编译到 tauri 配置里的资源，所以模型得先到位（脚本自带 SHA256 校验）
+      - name: 拉取 OCR 模型
+        run: pnpm ocr:assets
 
       - name: 运行后端测试
         working-directory: src-tauri
@@ -64,14 +77,53 @@ jobs:
           New-Item -ItemType Directory -Force -Path dist-release | Out-Null
           Copy-Item src-tauri/target/release/bundle/nsis/*.exe dist-release/SuiYi-Setup-x64.exe
           Copy-Item src-tauri/target/release/bundle/msi/*.msi dist-release/SuiYi-Setup-x64.msi
-          Compress-Archive -Path src-tauri/target/release/suiyi.exe -DestinationPath dist-release/SuiYi-Portable-x64.zip -Force
+          # 免安装版也要带 ocr/（模型与 ONNX Runtime），否则解压出来只能回落到系统 OCR
+          New-Item -ItemType Directory -Force -Path dist-portable | Out-Null
+          Copy-Item src-tauri/target/release/suiyi.exe dist-portable/
+          Copy-Item src-tauri/ocr dist-portable/ocr -Recurse
+          Compress-Archive -Path dist-portable/* -DestinationPath dist-release/SuiYi-Portable-x64.zip -Force
           Get-ChildItem dist-release | Select-Object Name, Length
 
       - name: 上传构建产物
+        id: upload
         uses: actions/upload-artifact@v4
         with:
           name: suiyi-windows-x64
           path: dist-release/*
+
+      # 代码签名（SignPath Foundation，申请与配置见 docs/signing.md）。
+      # SIGNPATH_READY 还是 false、或仓库里没配 SIGNPATH_API_TOKEN 时整段跳过，
+      # 未签名的包照常发布；审核通过后把 SIGNPATH_READY 改成 true 并填上四个 slug 即可。
+      - name: 提交签名请求（SignPath）
+        id: signpath
+        if: ${{ vars.SIGNPATH_READY == 'true' && secrets.SIGNPATH_API_TOKEN != '' }}
+        uses: signpath/github-action-submit-signing-request@v1
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: "<-- 填这里：organization id"
+          project-slug: "<-- 填这里：project slug"
+          signing-policy-slug: "<-- 填这里：signing policy slug"
+          artifact-configuration-slug: "<-- 填这里：artifact configuration slug"
+          github-artifact-id: ${{ steps.upload.outputs.artifact-id }}
+          wait-for-completion: true
+          output-artifact-directory: signed
+
+      - name: 说明签名状态
+        if: ${{ vars.SIGNPATH_READY != 'true' || secrets.SIGNPATH_API_TOKEN == '' }}
+        shell: pwsh
+        run: Write-Host "::notice::本次未签名（SignPath 尚未接入，见 docs/signing.md）"
+
+      # 签名产物优先：拿到签名版就覆盖掉待发布的未签名文件
+      - name: 用已签名产物替换
+        if: ${{ steps.signpath.outcome == 'success' }}
+        shell: pwsh
+        run: |
+          if (Test-Path signed) {
+            Get-ChildItem signed -Recurse -File | ForEach-Object {
+              Copy-Item $_.FullName dist-release/ -Force
+            }
+          }
+          Get-ChildItem dist-release | Select-Object Name, Length
 
       - name: 发布到 GitHub Release
         if: startsWith(github.ref, 'refs/tags/v')
@@ -89,3 +141,14 @@ jobs:
             安装包没有代码签名，首次运行 Windows SmartScreen 会提示「未知发布者」，
             点「更多信息 → 仍要运行」即可。免安装版同样需要系统已装 WebView2 运行时
             （Windows 11 自带）。
+
+      # 新版本发布后立刻重跑一次 Pages：下载页会把最新安装包同步到 /dl/，
+      # 应用内的「下载并安装」优先走这份国内镜像。
+      - name: 刷新下载页镜像
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh api --method POST "/repos/${{ github.repository }}/actions/workflows/pages.yml/dispatches" -f ref=main
+          Write-Host "已触发 Pages 部署"

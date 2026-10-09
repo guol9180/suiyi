@@ -58,7 +58,7 @@ export function describeError(raw: string | undefined): ErrorInfo {
       return {
         ...base,
         title: "这枚 Key 没有该模型的权限",
-        hint: "确认账号已开通这个模型，或把模型名换成账号可用的那一个。",
+        hint: "模型列表里能看到不等于能调用。确认账号已开通这个模型，或把模型名换成账号确实可用的那一个（有的服务商还要先创建接入点/部署）。",
       };
     case "404":
       return {

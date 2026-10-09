@@ -157,9 +157,11 @@ export default function OcrResultPage() {
   const engineLabel =
     result?.engine === "windows"
       ? "Windows.Media.OCR"
-      : result?.engine?.startsWith("plugin:")
-        ? `OCR 插件 ${result.engine.slice("plugin:".length)}`
-        : "—";
+      : result?.engine === "paddle"
+        ? "PaddleOCR（本地）"
+        : result?.engine?.startsWith("plugin:")
+          ? `OCR 插件 ${result.engine.slice("plugin:".length)}`
+          : "—";
   /** 只认识 en-US / zh-CN 这两种常见值，其余原样显示 */
   const langLabel =
     result?.lang === "en-US" ? "英文" : result?.lang === "zh-CN" ? "中文" : (result?.lang ?? "");

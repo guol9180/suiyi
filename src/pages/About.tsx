@@ -2,8 +2,8 @@
  * 关于页（设计稿第 8 节）。
  *
  * 放三件对用户真正有用的事：这是谁、我的数据在哪、出问题怎么把线索给我。
- * 不写「感谢使用」这类空话，也不在页面上宣称许可 —— 仓库目前没有 LICENSE，
- * 只列第三方组件的许可，本项目许可留待仓库层面决定。
+ * 不写「感谢使用」这类空话。本项目许可是 MIT（见仓库 LICENSE），
+ * 这里只列实际用到的第三方组件与它们的许可。
  */
 import { useCallback, useEffect, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
@@ -326,7 +326,10 @@ export default function AboutPage({ forceCheckSignal = 0 }: { forceCheckSignal?:
         <div className="card-head"><b>第三方组件</b></div>
         <div className="ab-thanks">
           Tauri（MIT / Apache-2.0）、React（MIT）、Tokio / reqwest（MIT / Apache-2.0）、
-          rusqlite（MIT）、rquickjs（MIT）、keyring（MIT / Apache-2.0）。
+          rusqlite（MIT）、rquickjs（MIT）、keyring（MIT / Apache-2.0）、
+          PaddleOCR 模型与 RapidOCR（Apache-2.0）、ONNX Runtime（MIT）。
+          <br />
+          随译 SuiYi 本身以 MIT 许可发布，全文见仓库里的 LICENSE。
           产品名与商标归各自所有者所有。
         </div>
       </div>

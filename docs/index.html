@@ -323,8 +323,8 @@ footer a:hover{color:var(--link-hover)}
 
   <dl class="facts">
     <div><dt>系统</dt><dd>Windows 10 1809 以上，64 位</dd></div>
-    <div><dt>安装包</dt><dd>3.3 MB，未签名</dd></div>
-        <div><dt>版本</dt><dd>v0.8.1</dd></div>
+    <div><dt>安装包</dt><dd>约 20 MB，未签名</dd></div>
+        <div><dt>版本</dt><dd>v0.9.0</dd></div>
     <div><dt>翻译服务</dt><dd>自备 API Key，兼容 OpenAI 协议</dd></div>
   </dl>
 
@@ -417,7 +417,7 @@ footer a:hover{color:var(--link-hover)}
     <h2>已知限制</h2>
     <div class="limits">
       <p>只在 Windows 上构建与验证过。macOS 和 Linux 尚未实现，界面上只会提示当前平台不支持。</p>
-      <p>截图识别的语言取决于系统 OCR 语言包。只装中文包时，识别英文会有把小写 l 认成大写 I 这类误差。</p>
+      <p>截图识别用内置的 PaddleOCR（PP-OCRv4 中英文模型）在本机完成，首次使用不需要联网。手写体、竖排文字与极小字号仍会出错。</p>
       <p>朗读用系统自带语音，音色一般，也还没有语速和音色选择。</p>
       <p>插件不能联网，只能读写剪贴板，且需要先申请权限。</p>
       <p>API Key 只写进 Windows 凭据管理器，配置文件里零明文。</p>

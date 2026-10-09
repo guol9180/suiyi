@@ -1,11 +1,14 @@
 {
   "name": "sui-scaffold",
   "private": true,
-  "version": "0.8.1",
+  "version": "0.9.0",
   "type": "module",
+  "license": "MIT",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc && vite build",
+    "dev": "node scripts/fetch-ocr-assets.mjs && vite",
+    "build": "node scripts/fetch-ocr-assets.mjs && tsc && vite build",
+    "ocr:assets": "node scripts/fetch-ocr-assets.mjs",
+    "ocr:check": "node scripts/fetch-ocr-assets.mjs --check",
     "preview": "vite preview",
     "tauri": "tauri"
   },

@@ -12,6 +12,16 @@ dist
 dist-ssr
 *.local
 
+# OCR 模型（约 16MB）：构建前用 pnpm ocr:assets 拉到 src-tauri/ocr/，
+# 由 tauri.conf.json 的 bundle.resources 打进安装包；文件不进仓库。
+# 注意排除的是目录里的内容而不是目录本身：目录缺了，资源映射会直接构建失败，
+# 所以留一个 .gitkeep 让空目录也能被 clone 出来。
+src-tauri/ocr/*
+!src-tauri/ocr/.gitkeep
+
+# Pages 部署时同步过来的安装包镜像（CI 生成，不进仓库）
+docs/dl/
+
 # 运行时数据。API Key 只进系统凭据管理器，这几样东西永远不该被提交：
 # 密钥不在 services.json 里，但万一有人为了排查把它拷进仓库，先拦一道。
 services.json

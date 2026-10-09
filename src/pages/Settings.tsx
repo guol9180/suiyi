@@ -1715,7 +1715,7 @@ export default function SettingsPage({
                 )}
               </div>
 
-              {/* 测试连接：Key 是否有效、网关是否可达、模型是否可见 */}
+              {/* 测试连接：真实调用一次，回答「这个模型现在能不能用」 */}
               <div className="testbox">
                 <div className="trow">
                   <button
@@ -1728,14 +1728,14 @@ export default function SettingsPage({
                   {testing && <span className="spin" />}
                   {testResult?.ok && (
                     <>
-                      <span className="chip ok"><Icon name="check" size="sm" />连接正常</span>
+                      <span className="chip ok"><Icon name="check" size="sm" />模型可用</span>
                       <span className="chip mile">{testResult.elapsedMs}ms</span>
                       <span className="t-cap">
-                        {testResult.models.length === 0
-                          ? "服务未返回模型列表"
-                          : testResult.models.includes(draft.model)
-                            ? `模型 ${draft.model} 可用`
-                            : `返回 ${testResult.models.length} 个模型，未包含 ${draft.model}`}
+                        已用它跑通一次翻译
+                        {testResult.models.length > 0 &&
+                          (testResult.models.includes(draft.model)
+                            ? `，服务端共 ${testResult.models.length} 个模型`
+                            : `，但服务端模型列表（${testResult.models.length} 个）里没有这个名字`)}
                       </span>
                     </>
                   )}
@@ -1752,6 +1752,12 @@ export default function SettingsPage({
                       ))}
                     </div>
                   )}
+                {!testing && !testResult && (
+                  <div className="thint">
+                    会用它真实跑一次翻译（消耗几十个 token），比只看模型列表可靠：模型列表是公开的，
+                    有没有权限用是另一回事。
+                  </div>
+                )}
 
                 {/* 失败：标题写结论，原文折叠保留。诊断靠原文，所以不丢 */}
                 {testResult && !testResult.ok && testResult.error && (() => {

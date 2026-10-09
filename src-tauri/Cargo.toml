@@ -1,8 +1,9 @@
 [package]
 name = "suiyi"
-version = "0.8.1"
+version = "0.9.0"
 description = "随译 SuiYi · 桌面 AI 翻译助手"
 authors = ["suiyi-dev"]
+license = "MIT"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -36,6 +37,13 @@ rusqlite = { version = "0.40.2", features = ["bundled"] }
 rquickjs = "0.14.0"
 
 [target.'cfg(windows)'.dependencies]
+# PaddleOCR（PP-OCRv4）跑在 ONNX Runtime 上：中文与单行框选的识别质量比系统 OCR 高一大截
+# 关掉它自带的 download-binaries/copy-dylibs：运行时由我们自己的 ocr/onnxruntime.dll 提供，
+# 构建过程不联网，装到哪台机器也不会出现「找不到 DLL」。
+paddle-ocr-rs = { version = "0.6.1", default-features = false }
+# 版本必须和 paddle-ocr-rs 0.6.1 当年编译的那版一致：rc.13 把 Tensor/Session 的 API 换过，
+# 直接升上去编不过。
+ort = { version = "=2.0.0-rc.10", default-features = false, features = ["std", "ndarray", "load-dynamic"] }
 windows = { version = "0.61", features = [
     "Foundation",
     "Globalization",

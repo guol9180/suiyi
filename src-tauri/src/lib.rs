@@ -5,6 +5,7 @@ pub mod history;
 pub mod hotkeys;
 pub mod keyring;
 pub mod notice;
+pub mod ocr;
 pub mod plugin;
 pub mod plugin_js;
 pub mod screenshot;
@@ -142,6 +143,9 @@ pub fn run() {
 
             // 托盘常驻：这是这个后台热键工具唯一的「一直在那儿」的入口
             tray::init(&handle);
+
+            // OCR 模型在后台先加载好（约一秒），第一次截图就不用等
+            ocr::warm_up(handle.clone());
 
             // 旧实例退出、别的程序让出热键都需要时间：后台退避重试到全部注册成功为止，
             // 冲突消失（比如用户关掉 PixPin）时自动接管默认键。

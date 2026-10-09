@@ -641,8 +641,11 @@ pub struct ConnectionTest {
     pub error: Option<String>,
 }
 
-/// 探测服务连通性：请求 `{baseUrl}/models`，回答三件事——
-/// Key 是否有效、网关是否可达、模型是否在权限范围内。
+/// 探测服务连通性：用配置里的协议与模型**真实调用一次**，回答四件事——
+/// Key 是否有效、网关是否可达、模型能不能用、往返多久。
+///
+/// 不再只看 `/models`：那个接口只说明 Key 有效，说明不了你配的模型有权限用
+/// （模型列表通常对所有人可见），"测试通过但翻译 403" 就是这么来的。
 #[tauri::command]
 pub async fn test_connection(
     app: tauri::AppHandle,
@@ -670,29 +673,62 @@ pub async fn test_connection(
         return Ok(fail(0, "请先设置 API Key".into()));
     }
 
-    let probe = probe_models(&svc.base_url, &key, file.timeout_secs).await;
-    if let Some(err) = probe.error {
-        return Ok(fail(probe.elapsed_ms, err));
+    if svc.model.trim().is_empty() {
+        return Ok(fail(0, "请先填写模型".into()));
     }
-    if let Some(status) = probe.status {
-        if !status.is_success() {
-            let short: String = probe.body.chars().take(200).collect();
-            return Ok(fail(probe.elapsed_ms, format!("服务返回 {status}: {short}")));
+
+    /*
+     * 真的调用一次，而不是只看 /models。
+     *
+     * /models 只能证明「Key 有效、网关可达」：绝大多数服务商的模型列表是公开的，
+     * 能不能用你配的这个模型是另一回事 —— 用户看到「测试通过」，真翻译时却吃 403
+     * 就是这么来的。这里用同一个协议、同一个模型、同一个接口发一次最小请求，
+     * 走的就是翻译那条链路：测过能用就是真能用。
+     */
+    let dictionary_mode = svc.result_type == ResultType::Dictionary;
+    let template = if dictionary_mode && svc.prompt_template.is_none() {
+        Some(DICTIONARY_PROMPT)
+    } else {
+        svc.prompt_template.as_deref()
+    };
+    let prompt = translator::build_prompt(template, "自动检测", "中文", "ok");
+    let started = std::time::Instant::now();
+    let result = translator::translate(
+        &app,
+        translator::TranslateParams {
+            service_id: &service_id,
+            base_url: &svc.base_url,
+            api_key: &key,
+            model: &svc.model,
+            prompt: &prompt,
+            temperature: svc.temperature,
+            // 测试必须一次拿全，不能流式
+            stream: false,
+            timeout: Duration::from_secs(file.timeout_secs.clamp(3, 120).min(20)),
+        },
+    )
+    .await;
+    let elapsed_ms = started.elapsed().as_millis() as u64;
+
+    match result {
+        Ok(_) => {
+            // 顺手把模型列表也拉一次（best-effort）：界面上「改用某个模型」还靠它。
+            // 拉不到不算测试失败 —— 模型已经真的跑通了。
+            let probe = probe_models(&svc.base_url, &key, file.timeout_secs).await;
+            Ok(ConnectionTest {
+                ok: true,
+                elapsed_ms,
+                models: parse_model_ids(&probe.body),
+                error: None,
+            })
         }
+        Err(e) => Ok(fail(elapsed_ms, e)),
     }
-    Ok(ConnectionTest {
-        ok: true,
-        elapsed_ms: probe.elapsed_ms,
-        models: parse_model_ids(&probe.body),
-        error: None,
-    })
 }
 
-/// 一次 `/models` 探测的原始结果。把「请求 + 读正文」抽出来，
-/// 是为了让 test_connection（要状态码与耗时）和 list_models（只要 id 列表）
-/// 走同一条实现，不再各写一遍请求。
+/// 一次 `/models` 探测的原始结果。连通性测试已经改成真实调用模型了，
+/// 这里只服务于「拉模型候选列表」这一件事。
 struct ModelsProbe {
-    elapsed_ms: u64,
     /// 拿到响应时的状态码；连不上时为 None
     status: Option<reqwest::StatusCode>,
     body: String,
@@ -704,20 +740,17 @@ async fn probe_models(base_url: &str, key: &str, timeout_secs: u64) -> ModelsPro
     let url = format!("{}/models", base_url.trim_end_matches('/'));
     let timeout = Duration::from_secs(timeout_secs.clamp(3, 120).min(15));
     let client = reqwest::Client::new();
-    let started = std::time::Instant::now();
     let mut req = client.get(&url);
     if !key.trim().is_empty() {
         req = req.header("Authorization", format!("Bearer {}", key.trim()));
     }
     match tokio::time::timeout(timeout, req.send()).await {
         Err(_) => ModelsProbe {
-            elapsed_ms: started.elapsed().as_millis() as u64,
             status: None,
             body: String::new(),
             error: Some(format!("连接超时（{}s）", timeout.as_secs())),
         },
         Ok(Err(e)) => ModelsProbe {
-            elapsed_ms: started.elapsed().as_millis() as u64,
             status: None,
             body: String::new(),
             error: Some(format!("连接失败: {e}")),
@@ -726,7 +759,6 @@ async fn probe_models(base_url: &str, key: &str, timeout_secs: u64) -> ModelsPro
             let status = r.status();
             let body = r.text().await.unwrap_or_default();
             ModelsProbe {
-                elapsed_ms: started.elapsed().as_millis() as u64,
                 status: Some(status),
                 body,
                 error: None,
