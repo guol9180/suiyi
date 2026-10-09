@@ -134,6 +134,8 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: dist-release/*
+          # 同名资产直接覆盖：重打同一个 tag（比如修完工作流重发）时不会留下旧产物
+          overwrite_files: true
           generate_release_notes: true
           body: |
             Windows 桌面版安装包（x64，未签名）。
