@@ -16,6 +16,10 @@ permissions:
 jobs:
   windows:
     runs-on: windows-latest
+    # 签名凭据提到 job 级 env：GitHub 不允许在 step 的 if 里直接读 secrets，
+    # 只能先放进 env，再用 env.XXX 判断（这也是之前工作流“0 个 job 直接失败”的原因）。
+    env:
+      SIGNPATH_TOKEN: ${{ secrets.SIGNPATH_API_TOKEN }}
     steps:
       - uses: actions/checkout@v4
 
@@ -96,10 +100,10 @@ jobs:
       # 未签名的包照常发布；审核通过后把 SIGNPATH_READY 改成 true 并填上四个 slug 即可。
       - name: 提交签名请求（SignPath）
         id: signpath
-        if: ${{ vars.SIGNPATH_READY == 'true' && secrets.SIGNPATH_API_TOKEN != '' }}
+        if: ${{ vars.SIGNPATH_READY == 'true' && env.SIGNPATH_TOKEN != '' }}
         uses: signpath/github-action-submit-signing-request@v1
         with:
-          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          api-token: ${{ env.SIGNPATH_TOKEN }}
           organization-id: "<-- 填这里：organization id"
           project-slug: "<-- 填这里：project slug"
           signing-policy-slug: "<-- 填这里：signing policy slug"
@@ -109,7 +113,7 @@ jobs:
           output-artifact-directory: signed
 
       - name: 说明签名状态
-        if: ${{ vars.SIGNPATH_READY != 'true' || secrets.SIGNPATH_API_TOKEN == '' }}
+        if: ${{ vars.SIGNPATH_READY != 'true' || env.SIGNPATH_TOKEN == '' }}
         shell: pwsh
         run: Write-Host "::notice::本次未签名（SignPath 尚未接入，见 docs/signing.md）"
 
