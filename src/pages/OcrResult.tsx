@@ -162,9 +162,15 @@ export default function OcrResultPage() {
         : result?.engine?.startsWith("plugin:")
           ? `OCR 插件 ${result.engine.slice("plugin:".length)}`
           : "—";
-  /** 只认识 en-US / zh-CN 这两种常见值，其余原样显示 */
+  /** 只认识 en-US / zh-CN 这两种常见值，其余原样显示；PaddleOCR 中英混排时报空串 */
   const langLabel =
-    result?.lang === "en-US" ? "英文" : result?.lang === "zh-CN" ? "中文" : (result?.lang ?? "");
+    result?.engine === "paddle"
+      ? ""
+      : result?.lang === "en-US"
+        ? "英文"
+        : result?.lang === "zh-CN"
+          ? "中文"
+          : (result?.lang ?? "");
 
   async function copyTranslation() {
     const text = pieces

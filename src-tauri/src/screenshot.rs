@@ -702,7 +702,9 @@ pub async fn finish_region(
             match paddle {
                 Ok(all) => (
                     "paddle".to_string(),
-                    "ppocr".to_string(),
+                    // PP-OCRv4 的中文模型本来就中英混排一起认，没有"识别语言"这一说；
+                    // 留空让结果面板不显示那个语言小标签（引擎名已经写清楚了）
+                    String::new(),
                     map_lines_to_selection(all, 1.0, sel_in_region, crop_w, crop_h),
                 ),
                 Err(e) => {
