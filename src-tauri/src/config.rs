@@ -94,8 +94,6 @@ pub struct ServicesFile {
     pub version: u32,
     pub concurrency: u32,
     pub timeout_secs: u64,
-    /// 输入框转译（Alt+T）的目标语言
-    pub input_target_lang: String,
     /// AnkiConnect 地址与目标牌组
     pub anki_url: String,
     pub anki_deck: String,
@@ -104,21 +102,22 @@ pub struct ServicesFile {
     pub speech_voice: String,
     #[serde(default = "default_speech_rate")]
     pub speech_rate: f64,
-    /// 点窗口 × 时怎么办：ask（每次问）/ minimize（最小化到任务栏）/ quit（直接退出）
+    /// 点窗口 × 时怎么办：ask（每次问）/ tray（收进右下角托盘）/ quit（直接退出）
     #[serde(default = "default_close_action")]
     pub close_action: String,
     /// 启动后自动检查一次更新
     #[serde(default = "default_true")]
     pub auto_check_update: bool,
-    /// 用户改过的全局热键，键是动作 id（selection / screenshot / input），
+    /// 用户改过的全局热键，键是动作 id（selection / screenshot），
     /// 值是 "alt+d" 这种加速度字符串。没写过的动作走默认值。
+    /// 老配置里可能还留着已移除的 input，读进来不报错、也不会被注册。
     #[serde(default)]
     pub hotkeys: std::collections::BTreeMap<String, String>,
     pub services: Vec<ServiceConfig>,
 }
 
 /// 合法的关闭行为。写进配置前一律过一遍这张表，脏数据不进文件。
-pub const CLOSE_ACTIONS: [&str; 3] = ["ask", "minimize", "quit"];
+pub const CLOSE_ACTIONS: [&str; 3] = ["ask", "tray", "quit"];
 
 pub fn default_close_action() -> String {
     DEFAULT_CLOSE_ACTION.to_string()
@@ -126,6 +125,18 @@ pub fn default_close_action() -> String {
 
 /// 出厂关闭行为：每次询问。收窗口等于退出热键可用性，不能替用户默认掉。
 pub const DEFAULT_CLOSE_ACTION: &str = "ask";
+
+/// 把配置里读到的关闭行为收敛到合法值。
+///
+/// v0.8.1 把「最小化到任务栏」换成了「收进托盘」，老配置里的 minimize 按 tray 处理：
+/// 用户当初选的意思是「别退出、收起来」，托盘正是这个意思的落点。
+pub fn normalize_close_action(raw: &str) -> String {
+    match raw.trim() {
+        "minimize" | "tray" => "tray".to_string(),
+        "quit" => "quit".to_string(),
+        _ => DEFAULT_CLOSE_ACTION.to_string(),
+    }
+}
 
 pub fn default_true() -> bool {
     true
@@ -136,17 +147,12 @@ fn default_speech_rate() -> f64 {
     crate::speech::DEFAULT_RATE
 }
 
-/// 输入框转译可选的目标语言，与前端 types.ts 的 TARGET_LANGS 保持一致
-pub const INPUT_TARGET_LANGS: [&str; 4] = ["中文", "简体中文", "English", "日本語"];
-pub const DEFAULT_INPUT_TARGET_LANG: &str = "English";
-
 impl Default for ServicesFile {
     fn default() -> Self {
         Self {
             version: 1,
             concurrency: 2,
             timeout_secs: 15,
-            input_target_lang: DEFAULT_INPUT_TARGET_LANG.into(),
             anki_url: crate::anki::DEFAULT_ANKI_URL.into(),
             anki_deck: crate::anki::DEFAULT_ANKI_DECK.into(),
             speech_voice: String::new(),
@@ -268,10 +274,21 @@ mod tests {
         assert!(file.auto_check_update);
 
         let mut f = ServicesFile::default();
-        f.close_action = "minimize".into();
+        f.close_action = "tray".into();
         let json = serde_json::to_string(&f).unwrap();
-        assert!(json.contains("\"closeAction\":\"minimize\""), "实际：{json}");
+        assert!(json.contains("\"closeAction\":\"tray\""), "实际：{json}");
         assert!(json.contains("\"autoCheckUpdate\":true"), "实际：{json}");
+    }
+
+    /// 老配置里的 minimize（最小化到任务栏）统一按「收进托盘」处理，脏值回落到每次询问
+    #[test]
+    fn close_action_normalizes_legacy_values() {
+        assert_eq!(normalize_close_action("minimize"), "tray");
+        assert_eq!(normalize_close_action(" tray "), "tray");
+        assert_eq!(normalize_close_action("quit"), "quit");
+        assert_eq!(normalize_close_action("ask"), "ask");
+        assert_eq!(normalize_close_action(""), "ask");
+        assert_eq!(normalize_close_action("whatever"), "ask");
     }
 
     #[test]
@@ -300,7 +317,7 @@ mod tests {
         let raw = fs::read_to_string(dir.join(SERVICES_FILE)).unwrap();
         assert!(raw.contains("\"baseUrl\""));
         assert!(raw.contains("\"promptTemplate\""));
-        assert!(raw.contains("\"inputTargetLang\""));
+        assert!(raw.contains("\"closeAction\""));
         assert!(!raw.to_lowercase().contains("apikey"), "密钥绝不能出现在配置文件");
 
         let _ = fs::remove_dir_all(&dir);

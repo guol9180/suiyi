@@ -135,7 +135,6 @@ export default function PopupPage() {
   }, [doTranslate]);
 
   // 取词失败：主进程把原因投过来，别让用户对着一个空窗口猜。
-  // （输入框转译的失败提示走轻提示窗口，不再占用这个弹窗 —— 弹窗会抢走输入焦点。）
   useEffect(() => {
     const unNotice = listen<{ text: string }>("popup-notice", (e) => {
       setSource("");

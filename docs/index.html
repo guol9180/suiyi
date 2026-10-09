@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
 <title>随译 SuiYi - Windows 桌面翻译工具</title>
-<meta name="description" content="选中文字按 Alt+D，框选屏幕按 Alt+S，输入框里按 Alt+T。译文来自你自己的服务。">
+<meta name="description" content="选中文字按 Alt+D，框选屏幕按 Alt+S。译文来自你自己的服务，截图识别在本机完成。">
 <link rel="icon" href="img/icon.svg" type="image/svg+xml">
 <style>
 /*
@@ -305,8 +305,8 @@ footer a:hover{color:var(--link-hover)}
     <div>
       <h1>Windows 桌面翻译工具</h1>
       <p class="lead">
-        选中文字按 <b>Alt+D</b>，框选屏幕按 <b>Alt+S</b>，输入框里按 <b>Alt+T</b>。
-        三者都不用切窗口，译文来自你自己的服务。
+        选中文字按 <b>Alt+D</b>，框选屏幕按 <b>Alt+S</b>。
+        两个入口都不用切窗口，译文来自你自己的服务。
       </p>
       <div class="cta">
         <a class="btn" href="https://github.com/guol9180/suiyi/releases/latest/download/SuiYi-Setup-x64.exe">下载 Windows 版</a>
@@ -324,13 +324,13 @@ footer a:hover{color:var(--link-hover)}
   <dl class="facts">
     <div><dt>系统</dt><dd>Windows 10 1809 以上，64 位</dd></div>
     <div><dt>安装包</dt><dd>3.3 MB，未签名</dd></div>
-        <div><dt>版本</dt><dd>v0.8.0</dd></div>
+        <div><dt>版本</dt><dd>v0.8.1</dd></div>
     <div><dt>翻译服务</dt><dd>自备 API Key，兼容 OpenAI 协议</dd></div>
   </dl>
 
   <section id="entries">
-    <h2>三个入口</h2>
-    <p class="sub">默认是这三个，都能在设置 → 热键里改。浏览器里建议把划词换成 Ctrl+Alt+D，Alt+D 会先被地址栏抢走。</p>
+    <h2>两个入口</h2>
+    <p class="sub">默认是这两个，都能在设置 → 热键里改。浏览器里建议把划词换成 Ctrl+Alt+D，Alt+D 会先被地址栏抢走。</p>
     <div class="entries">
       <div class="entry">
         <div class="keys"><kbd>Alt</kbd><span class="plus">+</span><kbd>D</kbd></div>
@@ -347,10 +347,10 @@ footer a:hover{color:var(--link-hover)}
         </div>
       </div>
       <div class="entry">
-        <div class="keys"><kbd>Alt</kbd><span class="plus">+</span><kbd>T</kbd></div>
+        <div class="keys"><kbd>×</kbd></div>
         <div>
-          <h3>输入框转译</h3>
-          <p>读取当前输入框的内容，翻译后原位替换。写回前会核对焦点是否还在原窗口，不在就把译文放进剪贴板。</p>
+          <h3>托盘常驻</h3>
+          <p>点 × 时问一次「直接关闭 / 收进托盘」，可以记住选择。收进托盘后热键继续可用，单击右下角图标就能叫回窗口。</p>
         </div>
       </div>
     </div>
@@ -420,7 +420,6 @@ footer a:hover{color:var(--link-hover)}
       <p>截图识别的语言取决于系统 OCR 语言包。只装中文包时，识别英文会有把小写 l 认成大写 I 这类误差。</p>
       <p>朗读用系统自带语音，音色一般，也还没有语速和音色选择。</p>
       <p>插件不能联网，只能读写剪贴板，且需要先申请权限。</p>
-      <p>输入框转译写回后要撤销，得用目标程序自己的 Ctrl+Z。</p>
       <p>API Key 只写进 Windows 凭据管理器，配置文件里零明文。</p>
     </div>
   </section>

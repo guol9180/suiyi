@@ -21,7 +21,7 @@ pub struct HistoryEntry {
     pub id: i64,
     /// 毫秒时间戳
     pub created_at: i64,
-    /// 来源：selection（划词）/ screenshot（截图）/ manual（手输）/ input（输入框转译）
+    /// 来源：selection（划词）/ screenshot（截图）/ manual（手输）/ input（输入框转译，v0.8.1 起已移除，仅历史数据还在）
     pub kind: String,
     pub source: String,
     pub translated: String,

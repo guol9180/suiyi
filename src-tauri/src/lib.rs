@@ -11,9 +11,9 @@ pub mod screenshot;
 pub mod selection;
 pub mod speech;
 pub mod translator;
+pub mod tray;
 pub mod update;
 pub mod wordbook;
-pub mod writeback;
 
 use tauri::Emitter;
 use tauri::utils::config::WindowEffectsConfig;
@@ -36,7 +36,6 @@ pub fn run() {
             match action.as_deref() {
                 Some("selection") => selection::trigger_selection_translate(app.clone()),
                 Some("screenshot") => screenshot::trigger_screenshot(app.clone()),
-                Some("input") => writeback::trigger_input_translate(app.clone()),
                 _ => {}
             }
         });
@@ -85,8 +84,8 @@ pub fn run() {
 
             // 点 × 之后怎么办由用户定（通用设置里可改，默认每次询问）：
             // - quit：退出进程，热键一起失效，用户明确要的
-            // - minimize：最小化到任务栏，热键继续可用
-            // - ask：先把窗口叫回来，让界面弹一次「直接关闭 / 最小化到任务栏」
+            // - tray：收进右下角托盘，进程与热键继续活着
+            // - ask：先把窗口叫回来，让界面弹一次「直接关闭 / 收进托盘」
             if let Some(main) = app.get_webview_window("main") {
                 let handle_for_close = app.handle().clone();
                 main.on_window_event(move |event| {
@@ -96,20 +95,13 @@ pub fn run() {
                             .and_then(|dir| config::load_services(&dir))
                             .map(|f| f.close_action)
                             .unwrap_or_else(|_| config::DEFAULT_CLOSE_ACTION.to_string());
+                        let action = config::normalize_close_action(&action);
                         match action.as_str() {
                             "quit" => handle_for_close.exit(0),
-                            "minimize" => {
-                                if let Some(win) = handle_for_close.get_webview_window("main") {
-                                    let _ = win.minimize();
-                                }
-                            }
+                            "tray" => commands::hide_to_tray(&handle_for_close),
                             _ => {
                                 // 每次询问：窗口可能是收起来的，先叫回来再问
-                                if let Some(win) = handle_for_close.get_webview_window("main") {
-                                    let _ = win.show();
-                                    let _ = win.unminimize();
-                                    let _ = win.set_focus();
-                                }
+                                tray::show_main(&handle_for_close);
                                 let _ = handle_for_close.emit("close-requested", ());
                             }
                         }
@@ -147,6 +139,9 @@ pub fn run() {
             let pairs = hotkeys::effective(&config);
             let status = hotkeys::apply(&handle, &pairs);
             hotkeys::publish(&handle, status);
+
+            // 托盘常驻：这是这个后台热键工具唯一的「一直在那儿」的入口
+            tray::init(&handle);
 
             // 旧实例退出、别的程序让出热键都需要时间：后台退避重试到全部注册成功为止，
             // 冲突消失（比如用户关掉 PixPin）时自动接管默认键。
@@ -202,7 +197,7 @@ pub fn run() {
             wordbook::wordbook_add,
             wordbook::wordbook_sync,
             wordbook::wordbook_remove,
-            writeback::replace_selection,
+            selection::replace_selection,
             speech::speak_text,
             speech::speech_state,
             speech::pause_speaking,

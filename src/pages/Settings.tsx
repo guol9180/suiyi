@@ -52,7 +52,6 @@ import {
   PLUGIN_KIND_LABELS,
   PROTOCOL_LABELS,
   serviceMeta,
-  TARGET_LANGS,
   type HistoryEntry,
   type HistoryKind,
   type AnkiStatus,
@@ -88,11 +87,10 @@ const SIDEBAR_PAGES: Record<string, Page> = {
   插件: "plugins",
 };
 
-/** 三个入口的热键，id 与 src-tauri/src/hotkeys.rs 的 ENTRIES 一一对应 */
+/** 两个入口的热键，id 与 src-tauri/src/hotkeys.rs 的 ENTRIES 一一对应 */
 const HOTKEYS: { id: string; name: string; accel: string; desc: string }[] = [
   { id: "selection", name: "划词翻译", accel: "alt+d", desc: "取选中文字并在光标处弹出翻译窗" },
   { id: "screenshot", name: "截图识别", accel: "alt+s", desc: "冻结鼠标所在显示器，框选后离线识别" },
-  { id: "input", name: "输入框转译", accel: "alt+t", desc: "翻译当前输入框内容并原位写回" },
 ];
 /** 尚未实现的入口收进「即将推出」分组并带里程碑锁标，不再平铺成一排空壳 */
 const SIDEBAR_SOON: { name: string; milestone: string }[] = [];
@@ -148,9 +146,12 @@ function Toggle(props: { on: boolean; onClick: () => void }) {
 
 export default function SettingsPage({
   focusAboutSignal = 0,
+  checkUpdateSignal = 0,
 }: {
   /** 每次自增一次就把右侧切到「关于」页：主窗口的更新提示条用它跳过来 */
   focusAboutSignal?: number;
+  /** 每次自增一次就让关于页当场查一次更新：托盘菜单的「检查更新」用它 */
+  checkUpdateSignal?: number;
 }) {
   const [file, setFile] = useState<ServicesFile | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -162,7 +163,6 @@ export default function SettingsPage({
   const [settings, setSettings] = useState<GlobalSettings>({
     concurrency: 2,
     timeoutSecs: 15,
-    inputTargetLang: "English",
     ankiUrl: "http://127.0.0.1:8765",
     ankiDeck: "随译",
     speechVoice: "",
@@ -274,7 +274,6 @@ export default function SettingsPage({
       setSettings({
         concurrency: f.concurrency,
         timeoutSecs: f.timeoutSecs,
-        inputTargetLang: f.inputTargetLang || "English",
         ankiUrl: f.ankiUrl || "http://127.0.0.1:8765",
         ankiDeck: f.ankiDeck || "随译",
         speechVoice: f.speechVoice || "",
@@ -892,32 +891,6 @@ export default function SettingsPage({
           <div className="panel" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             <div className="card">
               <div className="card-head">
-                <span className="hname">输入框转译</span>
-                <span className="m">Alt + T</span>
-              </div>
-              <div className="f" style={{ maxWidth: 280 }}>
-                <label>目标语言</label>
-                <select
-                  className="inp"
-                  value={settings.inputTargetLang}
-                  onChange={(e) => {
-                    const next = { ...settings, inputTargetLang: e.target.value };
-                    setSettings(next);
-                    void saveGlobal(next);
-                  }}
-                >
-                  {TARGET_LANGS.map((l) => (
-                    <option key={l} value={l}>{l}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="thint">
-                按下 Alt+T 会读取当前输入框内容，翻译成该语言后原位写回。来源语言始终自动检测。
-              </div>
-            </div>
-
-            <div className="card">
-              <div className="card-head">
                 <span className="hname">Anki 生词本</span>
                 <span className="m">需要安装并启动 AnkiConnect 插件</span>
               </div>
@@ -989,7 +962,7 @@ export default function SettingsPage({
                   }}
                 >
                   <option value="ask">每次询问</option>
-                  <option value="minimize">最小化到任务栏</option>
+                  <option value="tray">收进托盘（右下角图标）</option>
                   <option value="quit">直接退出随译</option>
                 </select>
               </div>
@@ -1005,8 +978,8 @@ export default function SettingsPage({
                 <span>启动后自动检查更新</span>
               </label>
               <div className="thint">
-                「最小化到任务栏」会保留 Alt+D / Alt+S / Alt+T 热键；「直接退出」会把热键一起停掉。
-                更新只在关于页确认后才会下载安装。
+                「收进托盘」会把窗口藏起来，Alt+D / Alt+S 热键继续可用，单击右下角图标就能叫回来；
+                「直接退出」会把热键一起停掉。更新只在关于页确认后才会下载安装。
               </div>
             </div>
           </div>
@@ -1517,7 +1490,7 @@ export default function SettingsPage({
           </div>
         )}
 
-        {page === "about" && <AboutPage />}
+        {page === "about" && <AboutPage forceCheckSignal={checkUpdateSignal} />}
 
         {page === "services" && (
           <>

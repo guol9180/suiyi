@@ -92,7 +92,7 @@
         };
 
         var SERVICES = {
-          version: 1, concurrency: 2, timeoutSecs: 15, inputTargetLang: "中文",
+          version: 1, concurrency: 2, timeoutSecs: 15,
           ankiUrl: "http://127.0.0.1:8765", ankiDeck: "随译生词",
           speechVoice: "", speechRate: 1, closeAction: "ask", autoCheckUpdate: true,
           services: [
@@ -129,8 +129,6 @@
             registered: !hotkeyConflict, error: hotkeyConflict ? "该组合已被其他程序占用" : null, custom: false },
           { id: "screenshot", label: "截图识别", accelerator: "alt+s",
             registered: !conflict, error: conflict ? "该组合已被其他程序占用" : null, custom: false },
-          { id: "input", label: "输入框转译", accelerator: "alt+t",
-            registered: !hotkeyConflict, error: hotkeyConflict ? "该组合已被其他程序占用" : null, custom: false },
         ];
         function setHotkeyStub(args) {
           var hit = HOTKEYS.filter(function (h) { return h.id === args.id; })[0];
@@ -143,7 +141,7 @@
           return HOTKEYS;
         }
         function resetHotkeysStub() {
-          var defs = { selection: "alt+d", screenshot: "alt+s", input: "alt+t" };
+          var defs = { selection: "alt+d", screenshot: "alt+s" };
           HOTKEYS.forEach(function (h) { h.accelerator = defs[h.id]; h.custom = false; h.registered = true; h.error = null; });
           return HOTKEYS;
         }
@@ -160,7 +158,7 @@
           },
           get_settings: function () {
             return {
-              concurrency: 2, timeoutSecs: 15, inputTargetLang: "中文",
+              concurrency: 2, timeoutSecs: 15,
               ankiUrl: "http://127.0.0.1:8765", ankiDeck: "随译生词",
               speechVoice: SPEECH_VOICE, speechRate: 1,
               closeAction: "ask", autoCheckUpdate: true,

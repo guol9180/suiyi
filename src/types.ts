@@ -27,25 +27,22 @@ export interface ServicesFile {
   version: number;
   concurrency: number;
   timeoutSecs: number;
-  inputTargetLang: string;
   ankiUrl: string;
   ankiDeck: string;
   speechVoice: string;
   speechRate: number;
-  /** 点窗口 × 时：ask / minimize / quit */
+  /** 点窗口 × 时：ask（每次询问）/ tray（收进托盘）/ quit（直接退出） */
   closeAction: CloseAction;
   /** 启动后自动检查更新 */
   autoCheckUpdate: boolean;
   services: ServiceConfig[];
 }
 
-export type CloseAction = "ask" | "minimize" | "quit";
+export type CloseAction = "ask" | "tray" | "quit";
 
 export interface GlobalSettings {
   concurrency: number;
   timeoutSecs: number;
-  /** 输入框转译（Alt+T）的目标语言 */
-  inputTargetLang: string;
   /** AnkiConnect 地址与目标牌组 */
   ankiUrl: string;
   ankiDeck: string;

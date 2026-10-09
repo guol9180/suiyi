@@ -172,19 +172,11 @@ fn simulate_ctrl_key(key: u16, name: &str) -> Result<(), String> {
     Ok(())
 }
 
-const VK_A: u16 = 0x41;
 const VK_C: u16 = 0x43;
 const VK_V: u16 = 0x56;
-const VK_RIGHT: u16 = 0x27;
-
-/// 全选：抓取与写回输入框内容时都用它
-#[cfg(windows)]
-pub(crate) fn simulate_ctrl_a() -> Result<(), String> {
-    simulate_ctrl_key(VK_A, "A")
-}
 
 #[cfg(windows)]
-pub(crate) fn simulate_ctrl_c() -> Result<(), String> {
+fn simulate_ctrl_c() -> Result<(), String> {
     simulate_ctrl_key(VK_C, "C")
 }
 
@@ -192,17 +184,6 @@ pub(crate) fn simulate_ctrl_c() -> Result<(), String> {
 #[cfg(windows)]
 pub(crate) fn simulate_ctrl_v() -> Result<(), String> {
     simulate_ctrl_key(VK_V, "V")
-}
-
-/// 松开 Ctrl+A 留下的全选。
-///
-/// 抓取流程失败时输入框里还留着「全选」状态，用户接着敲键盘会把整段内容替换掉。
-/// 按一次右方向键在绝大多数编辑器里等于「光标移到选区末尾」：不动文本，只收掉选区。
-#[cfg(windows)]
-pub(crate) fn simulate_arrow_right() -> Result<(), String> {
-    send_vk(VK_RIGHT, false)?;
-    std::thread::sleep(Duration::from_millis(20));
-    send_vk(VK_RIGHT, true)
 }
 
 /// 取词失败的原因。不猜，按顺序问三个问题：
@@ -435,4 +416,66 @@ pub(crate) fn ensure_popup_at_cursor(app: &AppHandle) -> Result<(), String> {
             .map(|_| ())
             .map_err(|e| format!("创建弹窗失败: {e}")),
     }
+}
+
+/// 弹窗里的「替换原文」：把译文粘回取词时所在的那个窗口。
+///
+/// 取词时记下了目标窗口句柄；这里先把弹窗藏起来让焦点回到目标窗口，
+/// 校验前台窗口确实是它之后才粘贴，否则取消并恢复剪贴板。
+#[cfg(windows)]
+#[tauri::command]
+pub fn replace_selection(app: AppHandle, text: String) -> Result<(), String> {
+    use arboard::Clipboard;
+
+    if text.trim().is_empty() {
+        return Err("没有可替换的译文".into());
+    }
+    if let Some(win) = app.get_webview_window("popup") {
+        let _ = win.hide();
+    }
+
+    let target = last_target();
+    if target == 0 {
+        return Err("还没有取词目标，请重新划词后再替换".into());
+    }
+
+    let mut cb = Clipboard::new().map_err(|e| format!("剪贴板打开失败: {e}"))?;
+    let prev = cb.get_text().ok();
+    cb.set_text(text).map_err(|e| format!("设置剪贴板失败: {e}"))?;
+
+    std::thread::sleep(Duration::from_millis(150));
+    {
+        use windows::Win32::Foundation::HWND;
+        use windows::Win32::UI::WindowsAndMessaging::SetForegroundWindow;
+        unsafe {
+            let _ = SetForegroundWindow(HWND(target as *mut core::ffi::c_void));
+        }
+    }
+    std::thread::sleep(Duration::from_millis(250));
+
+    let restore = |cb: &mut Clipboard, prev: &Option<String>| {
+        if let Some(p) = prev {
+            let _ = cb.set_text(p.clone());
+        }
+    };
+
+    if foreground_hwnd() != target {
+        restore(&mut cb, &prev);
+        return Err("目标窗口没有回到前台，已取消替换".into());
+    }
+
+    if let Err(e) = simulate_ctrl_v() {
+        restore(&mut cb, &prev);
+        return Err(format!("模拟 Ctrl+V 失败: {e}"));
+    }
+    std::thread::sleep(Duration::from_millis(300));
+    restore(&mut cb, &prev);
+    log_line("selection: 替换原文完成");
+    Ok(())
+}
+
+#[cfg(not(windows))]
+#[tauri::command]
+pub fn replace_selection(_app: AppHandle, _text: String) -> Result<(), String> {
+    Err("当前平台暂不支持替换原文".into())
 }

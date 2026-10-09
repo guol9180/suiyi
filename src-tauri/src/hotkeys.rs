@@ -13,11 +13,13 @@ use std::sync::Mutex;
 use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut};
 
-/// 三个动作与它们的出厂热键
-pub const ENTRIES: [(&str, &str, &str); 3] = [
+/// 两个动作与它们的出厂热键。
+///
+/// v0.8.1 起去掉了「输入框转译」：全局热键去抢用户的编辑器把内容改掉这件事，
+/// 风险（认错焦点、把残留剪贴板写回去）比收益大。历史记录里旧的 input 条目仍会展示。
+pub const ENTRIES: [(&str, &str, &str); 2] = [
     ("selection", "划词翻译", "alt+d"),
     ("screenshot", "截图识别", "alt+s"),
-    ("input", "输入框转译", "alt+t"),
 ];
 
 #[derive(Clone, Serialize)]
@@ -278,10 +280,9 @@ mod tests {
     #[test]
     fn 没有自定义时全部走出厂值() {
         let pairs = effective(&BTreeMap::new());
-        assert_eq!(pairs.len(), 3);
+        assert_eq!(pairs.len(), 2, "v0.8.1 起只剩划词与截图两条");
         assert_eq!(pairs[0], ("selection".to_string(), "alt+d".to_string()));
         assert_eq!(pairs[1], ("screenshot".to_string(), "alt+s".to_string()));
-        assert_eq!(pairs[2], ("input".to_string(), "alt+t".to_string()));
     }
 
     #[test]
@@ -292,12 +293,12 @@ mod tests {
         let pairs = effective(&cfg);
         assert_eq!(pairs[0].1, "ctrl+shift+d");
         assert_eq!(pairs[1].1, "alt+s", "空白自定义值应当退回默认");
-        assert_eq!(pairs[2].1, "alt+t");
     }
 
     #[test]
     fn 默认值查表能兜住未知动作() {
-        assert_eq!(default_of("input"), "alt+t");
+        assert_eq!(default_of("screenshot"), "alt+s");
+        // 已经不存在的动作（比如被移除的 input）也不能 panic
         assert_eq!(default_of("nope"), "alt+d");
     }
 
@@ -308,6 +309,7 @@ mod tests {
         let current = vec![
             HotkeyStatus::new("selection", "划词翻译", "alt+d", true, None, false),
             HotkeyStatus::new("screenshot", "截图识别", "alt+s", true, None, false),
+            // 老配置里可能留着已经被移除的 input，它不该影响判断
             HotkeyStatus::new("input", "输入框转译", "alt+t", true, None, false),
         ];
         let target = effective(&BTreeMap::new());
@@ -319,11 +321,10 @@ mod tests {
     fn pending_pairs_only_returns_what_is_missing() {
         let current = vec![
             HotkeyStatus::new("selection", "划词翻译", "ctrl+alt+d", true, None, true),
-            HotkeyStatus::new("screenshot", "截图识别", "alt+s", true, None, false),
             HotkeyStatus::new(
-                "input",
-                "输入框转译",
-                "alt+t",
+                "screenshot",
+                "截图识别",
+                "alt+s",
                 false,
                 Some("该组合已被其他程序占用".into()),
                 false,
@@ -332,11 +333,10 @@ mod tests {
         let target = vec![
             ("selection".to_string(), "ctrl+alt+d".to_string()),
             ("screenshot".to_string(), "alt+s".to_string()),
-            ("input".to_string(), "alt+t".to_string()),
         ];
         let need = pending_pairs(&current, &target);
-        assert_eq!(need.len(), 1, "应该只剩输入框那条要补");
-        assert_eq!(need[0].0, "input");
+        assert_eq!(need.len(), 1, "应该只剩截图那条要补");
+        assert_eq!(need[0].0, "screenshot");
     }
 
     /// 只能注册 target 里的组合：旧快照里的旧键绝不能被"顺手"装回来

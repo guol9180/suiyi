@@ -24,7 +24,7 @@ export default function App() {
   const [hotkeys, setHotkeys] = useState<HotkeyStatus[]>([]);
   const [dismissed, setDismissed] = useState(false);
   const [adopting, setAdopting] = useState(false);
-  /** 关窗口时问一次：直接关闭还是最小化到任务栏 */
+  /** 关窗口时问一次：直接关闭还是收进托盘 */
   const [closeAsk, setCloseAsk] = useState(false);
   const [rememberClose, setRememberClose] = useState(false);
   const [closeBusy, setCloseBusy] = useState(false);
@@ -33,6 +33,8 @@ export default function App() {
   const [updateDismissed, setUpdateDismissed] = useState(false);
   /** 递增信号：点提示条的「去关于页」时切到设置页并打开关于 */
   const [aboutSignal, setAboutSignal] = useState(0);
+  /** 递增信号：托盘菜单的「检查更新」要求关于页立刻查一次 */
+  const [updateCheckSignal, setUpdateCheckSignal] = useState(0);
 
   useEffect(() => {
     void hotkeyStatus().then(setHotkeys).catch(() => {});
@@ -45,10 +47,22 @@ export default function App() {
     };
   }, []);
 
-  // × 被后端拦下来（prevent_close）后问一次：直接关闭还是最小化到任务栏。
+  // × 被后端拦下来（prevent_close）后问一次：直接关闭还是收进托盘。
   // 用户在设置里选了「每次询问」之外的值时，后端直接执行，不会发这个事件。
   useEffect(() => {
     const un = listen("close-requested", () => setCloseAsk(true));
+    return () => {
+      void un.then((f) => f());
+    };
+  }, []);
+
+  // 托盘右键菜单的「检查更新」：把界面带到关于页并当场查一次
+  useEffect(() => {
+    const un = listen("check-update-requested", () => {
+      setTab("settings");
+      setAboutSignal((n) => n + 1);
+      setUpdateCheckSignal((n) => n + 1);
+    });
     return () => {
       void un.then((f) => f());
     };
@@ -75,7 +89,7 @@ export default function App() {
   }, []);
 
   const answerClose = useCallback(
-    async (action: "quit" | "minimize") => {
+    async (action: "quit" | "tray") => {
       setCloseBusy(true);
       try {
         await closeAction(action, rememberClose);
@@ -177,7 +191,7 @@ export default function App() {
         {tab === "translate" ? (
           <TranslatePage onOpenSettings={() => setTab("settings")} />
         ) : (
-          <SettingsPage focusAboutSignal={aboutSignal} />
+          <SettingsPage focusAboutSignal={aboutSignal} checkUpdateSignal={updateCheckSignal} />
         )}
       </div>
 
@@ -194,8 +208,8 @@ export default function App() {
               <b>关闭随译？</b>
             </div>
             <div className="ask-body">
-              「最小化到任务栏」会把窗口收起来，Alt+D / Alt+S / Alt+T 继续可用；
-              「直接关闭」会结束随译，三个热键一起失效。
+              「收进托盘」会把窗口藏到右下角的小图标里，Alt+D / Alt+S 继续可用，单击图标就能叫回来；
+              「直接关闭」会结束随译，两个热键一起失效。
             </div>
             <label className="kcheck">
               <input
@@ -213,8 +227,8 @@ export default function App() {
               <button className="btn danger mini" disabled={closeBusy} onClick={() => void answerClose("quit")}>
                 直接关闭
               </button>
-              <button className="btn primary mini" disabled={closeBusy} onClick={() => void answerClose("minimize")}>
-                最小化到任务栏
+              <button className="btn primary mini" disabled={closeBusy} onClick={() => void answerClose("tray")}>
+                收进托盘
               </button>
             </div>
           </div>

@@ -323,8 +323,15 @@ fn show_overlay(app: &AppHandle) -> Result<(), String> {
         (s.vs.0, s.vs.1, s.vs.2, s.vs.3)
     };
 
+    // 窗口是复用的，但页面只在挂载时取一次冻结帧 —— 不重新加载的话，第二次截图
+    // 显示的还是上一张图。reload 让页面重新挂载：新帧、干净的选框与失败态。
     let win = match app.get_webview_window("overlay") {
-        Some(win) => win,
+        Some(win) => {
+            if let Err(e) = win.reload() {
+                crate::selection::log_line(&format!("screenshot: 覆盖层重新加载失败（{e}），仍继续"));
+            }
+            win
+        }
         None => WebviewWindowBuilder::new(app, "overlay", WebviewUrl::App("overlay.html".into()))
             .title("随译 · 截图框选")
             .decorations(false)

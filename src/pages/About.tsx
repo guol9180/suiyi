@@ -36,7 +36,7 @@ const LINKS: Array<{ label: string; hint: string; url: string }> = [
 
 const DOWNLOAD_PAGE = "https://suiyi.imhgl.com/";
 
-export default function AboutPage() {
+export default function AboutPage({ forceCheckSignal = 0 }: { forceCheckSignal?: number } = {}) {
   const [paths, setPaths] = useState<AppPaths | null>(null);
   const [hotkeys, setHotkeys] = useState<HotkeyStatus[]>([]);
   const [notice, setNotice] = useState("");
@@ -74,6 +74,11 @@ export default function AboutPage() {
       void un.then((f) => f());
     };
   }, [doCheck]);
+
+  // 托盘菜单点「检查更新」：不管自动检查开没开，都当场查一次
+  useEffect(() => {
+    if (forceCheckSignal > 0) void doCheck();
+  }, [forceCheckSignal, doCheck]);
 
   /** 下载 → 拉起安装向导（随译会退出，装完由安装向导把它带回来） */
   async function downloadAndInstall() {

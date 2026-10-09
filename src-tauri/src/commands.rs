@@ -7,7 +7,7 @@
 
 use crate::config::{
     load_services, new_service_id, save_services, Protocol, ServiceConfig, ServiceKind,
-    ServicesFile, ResultType, DEFAULT_INPUT_TARGET_LANG, DICTIONARY_PROMPT, INPUT_TARGET_LANGS,
+    ServicesFile, ResultType, DICTIONARY_PROMPT,
 };
 use crate::plugin::{self, PluginKind};
 use crate::plugin_js;
@@ -27,8 +27,6 @@ use tauri::Manager;
 pub struct GlobalSettings {
     pub concurrency: u32,
     pub timeout_secs: u64,
-    /// 输入框转译的目标语言
-    pub input_target_lang: String,
     /// AnkiConnect 地址与目标牌组
     pub anki_url: String,
     pub anki_deck: String,
@@ -220,12 +218,12 @@ pub fn get_settings(app: tauri::AppHandle) -> Result<GlobalSettings, String> {
     Ok(GlobalSettings {
         concurrency: file.concurrency,
         timeout_secs: file.timeout_secs,
-        input_target_lang: file.input_target_lang,
         anki_url: file.anki_url,
         anki_deck: file.anki_deck,
         speech_voice: file.speech_voice,
         speech_rate: file.speech_rate,
-        close_action: file.close_action,
+        // 老配置里的 minimize 也要在这里收敛成 tray，界面才不会看到一个不认识的选项
+        close_action: crate::config::normalize_close_action(&file.close_action),
         auto_check_update: file.auto_check_update,
     })
 }
@@ -237,12 +235,6 @@ pub fn save_settings(app: tauri::AppHandle, settings: GlobalSettings) -> Result<
     let mut file = load_services(&dir)?;
     file.concurrency = settings.concurrency.clamp(1, 8);
     file.timeout_secs = settings.timeout_secs.clamp(3, 120);
-    // 只接受白名单内的语言，脏数据一律回落到默认值
-    file.input_target_lang = if INPUT_TARGET_LANGS.contains(&settings.input_target_lang.as_str()) {
-        settings.input_target_lang
-    } else {
-        DEFAULT_INPUT_TARGET_LANG.to_string()
-    };
     file.anki_url = settings.anki_url.trim().to_string();
     file.anki_deck = settings.anki_deck.trim().to_string();
     // 音色只在系统里找不到时才会回落到默认，具体匹配由合成器负责；
@@ -251,12 +243,8 @@ pub fn save_settings(app: tauri::AppHandle, settings: GlobalSettings) -> Result<
     file.speech_rate = settings
         .speech_rate
         .clamp(crate::speech::MIN_RATE, crate::speech::MAX_RATE);
-    // 关闭行为只接受白名单里的值，脏数据回落到「每次询问」
-    file.close_action = if crate::config::CLOSE_ACTIONS.contains(&settings.close_action.as_str()) {
-        settings.close_action
-    } else {
-        crate::config::DEFAULT_CLOSE_ACTION.to_string()
-    };
+    // 关闭行为收敛到 ask / tray / quit，脏数据回落到「每次询问」
+    file.close_action = crate::config::normalize_close_action(&settings.close_action);
     file.auto_check_update = settings.auto_check_update;
     save_services(&dir, &file)
 }
@@ -496,16 +484,27 @@ pub fn quit_app(app: tauri::AppHandle) {
     app.exit(0);
 }
 
-/// 点窗口 × 之后用户的选择：直接关闭（退出进程）或最小化到任务栏。
+/// 收进托盘：主窗口藏起来，进程与全局热键继续活着。
+///
+/// 首次收起来会弹一条轻提示 —— 托盘图标在右下角，第一次用很容易找不到窗口去哪了。
+pub(crate) fn hide_to_tray(app: &tauri::AppHandle) {
+    if let Some(win) = app.get_webview_window("main") {
+        let _ = win.hide();
+    }
+    static HINTED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+    if !HINTED.swap(true, std::sync::atomic::Ordering::SeqCst) {
+        crate::notice::show(app, "已收进托盘，单击右下角图标可以叫回来", "info");
+    }
+}
+
+/// 点窗口 × 之后用户的选择：直接关闭（退出进程）或收进托盘。
 ///
 /// lib.rs 里的 CloseRequested 被拦下来（prevent_close）后按配置分流：配成
-/// minimize / quit 就直接执行，配成 ask（默认）就把问题交给界面问一次，
+/// tray / quit 就直接执行，配成 ask（默认）就把问题交给界面问一次，
 /// 界面问完再调这个命令回来执行。remember 为真时顺手把选择记进配置。
 #[tauri::command]
 pub fn close_action(app: tauri::AppHandle, action: String, remember: bool) -> Result<(), String> {
-    if !crate::config::CLOSE_ACTIONS.contains(&action.as_str()) {
-        return Err(format!("未知的关闭行为: {action}"));
-    }
+    let action = crate::config::normalize_close_action(&action);
     if remember {
         let dir = config_dir(&app)?;
         let mut file = load_services(&dir)?;
@@ -517,12 +516,12 @@ pub fn close_action(app: tauri::AppHandle, action: String, remember: bool) -> Re
             crate::selection::log_line("close: 直接关闭，退出随译");
             app.exit(0);
         }
-        _ => {
-            crate::selection::log_line("close: 最小化到任务栏");
-            if let Some(win) = app.get_webview_window("main") {
-                let _ = win.minimize();
-            }
+        "tray" => {
+            crate::selection::log_line("close: 收进托盘");
+            hide_to_tray(&app);
         }
+        // ask 不该走到这里（界面只有 tray / quit 两个按钮）
+        _ => {}
     }
     Ok(())
 }
