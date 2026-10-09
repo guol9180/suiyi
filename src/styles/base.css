@@ -180,20 +180,24 @@ input[type="radio"] {
 .inp {
   width: 100%;
   height: var(--h-inp);
-  border: 1px solid var(--glass-edge);
+  border: 1px solid var(--field-border);
   border-radius: var(--radius-md);
   padding: 0 10px;
   font-family: inherit;
   font-size: var(--fs-sec);
   color: var(--c-text);
-  background: var(--glass-card-strong);
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
-  transition: border-color 0.14s;
+  background: var(--field-bg);
+  transition: border-color 0.14s, background 0.14s, box-shadow 0.14s;
   outline: none;
 }
-.inp:hover { border-color: var(--c-border-hover); }
-.inp:focus { border-color: var(--c-primary-strong); }
+.inp:hover { border-color: var(--field-border-hover); background: var(--field-bg-hover); }
+/* 焦点环：用 box-shadow 而不是 outline，不占布局、也不影响圆角 */
+.inp:focus {
+  border-color: var(--c-primary-strong);
+  background: var(--field-bg-focus);
+  box-shadow: 0 0 0 3px var(--field-ring);
+}
+.inp:disabled { background: var(--c-muted-bg); color: var(--c-muted-ink); }
 .inp.mono { font-family: var(--font-mono); font-size: var(--fs-sec); }
 .inp::placeholder { color: var(--c-caption); }
 select.inp { cursor: pointer; }
@@ -243,7 +247,15 @@ textarea.inp { height: auto; min-height: 86px; padding: 9px 11px; line-height: 1
   border-radius: var(--radius-lg);
   padding: 14px;
 }
-.card-head { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+/* 卡片头固定高度：有的头带按钮、有的只有文字，不固定的话同一列卡片会高矮不齐 */
+.card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  min-height: var(--h-btn);
+  flex-wrap: wrap;
+}
 .card-head .hname { font-size: var(--fs-sub); font-weight: 600; }
 .card-head .m { font-size: var(--fs-cap); color: var(--c-caption); }
 

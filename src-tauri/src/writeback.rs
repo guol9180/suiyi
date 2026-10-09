@@ -12,10 +12,13 @@
 
 use arboard::Clipboard;
 use std::time::Duration;
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::{AppHandle, Manager};
 use windows::Win32::UI::WindowsAndMessaging::GetForegroundWindow;
 
-use crate::selection::{log_line, simulate_ctrl_a, simulate_ctrl_c, simulate_ctrl_v};
+use crate::selection::{
+    log_line, read_clipboard_text, simulate_arrow_right, simulate_ctrl_a, simulate_ctrl_c,
+    simulate_ctrl_v, wait_for_modifiers_released,
+};
 
 /// 抓到的内容超过这个长度，就认为 Ctrl+A 选中的是整个页面而不是输入框
 const MAX_INPUT_CHARS: usize = 5000;
@@ -45,46 +48,71 @@ pub fn trigger_input_translate(_app: AppHandle) {
     log_line("input: 当前平台不支持");
 }
 
-/// 放弃写回：把译文放进剪贴板，并在光标处弹窗告知用户
+/// 放弃写回：把译文放进剪贴板，并在光标旁轻声告知用户。
+///
+/// 走轻提示而不是划词弹窗：弹窗会抢走输入框的焦点，正是我们不想打断的地方。
 #[cfg(windows)]
-fn degrade_to_clipboard(app: &AppHandle, cb: &mut Clipboard, original: &str, translated: &str, reason: &str) {
+fn degrade_to_clipboard(
+    app: &AppHandle,
+    cb: &mut Clipboard,
+    original: &str,
+    translated: &str,
+    reason: &str,
+) {
+    let _ = original;
     if cb.set_text(translated.to_string()).is_err() {
         log_line("input: 降级失败，连剪贴板都没写进去");
         return;
     }
-    let _ = crate::selection::ensure_popup_at_cursor(app);
-    std::thread::sleep(Duration::from_millis(150));
-    let _ = app.emit(
-        "popup-writeback-fallback",
-        serde_json::json!({
-            "original": original,
-            "translated": translated,
-            "reason": reason,
-        }),
-    );
-    log_line(&format!("input: 已降级为复制 + 弹窗告知（{reason}）"));
+    crate::notice::show(app, &format!("{reason}，译文已复制到剪贴板"), "info");
+    log_line(&format!("input: 已降级为复制 + 轻提示（{reason}）"));
+}
+
+/// 提示里放不下长报错：截到 60 个字符，剩下的留给日志
+fn clip(text: &str, max: usize) -> String {
+    let t = text.trim();
+    if t.chars().count() <= max {
+        return t.to_string();
+    }
+    format!("{}…", t.chars().take(max).collect::<String>())
 }
 
 #[cfg(windows)]
 fn run_input_translate(app: &AppHandle) -> Result<(), String> {
     let fg_before = foreground_hwnd();
 
+    // 热键按下的那一刻修饰键还按着（实测距触发只有 2ms），这时候发 Ctrl+A / Ctrl+C
+    // 目标程序收到的是 Ctrl+Alt+A / Ctrl+Alt+C：全选和复制都没发生。
+    let waited = wait_for_modifiers_released(1200);
+    if waited > 0 {
+        log_line(&format!("input: 等修饰键松开 {waited}ms"));
+    }
+
     let mut cb = Clipboard::new().map_err(|e| format!("剪贴板打开失败: {e}"))?;
     let prev = cb.get_text().ok();
 
-    // 1) 抓取输入框内容
+    // 1) 抓取输入框内容。先清空剪贴板：否则目标程序不响应模拟复制时，我们会把
+    //    上一次残留的剪贴板内容当成"输入框内容"翻译并写回 —— 用户看到的就是
+    //    "没弹窗、没翻译，直接就覆盖了"。
+    if cb.clear().is_err() {
+        log_line("input: 清空剪贴板失败，放弃");
+        crate::notice::show(app, "没取到输入框内容：剪贴板不可用", "err");
+        return Ok(());
+    }
     simulate_ctrl_a().map_err(|e| format!("模拟 Ctrl+A 失败: {e}"))?;
-    std::thread::sleep(Duration::from_millis(200));
+    std::thread::sleep(Duration::from_millis(180));
     simulate_ctrl_c().map_err(|e| format!("模拟 Ctrl+C 失败: {e}"))?;
-    std::thread::sleep(Duration::from_millis(350));
 
-    let original = match cb.get_text().ok().filter(|t| !t.trim().is_empty()) {
+    let original = match read_clipboard_text(&mut cb, 1500) {
         Some(t) => t,
         None => {
             if let Some(p) = &prev {
                 let _ = cb.set_text(p.clone());
             }
+            // Ctrl+A 已经把输入框内容选中了，不收回选区的话用户下次敲字就覆盖全文
+            let _ = simulate_arrow_right();
             log_line("input: 未取到输入框内容（焦点可能不在可编辑区域），流程结束");
+            crate::notice::show(app, "没取到输入框内容：把光标放进输入框再按一次", "err");
             return Ok(());
         }
     };
@@ -93,10 +121,12 @@ fn run_input_translate(app: &AppHandle) -> Result<(), String> {
         if let Some(p) = &prev {
             let _ = cb.set_text(p.clone());
         }
+        let _ = simulate_arrow_right();
         log_line(&format!(
             "input: 抓取内容异常巨大（{} 字符），疑似选中了整个页面，放弃",
             original.chars().count()
         ));
+        crate::notice::show(app, "这段内容太长了，像是整页文本，先选中要翻译的部分", "err");
         return Ok(());
     }
     log_line(&format!("input: 抓取输入框 {} 字符", original.chars().count()));
@@ -112,7 +142,22 @@ fn run_input_translate(app: &AppHandle) -> Result<(), String> {
         .iter()
         .find(|s| s.enabled && s.kind == crate::config::ServiceKind::Translation)
         .ok_or("没有已启用的翻译服务")?;
-    let key = crate::keyring::get_api_key(&svc.id)?.ok_or("该服务尚未设置 API Key")?;
+    // 本地服务（Ollama 这类）不需要密钥：只有 requires_key 为真时才强制要求
+    // get_api_key 返回 Result<Option<String>>：读凭据失败与"没存过"在这里都按空串处理
+    let key = crate::keyring::get_api_key(&svc.id)
+        .ok()
+        .flatten()
+        .unwrap_or_default();
+    if key.trim().is_empty() && svc.requires_key {
+        let msg = format!("「{}」还没填 API Key，先去设置页补一个", svc.name);
+        if let Some(p) = &prev {
+            let _ = cb.set_text(p.clone());
+        }
+        let _ = simulate_arrow_right();
+        crate::notice::show(app, &msg, "err");
+        log_line(&format!("input: {msg}"));
+        return Ok(());
+    }
 
     let target_lang = if file.input_target_lang.trim().is_empty() {
         crate::config::DEFAULT_INPUT_TARGET_LANG
@@ -125,7 +170,7 @@ fn run_input_translate(app: &AppHandle) -> Result<(), String> {
         target_lang,
         &original,
     );
-    let (translated, ms) = tauri::async_runtime::block_on(crate::translator::translate(
+    let translated = tauri::async_runtime::block_on(crate::translator::translate(
         app,
         crate::translator::TranslateParams {
             service_id: &svc.id,
@@ -137,7 +182,32 @@ fn run_input_translate(app: &AppHandle) -> Result<(), String> {
             stream: false,
             timeout: Duration::from_secs(file.timeout_secs.max(10)),
         },
-    ))?;
+    ));
+    let (translated, ms) = match translated {
+        Ok(v) => v,
+        Err(e) => {
+            // 失败也要留痕，历史页里才说得清哪一次没成
+            let _ = crate::history::record(
+                &dir,
+                crate::history::NewEntry {
+                    kind: "input".into(),
+                    source: original.clone(),
+                    translated: String::new(),
+                    service_name: svc.name.clone(),
+                    elapsed_ms: 0,
+                    ok: false,
+                    error: Some(e.clone()),
+                },
+            );
+            if let Some(p) = &prev {
+                let _ = cb.set_text(p.clone());
+            }
+            let _ = simulate_arrow_right();
+            log_line(&format!("input: 翻译失败 {e}"));
+            crate::notice::show(app, &format!("翻译失败：{}", clip(&e, 60)), "err");
+            return Ok(());
+        }
+    };
     log_line(&format!(
         "input: 翻译完成 {} 字符（{ms}ms）",
         translated.chars().count()
@@ -173,6 +243,8 @@ fn run_input_translate(app: &AppHandle) -> Result<(), String> {
         let _ = cb.set_text(p.clone());
     }
     log_line("input: 写回完成");
+    // 原位替换外加一句轻提示：静默覆盖会让人以为软件坏了
+    crate::notice::show(app, "已替换 · Ctrl+Z 撤销", "ok");
     Ok(())
 }
 

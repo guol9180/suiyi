@@ -1,6 +1,7 @@
 //! M1 划词取词：全局热键触发 → 剪贴板法抓取选中文本 → 光标处弹出翻译窗
 //!
 //! 策略（与 Pot 相同的兜底方案）：
+//! 0. 等用户把热键上的修饰键松开（否则 Ctrl+C 会变成 Ctrl+Alt+C，压根不是复制）；
 //! 1. 记录当前剪贴板内容并清空；
 //! 2. 模拟 Ctrl+C 让目标应用把选中文本写入剪贴板；
 //! 3. 读回剪贴板：非空且与原内容不同 → 视为选中文本；
@@ -26,6 +27,76 @@ pub(crate) fn last_target() -> isize {
 pub(crate) fn foreground_hwnd() -> isize {
     use windows::Win32::UI::WindowsAndMessaging::GetForegroundWindow;
     unsafe { GetForegroundWindow().0 as isize }
+}
+
+/// 物理修饰键（左右 Ctrl / Alt / Shift / Win）此刻是否还有按下的。
+///
+/// 用左右键码而不是 VK_CONTROL / VK_MENU 这种「通用」键码：GetAsyncKeyState 对
+/// 通用键码在部分键盘布局下不可靠，逐个体检左右键码最稳。
+#[cfg(windows)]
+fn any_modifier_down() -> bool {
+    use windows::Win32::UI::Input::KeyboardAndMouse::{
+        GetAsyncKeyState, VK_LCONTROL, VK_LMENU, VK_LSHIFT, VK_LWIN, VK_RCONTROL, VK_RMENU,
+        VK_RSHIFT, VK_RWIN, VIRTUAL_KEY,
+    };
+    const MODS: [VIRTUAL_KEY; 8] = [
+        VK_LCONTROL,
+        VK_RCONTROL,
+        VK_LMENU,
+        VK_RMENU,
+        VK_LSHIFT,
+        VK_RSHIFT,
+        VK_LWIN,
+        VK_RWIN,
+    ];
+    MODS.iter()
+        .any(|k| unsafe { GetAsyncKeyState(k.0 as i32) } < 0)
+}
+
+/// 等用户把修饰键松开再模拟按键，返回实际等了多久（毫秒）。
+///
+/// 全局热键在「按下」那一刻就回调（本机实测距触发只过了 2 毫秒），这时用户的手
+/// 还按着 Ctrl / Alt。立刻发 Ctrl+C，目标程序收到的是 Ctrl+Alt+C —— 那不是复制，
+/// 于是划词永远取不到东西、输入框转译会把残留的剪贴板内容当成输入框内容。
+///
+/// 不能改成「先补发修饰键抬起」：那等于替用户按了一个他没按的键（Alt 抬起会拉出
+/// 窗口菜单栏，Ctrl 抬起会打乱目标程序的按键状态）。等他自己松手最干净。
+pub(crate) fn wait_for_modifiers_released(timeout_ms: u64) -> u64 {
+    let start = std::time::Instant::now();
+    #[cfg(windows)]
+    {
+        while any_modifier_down() && start.elapsed().as_millis() < timeout_ms as u128 {
+            std::thread::sleep(Duration::from_millis(20));
+        }
+    }
+    #[cfg(not(windows))]
+    let _ = timeout_ms;
+    start.elapsed().as_millis() as u64
+}
+
+/// 发送一次按键（不带修饰键）
+#[cfg(windows)]
+fn send_vk(vk: u16, keyup: bool) -> Result<(), String> {
+    use windows::Win32::UI::Input::KeyboardAndMouse::{
+        SendInput, INPUT, INPUT_KEYBOARD, KEYBDINPUT, KEYEVENTF_KEYUP, VIRTUAL_KEY,
+    };
+    let input = INPUT {
+        r#type: INPUT_KEYBOARD,
+        Anonymous: windows::Win32::UI::Input::KeyboardAndMouse::INPUT_0 {
+            ki: KEYBDINPUT {
+                wVk: VIRTUAL_KEY(vk),
+                wScan: 0,
+                dwFlags: if keyup { KEYEVENTF_KEYUP } else { Default::default() },
+                time: 0,
+                dwExtraInfo: 0,
+            },
+        },
+    };
+    let sent = unsafe { SendInput(&[input], std::mem::size_of::<INPUT>() as i32) };
+    if sent != 1 {
+        return Err(format!("SendInput 发送失败: {sent}"));
+    }
+    Ok(())
 }
 
 /// 追加一行调试日志到 %APPDATA%/com.suiyi.dev/debug.log（诊断热键链路用）
@@ -87,36 +158,16 @@ pub fn trigger_selection_translate(app: AppHandle) {
 /// Unicode 注入（KEYEVENTF_UNICODE）不会触发目标程序的快捷键。
 #[cfg(windows)]
 fn simulate_ctrl_key(key: u16, name: &str) -> Result<(), String> {
-    use windows::Win32::UI::Input::KeyboardAndMouse::{
-        SendInput, INPUT, INPUT_KEYBOARD, KEYBDINPUT, KEYEVENTF_KEYUP, VK_CONTROL,
-    };
-    let make = |vk: u16, keyup: bool| INPUT {
-        r#type: INPUT_KEYBOARD,
-        Anonymous: windows::Win32::UI::Input::KeyboardAndMouse::INPUT_0 {
-            ki: KEYBDINPUT {
-                wVk: windows::Win32::UI::Input::KeyboardAndMouse::VIRTUAL_KEY(vk),
-                wScan: 0,
-                dwFlags: if keyup { KEYEVENTF_KEYUP } else { Default::default() },
-                time: 0,
-                dwExtraInfo: 0,
-            },
-        },
-    };
+    use windows::Win32::UI::Input::KeyboardAndMouse::VK_CONTROL;
     let seq: [(u16, bool); 4] = [
         (VK_CONTROL.0, false),
         (key, false),
         (key, true),
         (VK_CONTROL.0, true),
     ];
-    unsafe {
-        for (vk, up) in seq {
-            let input = make(vk, up);
-            let sent = SendInput(&[input], std::mem::size_of::<INPUT>() as i32);
-            if sent != 1 {
-                return Err(format!("Ctrl+{name} 发送失败: {sent}"));
-            }
-            std::thread::sleep(Duration::from_millis(25));
-        }
+    for (vk, up) in seq {
+        send_vk(vk, up).map_err(|e| format!("Ctrl+{name} 发送失败: {e}"))?;
+        std::thread::sleep(Duration::from_millis(25));
     }
     Ok(())
 }
@@ -124,6 +175,7 @@ fn simulate_ctrl_key(key: u16, name: &str) -> Result<(), String> {
 const VK_A: u16 = 0x41;
 const VK_C: u16 = 0x43;
 const VK_V: u16 = 0x56;
+const VK_RIGHT: u16 = 0x27;
 
 /// 全选：抓取与写回输入框内容时都用它
 #[cfg(windows)]
@@ -140,6 +192,17 @@ pub(crate) fn simulate_ctrl_c() -> Result<(), String> {
 #[cfg(windows)]
 pub(crate) fn simulate_ctrl_v() -> Result<(), String> {
     simulate_ctrl_key(VK_V, "V")
+}
+
+/// 松开 Ctrl+A 留下的全选。
+///
+/// 抓取流程失败时输入框里还留着「全选」状态，用户接着敲键盘会把整段内容替换掉。
+/// 按一次右方向键在绝大多数编辑器里等于「光标移到选区末尾」：不动文本，只收掉选区。
+#[cfg(windows)]
+pub(crate) fn simulate_arrow_right() -> Result<(), String> {
+    send_vk(VK_RIGHT, false)?;
+    std::thread::sleep(Duration::from_millis(20));
+    send_vk(VK_RIGHT, true)
 }
 
 /// 取词失败的原因。不猜，按顺序问三个问题：
@@ -240,10 +303,34 @@ fn process_name(pid: u32) -> Option<String> {
     }
 }
 
+/// 轮询读回剪贴板，直到出现非空文本或超时。
+///
+/// 目标程序写剪贴板的速度差别很大：记事本瞬间完成，浏览器、Electron 应用常常要几百毫秒。
+/// 原来「固定睡 350ms 读一次、不行再睡 250ms 读一次」会把慢的程序误判成「没取到选中文字」。
+pub(crate) fn read_clipboard_text(cb: &mut arboard::Clipboard, timeout_ms: u64) -> Option<String> {
+    let start = std::time::Instant::now();
+    loop {
+        if let Ok(t) = cb.get_text() {
+            if !t.trim().is_empty() {
+                return Some(t);
+            }
+        }
+        if start.elapsed().as_millis() >= timeout_ms as u128 {
+            return None;
+        }
+        std::thread::sleep(Duration::from_millis(80));
+    }
+}
+
 /// 剪贴板法抓取选中文本
 fn capture_selection() -> Option<String> {
     // 先记下目标窗口，取词成功后再落库，供「替换原文」回焦
     let target = foreground_hwnd();
+    // 等用户松开热键上的修饰键，否则下面的 Ctrl+C 会被目标程序当成 Ctrl+Alt+C
+    let waited = wait_for_modifiers_released(1200);
+    if waited > 0 {
+        log_line(&format!("capture: 等修饰键松开 {waited}ms"));
+    }
     let mut cb = arboard::Clipboard::new().map_err(|e| log_line(&format!("capture: 剪贴板打开失败 {e}"))).ok()?;
     let prev = cb.get_text().ok();
     log_line(&format!(
@@ -251,7 +338,10 @@ fn capture_selection() -> Option<String> {
         match &prev { Some(t) => t.chars().count().to_string(), None => "空/非文本".into() }
     ));
 
-    cb.clear().ok()?;
+    if cb.clear().is_err() {
+        log_line("capture: 清空剪贴板失败，无法可靠判断是否取到了新内容");
+        return None;
+    }
 
     if let Err(e) = simulate_ctrl_c() {
         log_line(&format!("capture: 模拟按键失败 {e}"));
@@ -261,14 +351,9 @@ fn capture_selection() -> Option<String> {
         }
         return None;
     }
-    std::thread::sleep(Duration::from_millis(350));
-
-    let mut now = cb.get_text().ok();
-    if now.as_deref().is_none() {
-        // 目标应用可能响应慢，再等一轮重试读取
-        std::thread::sleep(Duration::from_millis(250));
-        now = cb.get_text().ok();
-    }
+    // 剪贴板已经清空，所以这里读到的任何非空文本都只可能来自刚才那次 Ctrl+C，
+    // 不必再和 prev 比较（用户两次复制同一段文字时比较法会误判成失败）。
+    let now = read_clipboard_text(&mut cb, 1500);
     log_line(&format!(
         "capture: Ctrl+C 后剪贴板={}",
         match &now { Some(t) => format!("{} 字符", t.chars().count()), None => "空/非文本".into() }
@@ -280,9 +365,7 @@ fn capture_selection() -> Option<String> {
     }
 
     match now {
-        Some(t)
-            if !t.trim().is_empty() && prev.as_deref() != Some(t.as_str()) =>
-        {
+        Some(t) if !t.trim().is_empty() => {
             LAST_TARGET.store(target, Ordering::SeqCst);
             Some(t)
         }

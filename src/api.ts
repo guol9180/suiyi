@@ -1,6 +1,6 @@
 // Tauri 命令封装：前端所有后端调用只经过这里
 import { invoke } from "@tauri-apps/api/core";
-import type { GlobalSettings, ServiceConfig, ServicesFile } from "./types";
+import type { CloseAction, GlobalSettings, ServiceConfig, ServicesFile } from "./types";
 import type { HistoryEntry, HistoryKind } from "./types";
 import type { AnkiStatus, SpeechState, SpeechVoice, WordbookView } from "./types";
 import type { PluginInfo } from "./types";
@@ -121,6 +121,53 @@ export function tailLog(lines = 40): Promise<string> {
  */
 export function quitApp(): Promise<void> {
   return invoke("quit_app");
+}
+
+/**
+ * 点 × 之后的选择：quit 退出进程，minimize 最小化到任务栏。
+ * remember 为真时把选择记进配置，下次不再问。
+ */
+export function closeAction(action: CloseAction, remember: boolean): Promise<void> {
+  return invoke("close_action", { action, remember });
+}
+
+/** 一次更新检查的结果 */
+export interface UpdateInfo {
+  current: string;
+  latest: string;
+  hasUpdate: boolean;
+  /** release 正文 */
+  notes: string;
+  publishedAt: string;
+  /** 安装包直链 */
+  assetUrl: string;
+  /** release 页面（失败时的兜底） */
+  pageUrl: string;
+}
+
+/** 查一次最新版本；网络不通时抛出的原因可以直接展示 */
+export function checkUpdate(): Promise<UpdateInfo> {
+  return invoke("check_update");
+}
+
+/** 下载安装包到临时目录，返回本地路径。进度走 update-progress 事件 */
+export function downloadUpdate(url: string): Promise<string> {
+  return invoke("download_update", { url });
+}
+
+/** 退出随译并拉起安装向导 */
+export function installUpdate(path: string): Promise<void> {
+  return invoke("install_update", { path });
+}
+
+/** 轻提示窗口挂载时先取最近一条，事件可能比页面先到 */
+export function noticeLast(): Promise<{ text: string; kind: string } | null> {
+  return invoke("notice_last");
+}
+
+/** 关掉轻提示 */
+export function noticeHide(): Promise<void> {
+  return invoke("notice_hide");
 }
 
 /** 把译文替换回取词时所在的那个窗口 */

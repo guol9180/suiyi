@@ -158,6 +158,7 @@ const BOXES = `(() => {
   const pick = [
     ".side", ".main", ".cols", ".list-col", ".form-col", ".fallback", ".seg", ".set-body",
     ".panel", ".panel .f", ".panel .inp", ".row2", ".row2 .f",
+    ".update-banner", ".ask-card", ".nt-root", ".nt-card",
   ];
   const out = pick.map((s) => {
     const el = document.querySelector(s);

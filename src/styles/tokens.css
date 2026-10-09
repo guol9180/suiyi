@@ -110,6 +110,18 @@
   --glass-edge: rgba(255, 255, 255, 0.72);
   --glass-blur: blur(22px) saturate(155%);
 
+  /*
+   * 表单控件表面。输入框用卡片同色时在卡片上会「看不见」，只剩一行文字飘着：
+   * 这里给底色、边框、悬停与焦点三态，和周围内容明确分层。
+   * 底色是半透明白，压在毛玻璃卡片上仍然能透出底色，不破坏「空气感」。
+   */
+  --field-bg: rgba(255, 255, 255, 0.6);
+  --field-bg-hover: rgba(255, 255, 255, 0.86);
+  --field-bg-focus: #ffffff;
+  --field-border: rgba(15, 17, 21, 0.13);
+  --field-border-hover: rgba(15, 17, 21, 0.24);
+  --field-ring: rgba(57, 100, 254, 0.18);
+
   /* 字体 */
   --font-ui: "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif;
   --font-mono: Consolas, "Microsoft YaHei", monospace;

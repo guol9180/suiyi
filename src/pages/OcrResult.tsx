@@ -27,6 +27,8 @@ export interface OcrResult {
   engine: string;
   /** 识别语言（BCP-47），插件可能为空 */
   lang: string;
+  /** 识别失败的原因；为空表示流程跑完了（哪怕没认出一个字） */
+  error?: string | null;
 }
 
 /** 一个服务的译文。失败也留着，卡片上要说清是哪个服务没成 */
@@ -276,11 +278,31 @@ export default function OcrResultPage() {
               ) : (
                 <div className="emptybox">正在读取识别结果…</div>
               )
+            ) : result.error ? (
+              /* 识别本身失败：原因写清楚，并且给一条明确的出路 —— 之前是静默什么都不弹 */
+              <div className="emptybox">
+                识别失败
+                <br />
+                {result.error}
+                <div className="ocr-fallback">
+                  <button className="btn mini" onClick={() => void retry()}>
+                    <Icon name="frame" size="sm" />重新框选
+                  </button>
+                  <button className="btn mini" onClick={() => void closePanel()}>
+                    关闭
+                  </button>
+                </div>
+              </div>
             ) : !result.text.trim() ? (
               <div className="emptybox">
                 未识别到文字
                 <br />
-                选区可能不含文本，或者换一段更清楚的区域
+                选区可能太窄，或者不含文本；多框一行上下文再试一次更稳
+                <div className="ocr-fallback">
+                  <button className="btn mini" onClick={() => void retry()}>
+                    <Icon name="frame" size="sm" />重新框选
+                  </button>
+                </div>
               </div>
             ) : (
               <>

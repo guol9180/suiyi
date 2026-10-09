@@ -32,8 +32,14 @@ export interface ServicesFile {
   ankiDeck: string;
   speechVoice: string;
   speechRate: number;
+  /** 点窗口 × 时：ask / minimize / quit */
+  closeAction: CloseAction;
+  /** 启动后自动检查更新 */
+  autoCheckUpdate: boolean;
   services: ServiceConfig[];
 }
+
+export type CloseAction = "ask" | "minimize" | "quit";
 
 export interface GlobalSettings {
   concurrency: number;
@@ -47,6 +53,10 @@ export interface GlobalSettings {
   speechVoice: string;
   /** 语速倍数 */
   speechRate: number;
+  /** 点窗口 × 时怎么办 */
+  closeAction: CloseAction;
+  /** 启动后自动检查更新 */
+  autoCheckUpdate: boolean;
 }
 
 /** 系统里的一个本地语音 */

@@ -1,8 +1,17 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import SettingsPage from "./pages/Settings";
 import TranslatePage from "./pages/Translate";
-import { hotkeyStatus, retryHotkeys, setHotkey, type HotkeyStatus } from "./api";
+import {
+  checkUpdate,
+  closeAction,
+  getSettings,
+  hotkeyStatus,
+  retryHotkeys,
+  setHotkey,
+  type HotkeyStatus,
+  type UpdateInfo,
+} from "./api";
 import { Icon } from "./components/Icon";
 import { formatAccel, suggestionFor } from "./hotkeySuggest";
 import "./App.css";
@@ -15,6 +24,15 @@ export default function App() {
   const [hotkeys, setHotkeys] = useState<HotkeyStatus[]>([]);
   const [dismissed, setDismissed] = useState(false);
   const [adopting, setAdopting] = useState(false);
+  /** 关窗口时问一次：直接关闭还是最小化到任务栏 */
+  const [closeAsk, setCloseAsk] = useState(false);
+  const [rememberClose, setRememberClose] = useState(false);
+  const [closeBusy, setCloseBusy] = useState(false);
+  /** 发现有新版本时的提示条 */
+  const [update, setUpdate] = useState<UpdateInfo | null>(null);
+  const [updateDismissed, setUpdateDismissed] = useState(false);
+  /** 递增信号：点提示条的「去关于页」时切到设置页并打开关于 */
+  const [aboutSignal, setAboutSignal] = useState(0);
 
   useEffect(() => {
     void hotkeyStatus().then(setHotkeys).catch(() => {});
@@ -26,6 +44,60 @@ export default function App() {
       void un.then((f) => f());
     };
   }, []);
+
+  // × 被后端拦下来（prevent_close）后问一次：直接关闭还是最小化到任务栏。
+  // 用户在设置里选了「每次询问」之外的值时，后端直接执行，不会发这个事件。
+  useEffect(() => {
+    const un = listen("close-requested", () => setCloseAsk(true));
+    return () => {
+      void un.then((f) => f());
+    };
+  }, []);
+
+  // 启动后自动查一次更新：只提示，不自动下载
+  useEffect(() => {
+    let alive = true;
+    void getSettings()
+      .then((s) => {
+        if (!alive || !s.autoCheckUpdate) return;
+        return checkUpdate()
+          .then((info) => {
+            if (alive && info.hasUpdate) setUpdate(info);
+          })
+          .catch(() => {
+            // 离线、被限流都当没更新：这不是用户此刻要做的事，不打扰
+          });
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const answerClose = useCallback(
+    async (action: "quit" | "minimize") => {
+      setCloseBusy(true);
+      try {
+        await closeAction(action, rememberClose);
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setCloseBusy(false);
+        setCloseAsk(false);
+      }
+    },
+    [rememberClose],
+  );
+
+  // Esc 关掉询问框 = 这次不关窗口
+  useEffect(() => {
+    if (!closeAsk) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setCloseAsk(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [closeAsk]);
 
   const pending = hotkeys.filter((h) => !h.registered);
 
@@ -80,13 +152,74 @@ export default function App() {
           </button>
         </div>
       )}
+      {update?.hasUpdate && !updateDismissed && (
+        <div className="update-banner">
+          <Icon name="refresh" size="sm" />
+          <span>
+            发现新版本 v{update.latest}（当前 v{update.current}）
+          </span>
+          <span style={{ flex: 1 }} />
+          <button
+            className="btn mini"
+            onClick={() => {
+              setTab("settings");
+              setAboutSignal((n) => n + 1);
+            }}
+          >
+            去关于页更新
+          </button>
+          <button className="mini-as-link" title="以后再说" onClick={() => setUpdateDismissed(true)}>
+            <Icon name="close" size="sm" />
+          </button>
+        </div>
+      )}
       <div className="tab-body">
         {tab === "translate" ? (
           <TranslatePage onOpenSettings={() => setTab("settings")} />
         ) : (
-          <SettingsPage />
+          <SettingsPage focusAboutSignal={aboutSignal} />
         )}
       </div>
+
+      {closeAsk && (
+        <div className="ask-mask" onClick={() => setCloseAsk(false)}>
+          <div
+            className="ask-card"
+            role="dialog"
+            aria-modal="true"
+            aria-label="关闭随译"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="ask-head">
+              <b>关闭随译？</b>
+            </div>
+            <div className="ask-body">
+              「最小化到任务栏」会把窗口收起来，Alt+D / Alt+S / Alt+T 继续可用；
+              「直接关闭」会结束随译，三个热键一起失效。
+            </div>
+            <label className="kcheck">
+              <input
+                type="checkbox"
+                checked={rememberClose}
+                onChange={(e) => setRememberClose(e.target.checked)}
+              />
+              <span>记住我的选择（设置 → 通用 里可以改回来）</span>
+            </label>
+            <div className="ask-foot">
+              <button className="btn mini" disabled={closeBusy} onClick={() => setCloseAsk(false)}>
+                取消
+              </button>
+              <span style={{ flex: 1 }} />
+              <button className="btn danger mini" disabled={closeBusy} onClick={() => void answerClose("quit")}>
+                直接关闭
+              </button>
+              <button className="btn primary mini" disabled={closeBusy} onClick={() => void answerClose("minimize")}>
+                最小化到任务栏
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -16,6 +16,7 @@ export default function OverlayPage() {
   const [failed, setFailed] = useState(false);
   const dragStart = useRef<{ sx: number; sy: number } | null>(null);
   const busyRef = useRef(false);
+  const imgRef = useRef<HTMLImageElement | null>(null);
 
   useEffect(() => {
     // 会话写入与窗口创建几乎同时完成，重试几次更稳
@@ -66,8 +67,26 @@ export default function OverlayPage() {
       setRect(null);
       return;
     }
+    /*
+     * 把选框换算成「冻结帧自身的像素坐标」。
+     *
+     * 不乘窗口缩放系数、也不假设 CSS 像素与物理像素的关系：直接拿图片的渲染框和
+     * naturalWidth/naturalHeight 做比例换算。用户看到的是这张图，裁图也按这张图来，
+     * 两边永远对得上 —— DPI、滚动条、多屏混合缩放都不会再让框选和识别区域错位。
+     */
+    const img = imgRef.current;
+    const box = img?.getBoundingClientRect();
+    if (!img || !box || box.width <= 0 || box.height <= 0) {
+      return;
+    }
+    const kx = img.naturalWidth / box.width;
+    const ky = img.naturalHeight / box.height;
+    const ix = (rect.x - box.left) * kx;
+    const iy = (rect.y - box.top) * ky;
+    const iw = rect.w * kx;
+    const ih = rect.h * ky;
     busyRef.current = true;
-    void invoke("finish_region", { x: rect.x, y: rect.y, w: rect.w, h: rect.h })
+    void invoke("finish_region", { x: ix, y: iy, w: iw, h: ih })
       .catch((e) => console.error(String(e)))
       .finally(() => {
         busyRef.current = false;
@@ -85,7 +104,9 @@ export default function OverlayPage() {
       onMouseMove={onMove}
       onMouseUp={onUp}
     >
-      {dataUrl && <img className="ov-img" src={dataUrl} draggable={false} alt="" />}
+      {dataUrl && (
+        <img ref={imgRef} className="ov-img" src={dataUrl} draggable={false} alt="" />
+      )}
       <div className="ov-dim" />
       {rect && (
         <div className="ov-sel" style={{ left: rect.x, top: rect.y, width: rect.w, height: rect.h }}>

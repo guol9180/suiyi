@@ -56,6 +56,7 @@ import {
   type HistoryEntry,
   type HistoryKind,
   type AnkiStatus,
+  type GlobalSettings,
   type PluginInfo,
   type Protocol,
   type ResultType,
@@ -145,7 +146,12 @@ function Toggle(props: { on: boolean; onClick: () => void }) {
   );
 }
 
-export default function SettingsPage() {
+export default function SettingsPage({
+  focusAboutSignal = 0,
+}: {
+  /** 每次自增一次就把右侧切到「关于」页：主窗口的更新提示条用它跳过来 */
+  focusAboutSignal?: number;
+}) {
   const [file, setFile] = useState<ServicesFile | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [draft, setDraft] = useState<ServiceConfig | null>(null);
@@ -153,7 +159,7 @@ export default function SettingsPage() {
   const [hasKey, setHasKey] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  const [settings, setSettings] = useState({
+  const [settings, setSettings] = useState<GlobalSettings>({
     concurrency: 2,
     timeoutSecs: 15,
     inputTargetLang: "English",
@@ -161,6 +167,8 @@ export default function SettingsPage() {
     ankiDeck: "随译",
     speechVoice: "",
     speechRate: 1,
+    closeAction: "ask",
+    autoCheckUpdate: true,
   });
   const [anki, setAnki] = useState<AnkiStatus | null>(null);
   const [ankiTesting, setAnkiTesting] = useState(false);
@@ -271,6 +279,8 @@ export default function SettingsPage() {
         ankiDeck: f.ankiDeck || "随译",
         speechVoice: f.speechVoice || "",
         speechRate: f.speechRate || 1,
+        closeAction: f.closeAction || "ask",
+        autoCheckUpdate: f.autoCheckUpdate !== false,
       });
       const sorted = sortServices(f.services);
       setSelectedId((cur) => cur ?? sorted[0]?.id ?? null);
@@ -284,6 +294,11 @@ export default function SettingsPage() {
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  // 主窗口的更新提示条点进来时直接落到「关于」页
+  useEffect(() => {
+    if (focusAboutSignal > 0) setPage("about");
+  }, [focusAboutSignal]);
 
   const loadHistory = useCallback(async () => {
     try {
@@ -951,6 +966,47 @@ export default function SettingsPage() {
                     </span>
                   </div>
                 )}
+              </div>
+            </div>
+
+            <div className="card">
+              <div className="card-head">
+                <span className="hname">窗口与更新</span>
+                <span className="m">点 × 的行为、更新检查</span>
+              </div>
+              <div className="f" style={{ maxWidth: 280 }}>
+                <label>点窗口 × 时</label>
+                <select
+                  className="inp"
+                  value={settings.closeAction}
+                  onChange={(e) => {
+                    const next: GlobalSettings = {
+                      ...settings,
+                      closeAction: e.target.value as GlobalSettings["closeAction"],
+                    };
+                    setSettings(next);
+                    void saveGlobal(next);
+                  }}
+                >
+                  <option value="ask">每次询问</option>
+                  <option value="minimize">最小化到任务栏</option>
+                  <option value="quit">直接退出随译</option>
+                </select>
+              </div>
+              <label className="kcheck">
+                <Toggle
+                  on={settings.autoCheckUpdate}
+                  onClick={() => {
+                    const next = { ...settings, autoCheckUpdate: !settings.autoCheckUpdate };
+                    setSettings(next);
+                    void saveGlobal(next);
+                  }}
+                />
+                <span>启动后自动检查更新</span>
+              </label>
+              <div className="thint">
+                「最小化到任务栏」会保留 Alt+D / Alt+S / Alt+T 热键；「直接退出」会把热键一起停掉。
+                更新只在关于页确认后才会下载安装。
               </div>
             </div>
           </div>

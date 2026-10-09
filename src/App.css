@@ -80,6 +80,69 @@
   flex: none;
 }
 .hotkey-banner .btn.mini { flex: none; }
+
+/* 发现新版本：蓝底一条，比冲突横幅轻一档 —— 它不是故障，是提示 */
+.update-banner {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 16px;
+  font-size: var(--fs-sec);
+  color: var(--c-primary-text);
+  background: var(--c-primary-soft);
+  border-bottom: 1px solid var(--c-primary-border);
+  flex: none;
+}
+.update-banner .btn.mini { flex: none; }
+
+/* ---------- 关窗口前的询问 ---------- */
+.ask-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(15, 17, 21, 0.28);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+}
+.ask-card {
+  width: 100%;
+  max-width: 380px;
+  padding: 16px;
+  border: 1px solid var(--glass-edge);
+  border-radius: var(--radius-lg);
+  background: var(--glass-card-strong);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  box-shadow: var(--shadow-pop);
+}
+.ask-head {
+  font-size: var(--fs-sub);
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+.ask-body {
+  font-size: var(--fs-sec);
+  color: var(--c-text-3);
+  line-height: 1.75;
+}
+.ask-card .kcheck {
+  margin-top: 12px;
+}
+.ask-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--c-border-soft);
+}
+
 .tab-body {
   position: relative;
   z-index: 1;

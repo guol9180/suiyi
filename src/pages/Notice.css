@@ -1,0 +1,76 @@
+/*
+ * 轻提示窗口样式。
+ *
+ * 窗口本身是透明的（见 Rust 侧 notice.rs），这里只画中间那张小卡。
+ * 不设拖拽区、不加 hover 态 —— 整个窗口鼠标穿透，任何可交互的样子都是骗人。
+ */
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+.nt-root {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  padding: 3px 6px;
+  opacity: 1;
+  transform: translateY(0);
+  transition: opacity 0.26s ease, transform 0.26s ease;
+}
+
+.nt-root.out {
+  opacity: 0;
+  transform: translateY(-4px);
+}
+
+.nt-card {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--glass-edge);
+  border-radius: var(--radius-md);
+  background: var(--glass-card-strong);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  box-shadow: var(--shadow-float);
+  color: var(--c-text);
+  font-family: var(--font-ui);
+  font-size: var(--fs-sec);
+}
+
+.nt-card .ico {
+  flex: none;
+}
+
+.nt-card.ok .ico {
+  color: var(--c-success);
+}
+.nt-card.err .ico {
+  color: var(--c-danger-ink);
+}
+.nt-card.info .ico {
+  color: var(--c-primary-text);
+}
+
+/* 最长两行，多出来的截断：提示只报信，不铺一屏字 */
+.nt-text {
+  flex: 1;
+  min-width: 0;
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nt-root {
+    transition: none;
+  }
+}

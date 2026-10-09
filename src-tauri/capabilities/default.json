@@ -1,8 +1,8 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "主窗口、划词弹窗、截图覆盖层与截图识别结果面板四个 WebView 的权限集合",
-  "windows": ["main", "popup", "overlay", "ocr"],
+  "description": "主窗口、划词弹窗、截图覆盖层、截图识别结果面板与轻提示五个 WebView 的权限集合",
+  "windows": ["main", "popup", "overlay", "ocr", "notice"],
   "permissions": [
     "core:default",
     "opener:default",

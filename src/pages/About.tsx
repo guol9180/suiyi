@@ -5,15 +5,20 @@
  * 不写「感谢使用」这类空话，也不在页面上宣称许可 —— 仓库目前没有 LICENSE，
  * 只列第三方组件的许可，本项目许可留待仓库层面决定。
  */
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { listen } from "@tauri-apps/api/event";
 import { openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import {
   appPaths,
+  checkUpdate,
+  downloadUpdate,
+  getSettings,
   hotkeyStatus,
-  quitApp,
+  installUpdate,
   tailLog,
   type AppPaths,
   type HotkeyStatus,
+  type UpdateInfo,
 } from "../api";
 import { Icon } from "../components/Icon";
 import { formatAccel } from "../hotkeySuggest";
@@ -27,22 +32,63 @@ const LINKS: Array<{ label: string; hint: string; url: string }> = [
     hint: "全部版本与变更",
     url: "https://github.com/guol9180/suiyi/releases",
   },
-  {
-    label: "UI 设计稿",
-    hint: "design/ui-mockup.html",
-    url: "https://github.com/guol9180/suiyi/blob/main/design/ui-mockup.html",
-  },
 ];
+
+const DOWNLOAD_PAGE = "https://suiyi.imhgl.com/";
 
 export default function AboutPage() {
   const [paths, setPaths] = useState<AppPaths | null>(null);
   const [hotkeys, setHotkeys] = useState<HotkeyStatus[]>([]);
   const [notice, setNotice] = useState("");
+  const [update, setUpdate] = useState<UpdateInfo | null>(null);
+  const [checking, setChecking] = useState(false);
+  const [updateErr, setUpdateErr] = useState("");
+  const [progress, setProgress] = useState<{ downloaded: number; total: number } | null>(null);
+  const [installing, setInstalling] = useState(false);
+
+  const doCheck = useCallback(async () => {
+    setChecking(true);
+    setUpdateErr("");
+    try {
+      setUpdate(await checkUpdate());
+    } catch (e) {
+      setUpdateErr(String(e));
+    } finally {
+      setChecking(false);
+    }
+  }, []);
 
   useEffect(() => {
     void appPaths().then(setPaths).catch(() => setPaths(null));
     void hotkeyStatus().then(setHotkeys).catch(() => setHotkeys([]));
-  }, []);
+    // 启动时已经查过一次，这里只在用户开着自动检查时顺手再对一次
+    void getSettings()
+      .then((s) => {
+        if (s.autoCheckUpdate) void doCheck();
+      })
+      .catch(() => {});
+    const un = listen<{ downloaded: number; total: number }>("update-progress", (e) => {
+      setProgress(e.payload);
+    });
+    return () => {
+      void un.then((f) => f());
+    };
+  }, [doCheck]);
+
+  /** 下载 → 拉起安装向导（随译会退出，装完由安装向导把它带回来） */
+  async function downloadAndInstall() {
+    if (!update) return;
+    setInstalling(true);
+    setUpdateErr("");
+    try {
+      const path = await downloadUpdate(update.assetUrl);
+      await installUpdate(path);
+    } catch (e) {
+      setUpdateErr(String(e));
+      setInstalling(false);
+      setProgress(null);
+    }
+  }
 
   /** 把版本、系统、路径、热键状态与日志尾部拼成一段可粘贴的文本 */
   async function copyDiagnostics() {
@@ -123,21 +169,6 @@ export default function AboutPage() {
             <div className="ab-ver">v{__APP_VERSION__}</div>
             <div className="ab-tag">Windows 桌面翻译工具：划词、截图、输入框三个入口，译文来自你自己配置的服务。</div>
           </div>
-          <span style={{ flex: 1 }} />
-          <div className="ab-quit">
-            <button
-              className="btn mini"
-              title="关闭窗口只是收起随译（热键继续可用），这里才是真正退出"
-              onClick={() => {
-                if (window.confirm("退出随译？退出后 Alt+D / Alt+S / Alt+T 热键会一起失效。")) {
-                  void quitApp();
-                }
-              }}
-            >
-              退出随译
-            </button>
-            <div className="ab-quit-note">关窗口只是收起，热键仍在后台工作</div>
-          </div>
         </div>
 
         <div className="ab-links">
@@ -148,7 +179,87 @@ export default function AboutPage() {
               <Icon name="arrow-right" size="sm" />
             </button>
           ))}
+          <button className="ab-link" disabled={checking} onClick={() => void doCheck()}>
+            <span className="ab-link-name">获取更新</span>
+            <span className="ab-link-hint">
+              {checking ? "正在检查…" : `当前 v${__APP_VERSION__}`}
+            </span>
+            <Icon name="refresh" size="sm" />
+          </button>
         </div>
+      </div>
+
+      <div className="card">
+        <div className="card-head">
+          <b>更新</b>
+          <span className="m">从 GitHub Releases 读取最新版本</span>
+        </div>
+        <div className="ab-upd">
+          <span className="ab-upd-cur">当前版本 v{__APP_VERSION__}</span>
+          {update && update.hasUpdate && (
+            <span className="chip acc mini">发现 v{update.latest}</span>
+          )}
+          {update && !update.hasUpdate && !checking && (
+            <span className="chip ok mini">
+              <Icon name="check" size="sm" />
+              已是最新
+            </span>
+          )}
+          <span style={{ flex: 1 }} />
+          <button className="btn mini" disabled={checking || installing} onClick={() => void doCheck()}>
+            <Icon name="refresh" size="sm" />
+            {checking ? "检查中" : "检查更新"}
+          </button>
+          {update?.hasUpdate && (
+            <button
+              className="btn primary mini"
+              disabled={installing}
+              onClick={() => void downloadAndInstall()}
+            >
+              <Icon name="save" size="sm" />
+              {installing ? "下载中" : "下载并安装"}
+            </button>
+          )}
+        </div>
+        {progress && installing && (
+          <div className="ab-upd-prog">
+            <div className="ab-upd-bar">
+              <span
+                style={{
+                  width: progress.total
+                    ? `${Math.min(100, Math.round((progress.downloaded / progress.total) * 100))}%`
+                    : "100%",
+                }}
+              />
+            </div>
+            <span className="m">
+              {progress.total
+                ? `${Math.round((progress.downloaded / progress.total) * 100)}%`
+                : `${Math.round(progress.downloaded / 1024)} KB`}
+            </span>
+          </div>
+        )}
+        {update?.hasUpdate && update.notes.trim() && (
+          <details className="ab-upd-notes">
+            <summary>更新说明</summary>
+            <pre>{update.notes.trim()}</pre>
+          </details>
+        )}
+        {installing && !progress && <div className="thint">正在准备下载…</div>}
+        {installing && (
+          <div className="thint">
+            下载完成后随译会退出并打开安装向导，装完在向导最后一步勾选「运行 SuiYi」即可。
+          </div>
+        )}
+        {updateErr && (
+          <div className="terr">
+            <Icon name="alert" size="sm" />
+            <span>{updateErr}</span>
+            <button className="btn mini" onClick={() => void openUrl(update?.pageUrl ?? DOWNLOAD_PAGE)}>
+              打开下载页
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="card">

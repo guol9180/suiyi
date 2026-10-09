@@ -20,6 +20,9 @@
        *   ?demo=providers           打开「添加服务」的提供商卡片
        *   ?demo=models              选中服务并展开模型下拉（配 ?modelfail=1 看失败态）
        *   ?demo=keyerror            选中 DeepSeek 并测试连接（配 ?keyfail=1 看 401 人话提示）
+       *   ?demo=close               模拟点窗口 ×，看「直接关闭 / 最小化到任务栏」询问框
+       *   ?demo=update              让检查更新返回有新版本，看主窗口提示条与关于页更新卡
+       *   ?win=notice               渲染轻提示窗口（配 ?kind=ok|err|info 与 ?text=）
        *   ?keyfail=1                让测试连接返回 DeepSeek 那串 401
        *   ?conflict=1               让「截图识别」显示为被占用，用来看冲突提示
        *   ?hotkeyconflict=1         划词/输入框两条热键显示为被占用，看主窗口的冲突横幅
@@ -30,6 +33,7 @@
         var isPopup = q.get("win") === "popup";
         var isOverlay = q.get("win") === "overlay";
         var isOcr = q.get("win") === "ocr";
+        var isNotice = q.get("win") === "notice";
         var conflict = q.get("conflict") === "1";
         // ?hotkeyconflict=1 让划词/输入框两条热键显示为被占用，用来看主窗口的冲突横幅
         var hotkeyConflict = q.get("hotkeyconflict") === "1";
@@ -90,7 +94,7 @@
         var SERVICES = {
           version: 1, concurrency: 2, timeoutSecs: 15, inputTargetLang: "中文",
           ankiUrl: "http://127.0.0.1:8765", ankiDeck: "随译生词",
-          speechVoice: "", speechRate: 1,
+          speechVoice: "", speechRate: 1, closeAction: "ask", autoCheckUpdate: true,
           services: [
             { id: "zai", name: "ZAI", kind: "translation", protocol: "open_ai_compatible", enabled: true,
               baseUrl: "https://api.z.ai/api/paas/v4", model: "glm-5.3-flash", promptTemplate: null,
@@ -159,6 +163,7 @@
               concurrency: 2, timeoutSecs: 15, inputTargetLang: "中文",
               ankiUrl: "http://127.0.0.1:8765", ankiDeck: "随译生词",
               speechVoice: SPEECH_VOICE, speechRate: 1,
+              closeAction: "ask", autoCheckUpdate: true,
             };
           },
           get_api_key: function () { return "sk-xxxxxxxxxxxxxxxxxxxx"; },
@@ -228,6 +233,29 @@
             }
             return ["deepseek-flash", "deepseek-v4-pro", "deepseek-coder"];
           },
+          // 更新：?demo=update 让检查结果显示有新版本，用来看提示条与关于页的更新卡
+          check_update: function () {
+            var has = q.get("demo") === "update" || q.get("update") === "1";
+            return {
+              current: "0.7.0",
+              latest: has ? "0.8.0" : "0.7.0",
+              hasUpdate: has,
+              notes: has
+                ? "## 本次更新\n\n- 划词取词修复：等修饰键松开再模拟复制\n- 单行框选也能识别\n- 界面输入框加了底色与焦点环"
+                : "",
+              publishedAt: "2026-10-09T01:00:00Z",
+              assetUrl: "https://github.com/guol9180/suiyi/releases/latest/download/SuiYi-Setup-x64.exe",
+              pageUrl: "https://github.com/guol9180/suiyi/releases",
+            };
+          },
+          download_update: function () { return "C:\\Users\\PC\\AppData\\Local\\Temp\\suiyi-update\\SuiYi-Setup-x64.exe"; },
+          install_update: function () { return null; },
+          close_action: function () { return null; },
+          quit_app: function () { return null; },
+          notice_last: function () {
+            return { text: q.get("text") || "已替换 · Ctrl+Z 撤销", kind: q.get("kind") || "ok" };
+          },
+          notice_hide: function () { return null; },
           app_paths: function () {
             return {
               configDir: "C:\\Users\\PC\\AppData\\Roaming\\com.suiyi.dev",
@@ -371,10 +399,22 @@
         }
 
         var callbacks = {};
+        /*
+         * 回调 id → 事件名。
+         *
+         * Tauri 的 listen 会先调 plugin:event|listen 把 handler 注册进回调表，桩必须
+         * 记下它听的是哪个事件：主窗口同时挂着 hotkey-status / close-requested /
+         * update-progress 好几个监听器，无差别广播会把 payload 投给不该收的那个
+         * （setHotkeys(null) 直接让页面白屏）。
+         */
+        var eventOf = {};
         var seq = 0;
         window.__TAURI_INTERNALS__ = {
           invoke: async function (cmd, args) {
-            if (cmd === "plugin:event|listen") return 1;
+            if (cmd === "plugin:event|listen") {
+              if (args && args.event) eventOf[args.handler] = args.event;
+              return 1;
+            }
             if (cmd === "plugin:event|unlisten") return null;
             if (cmd.indexOf("plugin:") === 0) return null;
             if (Object.prototype.hasOwnProperty.call(MOCK, cmd)) return MOCK[cmd](args);
@@ -391,6 +431,16 @@
             .filter(function (e) { return (e.textContent || "").indexOf(text) >= 0; })[0];
         }
 
+        /** 只把事件投给监听该事件的回调（和真实 Tauri 的事件路由一致） */
+        function emitEvent(name, payload) {
+          Object.keys(callbacks).forEach(function (id) {
+            if (eventOf[id] !== name) return;
+            try {
+              callbacks[id]({ event: name, id: Number(id), payload: payload });
+            } catch (e) { console.warn(e); }
+          });
+        }
+
         // 轮询等元素出现再点。冷启动时首屏要几百毫秒才挂上，写死延迟会点空
         function waitFor(get, cb, left) {
           var n = left === undefined ? 80 : left;
@@ -402,15 +452,23 @@
         }
 
         window.addEventListener("load", function () {
+          // 轻提示窗口：把桩数据投进去，按 ?kind=ok|err|info 看三种配色
+          if (isNotice) {
+            setTimeout(function () {
+              emitEvent("notice-show", {
+                text: q.get("text") || "已替换 · Ctrl+Z 撤销",
+                kind: q.get("kind") || "ok",
+              });
+            }, 400);
+            return;
+          }
+
           if (isPopup) {
             setTimeout(function () {
-              Object.keys(callbacks).forEach(function (id) {
-                try {
-                  callbacks[id]({
-                    event: "popup-set-source", id: Number(id),
-                    payload: { text: "The quick brown fox jumps over the lazy dog.", autoTranslate: true, kind: "selection" },
-                  });
-                } catch (e) { console.warn(e); }
+              emitEvent("popup-set-source", {
+                text: "The quick brown fox jumps over the lazy dog.",
+                autoTranslate: true,
+                kind: "selection",
               });
             }, 400);
             return;
@@ -461,7 +519,11 @@
               tab.click();
               waitFor(function () { return byText(".side-item", "服务配置"); }, function (item) {
                 item.click();
-                // v0.7 起未选中服务时右侧直接就是供应商选择页，「添加服务」只是清空选中
+                // v0.7 起未选中服务时右侧直接就是供应商选择页，「添加服务」只是清空选中。
+                // 首次进入会自动选中第一个服务，所以这里必须真的点一下「添加服务」。
+                waitFor(function () { return byText(".card-head .btn", "添加服务"); }, function (add) {
+                  add.click();
+                });
               });
             });
             return;
@@ -511,6 +573,14 @@
             return;
           }
 
+          // ?demo=close：模拟点窗口 × 后主进程发来的 close-requested
+          if (q.get("demo") === "close") {
+            setTimeout(function () {
+              emitEvent("close-requested", null);
+            }, 900);
+            return;
+          }
+
           var want = (location.hash || "").replace("#", "");
           if (!want) return;
           var SIDE = {
@@ -536,12 +606,17 @@
         });
 
         // 无头浏览器有最小视口宽度，把弹窗钉回真实窗口宽度
-        if (isPopup || isOcr) {
+        if (isPopup || isOcr || isNotice) {
           var st = document.createElement("style");
-          st.textContent = "html,body{background:#fff;margin:0;padding:0;overflow:hidden}" +
-            (isPopup
-              ? ".popup-root{width:430px !important;height:540px !important}"
-              : ".ocr-root{width:460px !important;height:600px !important}");
+          st.textContent =
+            "html,body{margin:0;padding:0;overflow:hidden}" +
+            (isNotice
+              /* 轻提示贴的是桌面，白色底上看不出毛玻璃：给一块深一点的桌面色 */
+              ? "html,body{background:linear-gradient(135deg,#5b6478,#8b93a5)}" +
+                ".nt-root{width:420px !important;height:66px !important}"
+              : isPopup
+                ? "html,body{background:#fff}" + ".popup-root{width:430px !important;height:540px !important}"
+                : "html,body{background:#fff}" + ".ocr-root{width:460px !important;height:600px !important}");
           document.head.appendChild(st);
         }
 
@@ -562,9 +637,11 @@
           ? "/src/overlay-main.tsx"
           : isOcr
             ? "/src/ocr-main.tsx"
-            : isPopup
-              ? "/src/popup-main.tsx"
-              : "/src/main.tsx";
+            : isNotice
+              ? "/src/notice-main.tsx"
+              : isPopup
+                ? "/src/popup-main.tsx"
+                : "/src/main.tsx";
         document.addEventListener("DOMContentLoaded", function () { document.body.appendChild(scr); });
       })();
     </script>

@@ -15,7 +15,7 @@ export default defineConfig(() => ({
   },
 
   // 多页面入口：主窗口 index.html + 划词弹窗 popup.html + 截图覆盖层 overlay.html
-  // + 截图识别结果面板 ocr.html
+  // + 截图识别结果面板 ocr.html + 轻提示 notice.html
   build: {
     rollupOptions: {
       input: {
@@ -23,6 +23,7 @@ export default defineConfig(() => ({
         popup: "popup.html",
         overlay: "overlay.html",
         ocr: "ocr.html",
+        notice: "notice.html",
       },
     },
   },

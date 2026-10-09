@@ -4,15 +4,18 @@ pub mod config;
 pub mod history;
 pub mod hotkeys;
 pub mod keyring;
+pub mod notice;
 pub mod plugin;
 pub mod plugin_js;
 pub mod screenshot;
 pub mod selection;
 pub mod speech;
 pub mod translator;
+pub mod update;
 pub mod wordbook;
 pub mod writeback;
 
+use tauri::Emitter;
 use tauri::utils::config::WindowEffectsConfig;
 use tauri::utils::WindowEffect;
 use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
@@ -73,24 +76,42 @@ pub fn run() {
         .plugin(hotkey.build())
         .manage(hotkeys::HotkeyState::default())
         .manage(std::sync::Mutex::<Option<screenshot::ShotSession>>::new(None))
-        .manage(screenshot::OcrState::default());
+        .manage(screenshot::OcrState::default())
+        .manage(notice::NoticeState::default());
 
     builder
         .setup(move |app| {
             let handle = app.handle().clone();
 
-            // 点 × 只把主窗口收起来，不结束进程：全局热键是这个工具的核心，
-            // 关掉窗口就退出会让 Alt+D / Alt+S / Alt+T 一起失效。
-            // 于是必须保证「再点一次图标」能把窗口叫回来 —— 靠下面这段 hide，
-            // 加上单实例回调里的 show（窗口被销毁时还会重建）。
-            // 真正退出放在「关于」页的「退出随译」。
+            // 点 × 之后怎么办由用户定（通用设置里可改，默认每次询问）：
+            // - quit：退出进程，热键一起失效，用户明确要的
+            // - minimize：最小化到任务栏，热键继续可用
+            // - ask：先把窗口叫回来，让界面弹一次「直接关闭 / 最小化到任务栏」
             if let Some(main) = app.get_webview_window("main") {
                 let handle_for_close = app.handle().clone();
                 main.on_window_event(move |event| {
                     if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                         api.prevent_close();
-                        if let Some(win) = handle_for_close.get_webview_window("main") {
-                            let _ = win.hide();
+                        let action = commands::config_dir(&handle_for_close)
+                            .and_then(|dir| config::load_services(&dir))
+                            .map(|f| f.close_action)
+                            .unwrap_or_else(|_| config::DEFAULT_CLOSE_ACTION.to_string());
+                        match action.as_str() {
+                            "quit" => handle_for_close.exit(0),
+                            "minimize" => {
+                                if let Some(win) = handle_for_close.get_webview_window("main") {
+                                    let _ = win.minimize();
+                                }
+                            }
+                            _ => {
+                                // 每次询问：窗口可能是收起来的，先叫回来再问
+                                if let Some(win) = handle_for_close.get_webview_window("main") {
+                                    let _ = win.show();
+                                    let _ = win.unminimize();
+                                    let _ = win.set_focus();
+                                }
+                                let _ = handle_for_close.emit("close-requested", ());
+                            }
                         }
                     }
                 });
@@ -155,6 +176,12 @@ pub fn run() {
             commands::app_paths,
             commands::tail_log,
             commands::quit_app,
+            commands::close_action,
+            update::check_update,
+            update::download_update,
+            update::install_update,
+            notice::notice_last,
+            notice::notice_hide,
             commands::hotkey_status,
             commands::retry_hotkeys,
             commands::set_hotkey,

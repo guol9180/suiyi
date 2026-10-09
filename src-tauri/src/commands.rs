@@ -37,6 +37,12 @@ pub struct GlobalSettings {
     pub speech_voice: String,
     #[serde(default = "crate::speech::default_rate")]
     pub speech_rate: f64,
+    /// 点 × 时的行为：ask / minimize / quit
+    #[serde(default = "crate::config::default_close_action")]
+    pub close_action: String,
+    /// 启动后自动检查更新
+    #[serde(default = "crate::config::default_true")]
+    pub auto_check_update: bool,
 }
 
 pub(crate) fn config_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
@@ -219,6 +225,8 @@ pub fn get_settings(app: tauri::AppHandle) -> Result<GlobalSettings, String> {
         anki_deck: file.anki_deck,
         speech_voice: file.speech_voice,
         speech_rate: file.speech_rate,
+        close_action: file.close_action,
+        auto_check_update: file.auto_check_update,
     })
 }
 
@@ -243,6 +251,13 @@ pub fn save_settings(app: tauri::AppHandle, settings: GlobalSettings) -> Result<
     file.speech_rate = settings
         .speech_rate
         .clamp(crate::speech::MIN_RATE, crate::speech::MAX_RATE);
+    // 关闭行为只接受白名单里的值，脏数据回落到「每次询问」
+    file.close_action = if crate::config::CLOSE_ACTIONS.contains(&settings.close_action.as_str()) {
+        settings.close_action
+    } else {
+        crate::config::DEFAULT_CLOSE_ACTION.to_string()
+    };
+    file.auto_check_update = settings.auto_check_update;
     save_services(&dir, &file)
 }
 
@@ -479,6 +494,37 @@ pub fn tail_log(app: tauri::AppHandle, lines: usize) -> String {
 #[tauri::command]
 pub fn quit_app(app: tauri::AppHandle) {
     app.exit(0);
+}
+
+/// 点窗口 × 之后用户的选择：直接关闭（退出进程）或最小化到任务栏。
+///
+/// lib.rs 里的 CloseRequested 被拦下来（prevent_close）后按配置分流：配成
+/// minimize / quit 就直接执行，配成 ask（默认）就把问题交给界面问一次，
+/// 界面问完再调这个命令回来执行。remember 为真时顺手把选择记进配置。
+#[tauri::command]
+pub fn close_action(app: tauri::AppHandle, action: String, remember: bool) -> Result<(), String> {
+    if !crate::config::CLOSE_ACTIONS.contains(&action.as_str()) {
+        return Err(format!("未知的关闭行为: {action}"));
+    }
+    if remember {
+        let dir = config_dir(&app)?;
+        let mut file = load_services(&dir)?;
+        file.close_action = action.clone();
+        save_services(&dir, &file)?;
+    }
+    match action.as_str() {
+        "quit" => {
+            crate::selection::log_line("close: 直接关闭，退出随译");
+            app.exit(0);
+        }
+        _ => {
+            crate::selection::log_line("close: 最小化到任务栏");
+            if let Some(win) = app.get_webview_window("main") {
+                let _ = win.minimize();
+            }
+        }
+    }
+    Ok(())
 }
 
 /// 运行动作插件：把原文与译文交给插件的 `run({ source, translated })`，

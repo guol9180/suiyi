@@ -74,11 +74,29 @@ pub struct OcrResult {
     pub engine: String,
     /// 识别用的语言标签（BCP-47）。系统 OCR 走 en-US，插件不报语言时为空
     pub lang: String,
+    /// 识别失败的原因。为空表示识别流程本身跑完了（哪怕一个字都没认出来）
+    pub error: Option<String>,
 }
 
 /// 最近一次识别结果。结果窗口挂载时直接取它，不依赖事件先到
 #[derive(Default)]
 pub struct OcrState(pub Mutex<Option<OcrResult>>);
+
+/// OCR 输入区域相对选区的外扩量（图像像素）。
+///
+/// Windows OCR 认不了「紧框一行」的条状图：本机实测 700x26 与 420x26 都返回 0 行，
+/// 同一张图上下各外扩 32px 后立刻能认出来。框一行文字恰恰是最常见的用法，
+/// 所以先外扩再识别；外扩带进来的邻行随后按矩形过滤掉，不会混进译文。
+const OCR_PAD: i32 = 32;
+
+/// 外扩后的区域还这么小，就先放大再识别（小字对 Windows OCR 同样不友好）
+const OCR_UPSCALE_IF_BELOW: i32 = 480;
+
+/// 识别区域的外扩比。识别一次约 100~300ms，最多试三遍
+const OCR_MAX_SCALE: u32 = 2;
+
+/// 诊断落盘：识别为空时把裁剪图写到配置目录，方便事后查为什么没认出来
+const EMPTY_CROP_FILE: &str = "last-crop.png";
 
 /// 结果面板尺寸，与设计稿的第 3 节面板接近
 const OCR_W: f64 = 460.0;
@@ -414,7 +432,145 @@ pub fn cancel_screenshot(
     Ok(())
 }
 
-/// 框选完成：逻辑坐标 → 物理裁剪 → OCR → 投递结果面板。
+// ==================== 选区几何与 OCR 预处理 ====================
+
+/// 矩形（图像像素）：x, y, w, h
+type Rect = (i32, i32, i32, i32);
+
+/// 把选区向外扩 pad 像素，并裁剪到帧内
+fn expand_rect(sel: Rect, vw: i32, vh: i32, pad: i32) -> Rect {
+    let x = (sel.0 - pad).max(0);
+    let y = (sel.1 - pad).max(0);
+    let x2 = (sel.0 + sel.2 + pad).min(vw);
+    let y2 = (sel.1 + sel.3 + pad).min(vh);
+    (x, y, (x2 - x).max(1), (y2 - y).max(1))
+}
+
+/// 从整帧 RGBA 里裁一块（逐行拷贝）
+fn crop_rgba(rgba: &[u8], stride: i32, r: Rect) -> Vec<u8> {
+    let mut out = Vec::with_capacity((r.2 * r.3 * 4) as usize);
+    for row in 0..r.3 {
+        let start = ((r.1 + row) * stride + r.0) as usize * 4;
+        let end = start + r.2 as usize * 4;
+        out.extend_from_slice(&rgba[start..end]);
+    }
+    out
+}
+
+/// 这一行算不算「用户框到的」：重叠面积占该行 30% 以上，或者行中心落在选区内。
+/// 外扩会把邻行一起送给引擎，靠这个把它们摘掉。
+fn line_belongs(line: (f64, f64, f64, f64), sel: (f64, f64, f64, f64)) -> bool {
+    let (lx, ly, lw, lh) = line;
+    let (sx, sy, sw, sh) = sel;
+    let ix = (lx + lw).min(sx + sw) - lx.max(sx);
+    let iy = (ly + lh).min(sy + sh) - ly.max(sy);
+    let inter = ix.max(0.0) * iy.max(0.0);
+    if inter / (lw * lh).max(1.0) >= 0.3 {
+        return true;
+    }
+    let cx = lx + lw / 2.0;
+    let cy = ly + lh / 2.0;
+    cx >= sx && cx <= sx + sw && cy >= sy && cy <= sy + sh
+}
+
+/// 放大若干倍：小图上的小字识别率明显更差
+fn scale_rgba(rgba: &[u8], w: i32, h: i32, factor: u32) -> Vec<u8> {
+    let Some(img) = image::RgbaImage::from_raw(w as u32, h as u32, rgba.to_vec()) else {
+        return rgba.to_vec();
+    };
+    let out = image::imageops::resize(
+        &img,
+        (w as u32) * factor,
+        (h as u32) * factor,
+        image::imageops::FilterType::Triangle,
+    );
+    out.into_raw()
+}
+
+/// 反色（只翻 RGB，alpha 保持）
+fn invert_rgba(rgba: &[u8]) -> Vec<u8> {
+    let mut out = rgba.to_vec();
+    for px in out.chunks_exact_mut(4) {
+        px[0] = 255 - px[0];
+        px[1] = 255 - px[1];
+        px[2] = 255 - px[2];
+    }
+    out
+}
+
+fn char_count(lines: &[OcrLine]) -> usize {
+    lines.iter().map(|l| l.text.chars().count()).sum()
+}
+
+/// 识别一块 RGBA，返回 (行, 实际用上的语言标签)
+fn ocr_rgba(rgba: &[u8], w: i32, h: i32, lang: &str) -> Result<(Vec<OcrLine>, String), String> {
+    let png = rgba_to_png_bytes(rgba, w, h)?;
+    ocr_bytes_lang(&png, lang)
+}
+
+/// 依次试原图 → 2 倍放大 → 反色，一旦认出行就不再折腾，返回实际用的放大倍数。
+///
+/// 三遍都认不出才返回 Err（真正的识别故障）；认出来但内容为空是正常结果。
+fn ocr_best(
+    rgba: &[u8],
+    w: i32,
+    h: i32,
+    lang: &str,
+) -> Result<(Vec<OcrLine>, String, u32), String> {
+    let mut best: Option<(Vec<OcrLine>, String, u32)> = None;
+    let mut last_err: Option<String> = None;
+    for stage in 0..3u32 {
+        let (buf, aw, ah, scale) = match stage {
+            0 => (rgba.to_vec(), w, h, 1),
+            1 => (
+                scale_rgba(rgba, w, h, OCR_MAX_SCALE),
+                w * OCR_MAX_SCALE as i32,
+                h * OCR_MAX_SCALE as i32,
+                OCR_MAX_SCALE,
+            ),
+            _ => (invert_rgba(rgba), w, h, 1),
+        };
+        match ocr_rgba(&buf, aw, ah, lang) {
+            Ok((lines, used)) => {
+                let count = char_count(&lines);
+                if best
+                    .as_ref()
+                    .map(|(b, _, _)| char_count(b) < count)
+                    .unwrap_or(true)
+                {
+                    best = Some((lines, used, scale));
+                }
+                if count > 0 {
+                    break;
+                }
+            }
+            Err(e) => last_err = Some(e),
+        }
+    }
+    best.ok_or_else(|| last_err.unwrap_or_else(|| "OCR 没有返回结果".into()))
+}
+
+/// 一个字都没认出来时，把送进引擎的那块图存到配置目录：用户反馈"识别不出来"时
+/// 有据可查，不用再靠猜。
+fn dump_empty_crop(app: &AppHandle, png: &[u8]) {
+    let Ok(dir) = app.path().app_config_dir() else {
+        return;
+    };
+    let path = dir.join(EMPTY_CROP_FILE);
+    match std::fs::write(&path, png) {
+        Ok(()) => crate::selection::log_line(&format!(
+            "screenshot: 未识别到文字，选区图已存 → {}",
+            path.display()
+        )),
+        Err(e) => crate::selection::log_line(&format!("screenshot: 选区图保存失败 {e}")),
+    }
+}
+
+/// 框选完成：帧图像素坐标 → 裁剪 → OCR → 投递结果面板。
+///
+/// 前端回传的 x/y/w/h 是**冻结帧自身的像素坐标**（覆盖层按 <img> 的渲染框与
+/// naturalWidth/naturalHeight 换算出来的），与窗口 DPI、滚动条、多屏混合缩放无关，
+/// 所以这里不做任何缩放系数换算。
 ///
 /// 这个命令必须是 async：里面的裁剪、PNG 编码和 WinRT OCR 都是同步阻塞活儿，
 /// 同步命令跑在主线程上，会把整个应用（包括刚建出来的结果面板）一起冻住 ——
@@ -429,64 +585,104 @@ pub async fn finish_region(
     w: f64,
     h: f64,
 ) -> Result<OcrPayload, String> {
-    let (session, png) = {
+    let (session, crop_png, crop_w, crop_h, region_rgba, region_w, region_h, sel_in_region) = {
         let mut g = state.lock().map_err(|e| e.to_string())?;
         let s = g.as_mut().ok_or("没有进行中的截图会话")?;
-        let sf = s.sf;
-        // 逻辑 → 物理
-        let mut px = (x * sf).round() as i32;
-        let mut py = (y * sf).round() as i32;
-        let mut pw = (w * sf).round() as i32;
-        let mut ph = (h * sf).round() as i32;
-        px = px.clamp(0, s.w);
-        py = py.clamp(0, s.h);
-        pw = pw.clamp(0, s.w - px);
-        ph = ph.clamp(0, s.h - py);
-        if pw < 4 || ph < 4 {
+        let sx = (x.round() as i32).clamp(0, s.w);
+        let sy = (y.round() as i32).clamp(0, s.h);
+        let sw = (w.round() as i32).clamp(0, s.w - sx);
+        let sh = (h.round() as i32).clamp(0, s.h - sy);
+        if sw < 4 || sh < 4 {
             return Err("选区太小".into());
         }
-        // 裁剪 RGBA（行拷贝）
-        let mut crop = Vec::with_capacity((pw * ph * 4) as usize);
-        for row in 0..ph {
-            let start = ((py + row) * s.w + px) as usize * 4;
-            let end = start + pw as usize * 4;
-            crop.extend_from_slice(&s.rgba[start..end]);
-        }
-        let png = rgba_to_png_bytes(&crop, pw, ph)?;
+        let tight = (sx, sy, sw, sh);
+        // 紧框图：面板展示与「原图覆盖」用，行矩形也在这个坐标系里
+        let crop = crop_rgba(&s.rgba, s.w, tight);
+        let crop_png = rgba_to_png_bytes(&crop, sw, sh)?;
+        // OCR 输入：向外扩一圈。紧框单行的条状图 Windows OCR 会直接返回 0 行，
+        // 框一行文字偏偏是最常见的用法。
+        let region = expand_rect(tight, s.w, s.h, OCR_PAD);
+        let region_rgba = crop_rgba(&s.rgba, s.w, region);
         let session = ShotSession {
             vs: s.vs,
             sf: s.sf,
-            w: pw,
-            h: ph,
+            w: sw,
+            h: sh,
             rgba: crop,
             data_url: String::new(),
         };
-        (session, png)
+        (
+            session,
+            crop_png,
+            sw,
+            sh,
+            region_rgba,
+            region.2,
+            region.3,
+            (
+                (sx - region.0) as f64,
+                (sy - region.1) as f64,
+                sw as f64,
+                sh as f64,
+            ),
+        )
     };
 
     hide_overlay(&app);
+    crate::selection::log_line(&format!(
+        "screenshot: 选区 {crop_w}x{crop_h}，送识别区域 {region_w}x{region_h}（外扩 {OCR_PAD}px）"
+    ));
 
-    // 装了 OCR 插件就优先用插件；插件失败不让整条链路挂掉，回落到系统离线 OCR
-    let plugin_result = plugin_ocr(&app, &png);
+    // 装了 OCR 插件就优先用插件（插件收到紧框图，行矩形与展示图同一坐标系）；
+    // 插件失败不让整条链路挂掉，回落到系统离线 OCR。
+    let plugin_result = plugin_ocr(&app, &crop_png);
     if let Err(e) = &plugin_result {
         crate::selection::log_line(&format!(
             "screenshot: OCR 插件失败（{e}），回落到系统 OCR"
         ));
     }
+
+    let mut error: Option<String> = None;
     let (engine, lang, lines) = match plugin_result.ok().flatten() {
         // 插件不回传语言，留空让界面别乱猜
         Some((name, l)) => (format!("plugin:{name}"), String::new(), l),
-        // 系统 OCR：英文优先，取不到语言包时回退用户语言
-        None => match ocr_bytes(&png, "en-US") {
-            Ok(l) => ("windows".to_string(), "en-US".to_string(), l),
+        None => match ocr_best(&region_rgba, region_w, region_h, "en-US") {
+            Ok((all, used, scale)) => {
+                let k = scale as f64;
+                // 外扩带进来的邻行按矩形摘掉，再把坐标平移回紧框图的坐标系
+                let filtered: Vec<OcrLine> = all
+                    .into_iter()
+                    .filter(|l| line_belongs((l.x / k, l.y / k, l.w / k, l.h / k), sel_in_region))
+                    .map(|l| {
+                        let lx = (l.x / k - sel_in_region.0).clamp(0.0, crop_w as f64);
+                        let ly = (l.y / k - sel_in_region.1).clamp(0.0, crop_h as f64);
+                        let lw = (l.w / k).clamp(1.0, (crop_w as f64 - lx).max(1.0));
+                        let lh = (l.h / k).clamp(1.0, (crop_h as f64 - ly).max(1.0));
+                        OcrLine {
+                            text: l.text,
+                            x: lx,
+                            y: ly,
+                            w: lw,
+                            h: lh,
+                        }
+                    })
+                    .collect();
+                ("windows".to_string(), used, filtered)
+            }
             Err(e) => {
+                // 识别故障不再直接吞掉：面板照常打开，把原因写给它看
                 crate::selection::log_line(&format!("screenshot: OCR 失败 {e}"));
-                return Err(format!("OCR 识别失败: {e}"));
+                error = Some(e);
+                ("windows".to_string(), String::new(), Vec::new())
             }
         },
     };
     let text = lines.iter().map(|l| l.text.as_str()).collect::<Vec<_>>().join("\n");
     crate::selection::log_line(&format!("screenshot: OCR 完成 {} 行 / {} 字符", lines.len(), text.chars().count()));
+    if text.trim().is_empty() && error.is_none() {
+        // 没认出字是一件需要事后能查的事：把送进引擎的图留下
+        dump_empty_crop(&app, &crop_png);
+    }
 
     // 选区图存成 data URL：结果面板的「原图覆盖」要把它铺回去。
     // 行坐标与它在同一个像素空间，前端按百分比定位就够，不用碰 DPI 换算。
@@ -494,14 +690,15 @@ pub async fn finish_region(
     let result = OcrResult {
         crop_url: format!(
             "data:image/png;base64,{}",
-            base64::engine::general_purpose::STANDARD.encode(&png)
+            base64::engine::general_purpose::STANDARD.encode(&crop_png)
         ),
-        crop_w: session.w,
-        crop_h: session.h,
+        crop_w,
+        crop_h,
         text: text.clone(),
         lines: lines.clone(),
         engine,
         lang,
+        error,
     };
 
     // 裁剪会话留给「重新识别」，结果留给结果面板
@@ -691,7 +888,7 @@ struct RawOcrLine {
 }
 
 #[cfg(windows)]
-pub fn ocr_bytes(img: &[u8], lang: &str) -> Result<Vec<OcrLine>, String> {
+pub fn ocr_bytes_lang(img: &[u8], lang: &str) -> Result<(Vec<OcrLine>, String), String> {
     // WinRT 的 OCR 必须在 MTA 线程上跑：Tauri 的命令线程可能已被 WebView 初始化成 STA，
     // 在那里调用 CoInitializeEx 会返回 RPC_E_CHANGED_MODE；而在 STA 上直接 await 异步结果
     // （下面的 .get()）又会因缺少消息泵而死锁。所以固定换到独立线程执行。
@@ -702,8 +899,14 @@ pub fn ocr_bytes(img: &[u8], lang: &str) -> Result<Vec<OcrLine>, String> {
         .map_err(|_| "OCR 线程异常退出".to_string())?
 }
 
+/// 只要识别出的行（调用方不关心实际用了哪个语言包时用这个）
 #[cfg(windows)]
-fn ocr_bytes_inner(img: &[u8], lang: &str) -> Result<Vec<OcrLine>, String> {
+pub fn ocr_bytes(img: &[u8], lang: &str) -> Result<Vec<OcrLine>, String> {
+    ocr_bytes_lang(img, lang).map(|(lines, _)| lines)
+}
+
+#[cfg(windows)]
+fn ocr_bytes_inner(img: &[u8], lang: &str) -> Result<(Vec<OcrLine>, String), String> {
     use windows::Globalization::Language;
     use windows::Graphics::Imaging::BitmapDecoder;
     use windows::Media::Ocr::OcrEngine;
@@ -767,6 +970,14 @@ fn ocr_bytes_inner(img: &[u8], lang: &str) -> Result<Vec<OcrLine>, String> {
     .ok()
     .or_else(|| OcrEngine::TryCreateFromUserProfileLanguages().ok())
     .ok_or("系统未安装可用的 OCR 语言包（设置 → 时间和语言 → 语言）")?;
+    // 实际用上的语言包要报给界面：装了哪些语言包决定了能认出哪种文字，
+    // 报错时说清楚这一点，用户才知道该去装什么
+    let used_lang = engine
+        .RecognizerLanguage()
+        .ok()
+        .and_then(|l| l.LanguageTag().ok())
+        .map(|t| t.to_string())
+        .unwrap_or_default();
 
     let result = engine
         .RecognizeAsync(&bitmap)
@@ -806,14 +1017,21 @@ fn ocr_bytes_inner(img: &[u8], lang: &str) -> Result<Vec<OcrLine>, String> {
         let band = (a.y - b.y).abs() < 14.0;
         if band { a.x.partial_cmp(&b.x).unwrap_or(std::cmp::Ordering::Equal) } else { a.y.partial_cmp(&b.y).unwrap_or(std::cmp::Ordering::Equal) }
     });
-    Ok(raw
-        .into_iter()
-        .map(|l| OcrLine { text: l.text, x: l.x, y: l.y, w: l.w, h: l.h })
-        .collect())
+    Ok((
+        raw.into_iter()
+            .map(|l| OcrLine { text: l.text, x: l.x, y: l.y, w: l.w, h: l.h })
+            .collect(),
+        used_lang,
+    ))
 }
 
 #[cfg(not(windows))]
 pub fn ocr_bytes(_img: &[u8], _lang: &str) -> Result<Vec<OcrLine>, String> {
+    Err("当前平台暂不支持 OCR".into())
+}
+
+#[cfg(not(windows))]
+pub fn ocr_bytes_lang(_img: &[u8], _lang: &str) -> Result<(Vec<OcrLine>, String), String> {
     Err("当前平台暂不支持 OCR".into())
 }
 
@@ -845,6 +1063,40 @@ mod tests {
         assert!(super::union_rect(&[]).is_none());
     }
 
+    /// 送识别前要向外扩一圈，且不能扩出帧外
+    #[test]
+    fn expand_rect_pads_and_clamps() {
+        assert_eq!(
+            super::expand_rect((100, 100, 200, 20), 1000, 800, 32),
+            (68, 68, 264, 84)
+        );
+        // 左上角起框：只能往右下扩
+        assert_eq!(
+            super::expand_rect((0, 0, 200, 20), 1000, 800, 32),
+            (0, 0, 232, 52)
+        );
+        // 右下角起框：不能超出帧
+        assert_eq!(
+            super::expand_rect((900, 780, 100, 20), 1000, 800, 32),
+            (868, 748, 132, 52)
+        );
+    }
+
+    /// 外扩带进来的邻行必须被过滤掉，用户框到的行必须留下
+    #[test]
+    fn line_belongs_keeps_only_selected_lines() {
+        // 区域坐标系里的选区：宽 400、高 24，紧框一行
+        let sel = (32.0, 32.0, 400.0, 24.0);
+        assert!(super::line_belongs((36.0, 34.0, 300.0, 19.0), sel), "框内的行要留");
+        assert!(!super::line_belongs((36.0, 2.0, 300.0, 19.0), sel), "上一行要滤掉");
+        assert!(!super::line_belongs((36.0, 60.0, 300.0, 19.0), sel), "下一行要滤掉");
+        // 大部分在选区外、中心也在外面的行同样滤掉
+        let s2 = (0.0, 0.0, 100.0, 100.0);
+        assert!(!super::line_belongs((-70.0, 40.0, 80.0, 20.0), s2));
+        // 压在左边界上、有近一半落在选区里的行要留（用户确实框到了它）
+        assert!(super::line_belongs((-40.0, 40.0, 80.0, 20.0), s2));
+    }
+
     /// 结果面板按这套字段名取值，序列化键改了就前端就断了，在这里钉住
     #[test]
     fn ocr_result_serializes_to_the_keys_the_panel_reads() {
@@ -862,9 +1114,10 @@ mod tests {
             }],
             engine: "windows".into(),
             lang: "en-US".into(),
+            error: None,
         };
         let v: serde_json::Value = serde_json::to_value(&r).expect("OcrResult 应能序列化");
-        for key in ["cropUrl", "cropW", "cropH", "text", "lines", "engine", "lang"] {
+        for key in ["cropUrl", "cropW", "cropH", "text", "lines", "engine", "lang", "error"] {
             assert!(v.get(key).is_some(), "缺字段 {key}");
         }
         let line = &v["lines"][0];

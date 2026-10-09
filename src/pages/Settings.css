@@ -59,6 +59,11 @@
   /* 窗口拉宽时不再把表单拉成 1300px，超过这个宽度就居中留白 */
   max-width: 980px;
   margin: 0 auto;
+  /*
+   * 内容变高时右侧会出现滚动条，滚动条一挤，整块内容会横着跳一下。
+   * 固定留出滚动条宽度，切换页面/点供应商都不会再位移。
+   */
+  scrollbar-gutter: stable;
   overflow: auto;
 }
 /*
@@ -72,6 +77,20 @@
   gap: 14px;
   align-items: stretch;
   min-height: 100%;
+}
+/*
+ * 服务配置页（左列表 + 右表单）：改成显式网格轨道。
+ *
+ * flex 下左列宽度是 34% 的百分比，右侧内容一变（点供应商、出现/隐藏表单）
+ * 一旦触发溢出，整块布局就会横着挪。网格轨道是固定算式，列的几何与内容无关。
+ */
+.cols:has(> .list-col) {
+  display: grid;
+  grid-template-columns: clamp(268px, 34%, 340px) minmax(0, 1fr);
+  align-items: stretch;
+}
+.cols:has(> .list-col) > .list-col {
+  width: auto;
 }
 .list-col {
   /* 窄窗口收窄、宽窗口停在 340px，不再固定死 */
@@ -141,9 +160,9 @@
 .g-label {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  font-size: var(--fs-cap);
-  color: var(--c-text-3);
+  gap: 6px;
+  font-size: var(--fs-sec);
+  color: var(--c-caption);
 }
 
 /* ---------- 编辑表单 ---------- */
@@ -172,15 +191,17 @@
  * 表单行。设计稿 v0.4 有这三条（.f / .f>label / .row2），移植到应用时漏了，
  * 结果「名称 / 协议」「模型 / 结果类型」全都竖着堆，标签还跟着正文的 13px 走。
  */
-.f { margin-bottom: 11px; }
+/* 字段节律：标签 12px 在控件上方 6px，字段之间 14px —— 一屏里间距只有这一个数 */
+.f { margin-bottom: 14px; }
 .f > label {
   display: block;
-  font-size: var(--fs-cap);
-  color: var(--c-text-3);
-  margin-bottom: 5px;
+  font-size: var(--fs-sec);
+  color: var(--c-caption);
+  margin-bottom: 6px;
 }
-.row2 { display: flex; gap: 10px; }
-.row2 > .f { flex: 1; min-width: 0; }
+/* 一行两列：间距由行自己管，里面的字段不再各带一份下边距 */
+.row2 { display: flex; gap: 14px; align-items: flex-start; margin-bottom: 14px; }
+.row2 > .f { flex: 1; min-width: 0; margin-bottom: 0; }
 
 .form-foot {
   display: flex;
@@ -359,7 +380,10 @@ select.inp { appearance: auto; }
   min-width: 0;
   align-self: flex-start;
   max-width: 620px;
-  margin-left: auto;
+  /*
+   * 左边缘固定。之前两边都 auto，单栏页（通用 / 关于）在宽窗口里会居中，
+   * 与两栏页的左列差出 150px，切页时整块内容左右跳。
+   */
   margin-right: auto;
 }
 .hkrow {

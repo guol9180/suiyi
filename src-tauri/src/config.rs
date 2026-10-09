@@ -104,11 +104,31 @@ pub struct ServicesFile {
     pub speech_voice: String,
     #[serde(default = "default_speech_rate")]
     pub speech_rate: f64,
+    /// 点窗口 × 时怎么办：ask（每次问）/ minimize（最小化到任务栏）/ quit（直接退出）
+    #[serde(default = "default_close_action")]
+    pub close_action: String,
+    /// 启动后自动检查一次更新
+    #[serde(default = "default_true")]
+    pub auto_check_update: bool,
     /// 用户改过的全局热键，键是动作 id（selection / screenshot / input），
     /// 值是 "alt+d" 这种加速度字符串。没写过的动作走默认值。
     #[serde(default)]
     pub hotkeys: std::collections::BTreeMap<String, String>,
     pub services: Vec<ServiceConfig>,
+}
+
+/// 合法的关闭行为。写进配置前一律过一遍这张表，脏数据不进文件。
+pub const CLOSE_ACTIONS: [&str; 3] = ["ask", "minimize", "quit"];
+
+pub fn default_close_action() -> String {
+    DEFAULT_CLOSE_ACTION.to_string()
+}
+
+/// 出厂关闭行为：每次询问。收窗口等于退出热键可用性，不能替用户默认掉。
+pub const DEFAULT_CLOSE_ACTION: &str = "ask";
+
+pub fn default_true() -> bool {
+    true
 }
 
 /// 老配置文件里没有 speech_rate，缺省按原速
@@ -131,6 +151,8 @@ impl Default for ServicesFile {
             anki_deck: crate::anki::DEFAULT_ANKI_DECK.into(),
             speech_voice: String::new(),
             speech_rate: crate::speech::DEFAULT_RATE,
+            close_action: default_close_action(),
+            auto_check_update: true,
             hotkeys: std::collections::BTreeMap::new(),
             services: Vec::new(),
         }
@@ -235,6 +257,21 @@ mod tests {
         let svc: ServiceConfig = serde_json::from_str(raw).unwrap();
         assert!(!svc.requires_key);
         assert_eq!(svc.model, "qwen3:8b");
+    }
+
+    /// 老配置没有 closeAction / autoCheckUpdate：缺省必须是「每次询问」与「自动检查」
+    #[test]
+    fn close_action_defaults_to_ask() {
+        let old = r#"{"version":1,"services":[]}"#;
+        let file: ServicesFile = serde_json::from_str(old).unwrap();
+        assert_eq!(file.close_action, "ask");
+        assert!(file.auto_check_update);
+
+        let mut f = ServicesFile::default();
+        f.close_action = "minimize".into();
+        let json = serde_json::to_string(&f).unwrap();
+        assert!(json.contains("\"closeAction\":\"minimize\""), "实际：{json}");
+        assert!(json.contains("\"autoCheckUpdate\":true"), "实际：{json}");
     }
 
     #[test]

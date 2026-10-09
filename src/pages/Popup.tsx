@@ -134,33 +134,16 @@ export default function PopupPage() {
     };
   }, [doTranslate]);
 
-  // 输入框转译写回失败：主进程把译文降级为复制，并把结果投递到这里告知用户
+  // 取词失败：主进程把原因投过来，别让用户对着一个空窗口猜。
+  // （输入框转译的失败提示走轻提示窗口，不再占用这个弹窗 —— 弹窗会抢走输入焦点。）
   useEffect(() => {
-    // 取词失败：主进程把原因投过来，别让用户对着一个空窗口猜
     const unNotice = listen<{ text: string }>("popup-notice", (e) => {
       setSource("");
       setCards([]);
       setNotice(e.payload.text || "没取到选中文字");
     });
-    const un = listen<{ original: string; translated: string; reason: string }>(
-      "popup-writeback-fallback",
-      (e) => {
-        setSource(e.payload.original);
-        kindRef.current = "input";
-        setCards([
-          {
-            id: "__writeback",
-            name: "输入框转译",
-            text: e.payload.translated,
-            status: "done",
-          },
-        ]);
-        setNotice(`${e.payload.reason}，译文已复制到剪贴板`);
-      },
-    );
     return () => {
       void unNotice.then((f) => f());
-      void un.then((f) => f());
     };
   }, []);
 
