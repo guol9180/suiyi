@@ -87,8 +87,10 @@
           cropH: 300,
           text: OCR_LINES.map(function (l) { return l.text; }).join("\n"),
           lines: OCR_LINES,
-          engine: "windows",
-          lang: "en-US",
+          // 默认就是现在的真实情况：本机 PaddleOCR（PP-OCRv4 中英混排，不报单一语言）
+          // ?engine=windows 看回落到系统 OCR 时的样子
+          engine: q.get("engine") === "windows" ? "windows" : "paddle",
+          lang: q.get("engine") === "windows" ? "en-US" : "",
         };
 
         var SERVICES = {
