@@ -94,6 +94,18 @@ fn ensure_runtime(dir: &std::path::Path) -> Result<(), String> {
             if !dll.exists() {
                 return Err(format!("缺少 ONNX Runtime：{}", dll.display()));
             }
+            /*
+             * 先自己探一次能不能加载。
+             *
+             * ort 在「DLL 加载失败」时是直接 panic，而 release 构建是 panic=abort：
+             * 一个损坏或被换掉的 DLL 会把整个随译带走，连回落的机会都没有。
+             * 这里先用 libloading 探一次，失败就干净地返回 Err，走系统 OCR 兜底。
+             */
+            {
+                let probe = unsafe { libloading::Library::new(&dll) }
+                    .map_err(|e| format!("ONNX Runtime 无法加载（{}）：{e}", dll.display()))?;
+                drop(probe);
+            }
             // rc.10 的 init_from 只登记路径，真正的加载发生在 commit 里；
             // 路径不存在或加载失败会在后面建会话时报错，这里先把路径喂进去。
             let _ = ort::init_from(dll.to_string_lossy().to_string()).commit();
