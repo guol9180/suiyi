@@ -52,25 +52,19 @@ pub struct OcrLine {
 #[serde(rename_all = "camelCase")]
 pub struct OcrPayload {
     pub text: String,
-    pub lines: Vec<OcrLine>,
 }
 
-/// 一次截图识别的完整结果，供结果面板使用。
+/// 一次截图识别的结果，供结果面板使用。
 ///
-/// 有了裁出来的那块图与每行的矩形，「原图覆盖」才能把译文画回原来的位置：
-/// 行坐标与 crop_url 是同一个像素空间，前端按百分比定位即可，不用碰 DPI 换算。
+/// 这里刻意不带选区图与行矩形：面板只呈现原文与译文，而一张选区图的 base64
+/// 动辄几 MB（大块选区更多），塞进事件与 ocr_last 返回值既慢又占内存。
+/// 行矩形仍然在识别流程内部用来把外扩带进来的邻行过滤掉，只是不再往界面传。
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OcrResult {
-    /// 裁剪后的选区图（PNG data URL）
-    pub crop_url: String,
-    pub crop_w: i32,
-    pub crop_h: i32,
     /// 识别出的原文
     pub text: String,
-    /// 行级矩形，坐标系与 crop_url 一致
-    pub lines: Vec<OcrLine>,
-    /// 识别引擎：windows 或 plugin:插件名
+    /// 识别引擎：paddle / windows / plugin:插件名
     pub engine: String,
     /// 识别用的语言标签（BCP-47）。系统 OCR 走 en-US，插件不报语言时为空
     pub lang: String,
@@ -599,17 +593,20 @@ fn ocr_best(
 
 /// 一个字都没认出来时，把送进引擎的那块图存到配置目录：用户反馈"识别不出来"时
 /// 有据可查，不用再靠猜。
-fn dump_empty_crop(app: &AppHandle, png: &[u8]) {
+fn dump_crop(app: &AppHandle, rgba: &[u8], w: i32, h: i32) {
     let Ok(dir) = app.path().app_config_dir() else {
         return;
     };
+    let Ok(png) = rgba_to_png_bytes(rgba, w, h) else {
+        return;
+    };
     let path = dir.join(EMPTY_CROP_FILE);
-    match std::fs::write(&path, png) {
+    match std::fs::write(&path, &png) {
         Ok(()) => crate::selection::log_line(&format!(
-            "screenshot: 未识别到文字，选区图已存 → {}",
+            "screenshot: 未识别到文字，送识别的区域已存 → {}",
             path.display()
         )),
-        Err(e) => crate::selection::log_line(&format!("screenshot: 选区图保存失败 {e}")),
+        Err(e) => crate::selection::log_line(&format!("screenshot: 诊断图保存失败 {e}")),
     }
 }
 
@@ -632,7 +629,7 @@ pub async fn finish_region(
     w: f64,
     h: f64,
 ) -> Result<OcrPayload, String> {
-    let (session, crop_png, crop_w, crop_h, region_rgba, region_w, region_h, sel_in_region) = {
+    let (session, crop_rgba, crop_w, crop_h, region_rgba, region_w, region_h, sel_in_region) = {
         let mut g = state.lock().map_err(|e| e.to_string())?;
         let s = g.as_mut().ok_or("没有进行中的截图会话")?;
         let sx = (x.round() as i32).clamp(0, s.w);
@@ -643,9 +640,8 @@ pub async fn finish_region(
             return Err("选区太小".into());
         }
         let tight = (sx, sy, sw, sh);
-        // 紧框图：面板展示与「原图覆盖」用，行矩形也在这个坐标系里
+        // 紧框图：交给 OCR 插件的输入、以及诊断落盘用；行矩形也在这个坐标系里
         let crop = crop_rgba(&s.rgba, s.w, tight);
-        let crop_png = rgba_to_png_bytes(&crop, sw, sh)?;
         // OCR 输入：向外扩一圈。紧框单行的条状图 Windows OCR 会直接返回 0 行，
         // 框一行文字偏偏是最常见的用法。
         let region = expand_rect(tight, s.w, s.h, OCR_PAD);
@@ -655,12 +651,12 @@ pub async fn finish_region(
             sf: s.sf,
             w: sw,
             h: sh,
-            rgba: crop,
+            rgba: crop.clone(),
             data_url: String::new(),
         };
         (
             session,
-            crop_png,
+            crop,
             sw,
             sh,
             region_rgba,
@@ -680,9 +676,9 @@ pub async fn finish_region(
         "screenshot: 选区 {crop_w}x{crop_h}，送识别区域 {region_w}x{region_h}（外扩 {OCR_PAD}px）"
     ));
 
-    // 装了 OCR 插件就优先用插件（插件收到紧框图，行矩形与展示图同一坐标系）；
+    // 装了 OCR 插件就优先用插件（插件收到紧框图）；
     // 插件失败不让整条链路挂掉，回落到系统离线 OCR。
-    let plugin_result = plugin_ocr(&app, &crop_png);
+    let plugin_result = plugin_ocr(&app, &crop_rgba, crop_w, crop_h);
     if let Err(e) = &plugin_result {
         crate::selection::log_line(&format!(
             "screenshot: OCR 插件失败（{e}），回落到系统 OCR"
@@ -735,22 +731,13 @@ pub async fn finish_region(
     let text = lines.iter().map(|l| l.text.as_str()).collect::<Vec<_>>().join("\n");
     crate::selection::log_line(&format!("screenshot: OCR 完成 {} 行 / {} 字符", lines.len(), text.chars().count()));
     if text.trim().is_empty() && error.is_none() {
-        // 没认出字是一件需要事后能查的事：把送进引擎的图留下
-        dump_empty_crop(&app, &crop_png);
+        // 没认出字是一件需要事后能查的事：把**送进引擎的那块图**留下（外扩后的区域），
+        // 这样能直接看出是选区偏了、还是引擎没认出来
+        dump_crop(&app, &region_rgba, region_w, region_h);
     }
 
-    // 选区图存成 data URL：结果面板的「原图覆盖」要把它铺回去。
-    // 行坐标与它在同一个像素空间，前端按百分比定位就够，不用碰 DPI 换算。
-    use base64::Engine as _;
     let result = OcrResult {
-        crop_url: format!(
-            "data:image/png;base64,{}",
-            base64::engine::general_purpose::STANDARD.encode(&crop_png)
-        ),
-        crop_w,
-        crop_h,
         text: text.clone(),
-        lines: lines.clone(),
         engine,
         lang,
         error,
@@ -784,14 +771,19 @@ pub async fn finish_region(
             }
         }
     }
-    Ok(OcrPayload { text, lines })
+    Ok(OcrPayload { text })
 }
 
 // ==================== 屏幕捕获（GDI） ====================
 
 /// 用 OCR 插件识别选区。没有可用插件时返回 Ok(None)，由调用方回落到系统 OCR。
 /// 返回 (插件名, 行)。插件名要给结果面板显示识别引擎用。
-fn plugin_ocr(app: &AppHandle, png: &[u8]) -> Result<Option<(String, Vec<OcrLine>)>, String> {
+fn plugin_ocr(
+    app: &AppHandle,
+    crop_rgba: &[u8],
+    w: i32,
+    h: i32,
+) -> Result<Option<(String, Vec<OcrLine>)>, String> {
     let dir = app
         .path()
         .app_config_dir()
@@ -801,6 +793,9 @@ fn plugin_ocr(app: &AppHandle, png: &[u8]) -> Result<Option<(String, Vec<OcrLine
     };
     let main = p.main.clone().ok_or("OCR 插件缺少入口脚本")?;
 
+    // 只有真要交给插件时才编码 PNG。这张图以前还要以 base64 塞进事件负载，
+    // 现在没有那个用途了，没必要为一个没装插件的用户白编码一次
+    let png = rgba_to_png_bytes(crop_rgba, w, h)?;
     use base64::Engine as _;
     let args = serde_json::json!({
         "pngBase64": base64::engine::general_purpose::STANDARD.encode(png)
@@ -820,7 +815,7 @@ fn plugin_ocr(app: &AppHandle, png: &[u8]) -> Result<Option<(String, Vec<OcrLine
     ));
 
     // 插件只给文字、没有行级坐标。这里如实留零，
-    // 原图覆盖模式据此改成整块铺在选区上，而不是假装知道每行在哪
+    // 面板按行拼文本时不依赖坐标，行矩形只在内部用来过滤邻行
     Ok(Some((
         p.name.clone(),
         text.lines()
@@ -1156,28 +1151,18 @@ mod tests {
     #[test]
     fn ocr_result_serializes_to_the_keys_the_panel_reads() {
         let r = super::OcrResult {
-            crop_url: "data:image/png;base64,AAAA".into(),
-            crop_w: 320,
-            crop_h: 200,
             text: "Hello".into(),
-            lines: vec![super::OcrLine {
-                text: "Hello".into(),
-                x: 1.0,
-                y: 2.0,
-                w: 3.0,
-                h: 4.0,
-            }],
-            engine: "windows".into(),
-            lang: "en-US".into(),
+            engine: "paddle".into(),
+            lang: String::new(),
             error: None,
         };
         let v: serde_json::Value = serde_json::to_value(&r).expect("OcrResult 应能序列化");
-        for key in ["cropUrl", "cropW", "cropH", "text", "lines", "engine", "lang", "error"] {
+        for key in ["text", "engine", "lang", "error"] {
             assert!(v.get(key).is_some(), "缺字段 {key}");
         }
-        let line = &v["lines"][0];
-        for key in ["text", "x", "y", "w", "h"] {
-            assert!(line.get(key).is_some(), "行缺字段 {key}");
+        // 选区图与行矩形已经不再往界面传：面板只呈现原文与译文
+        for gone in ["cropUrl", "cropW", "cropH", "lines"] {
+            assert!(v.get(gone).is_none(), "不该再出现字段 {gone}");
         }
     }
 

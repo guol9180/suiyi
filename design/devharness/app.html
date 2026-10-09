@@ -61,32 +61,15 @@
             "</svg>",
           );
 
-        // 结果面板的桩：一张「选区截图」与它上面四行文字的位置。
-        // 行矩形与图是同一个像素空间，和 Rust 侧 OcrResult 的约定一致。
-        var OCR_CROP =
-          "data:image/svg+xml;utf8," +
-          encodeURIComponent(
-            '<svg xmlns="http://www.w3.org/2000/svg" width="640" height="300">' +
-              '<rect width="640" height="300" fill="#eef1f5"/>' +
-              '<rect x="24" y="18" width="592" height="264" rx="6" fill="#ffffff"/>' +
-              '<text x="60" y="70" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="26" font-weight="600" fill="#1c1f24">Order Confirmation</text>' +
-              '<text x="60" y="128" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="17" fill="#3c4148">Thank you for your purchase!</text>' +
-              '<text x="60" y="176" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="17" fill="#3c4148">Total: $129.00</text>' +
-              '<text x="60" y="224" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="17" fill="#3c4148">Shipping: 2-3 business days</text>' +
-            "</svg>",
-          );
-        var OCR_LINES = [
-          { text: "Order Confirmation", x: 60, y: 48, w: 260, h: 28 },
-          { text: "Thank you for your purchase!", x: 60, y: 112, w: 250, h: 22 },
-          { text: "Total: $129.00", x: 60, y: 160, w: 140, h: 22 },
-          { text: "Shipping: 2-3 business days", x: 60, y: 208, w: 230, h: 22 },
-        ];
+        // 结果面板的桩：只回文本与引擎信息，和 Rust 侧 OcrResult 的约定一致
+        //（选区图与行矩形在 v0.9.1 之后不再往界面传）
         var OCR_RESULT = {
-          cropUrl: OCR_CROP,
-          cropW: 640,
-          cropH: 300,
-          text: OCR_LINES.map(function (l) { return l.text; }).join("\n"),
-          lines: OCR_LINES,
+          text: [
+            "Order Confirmation",
+            "Thank you for your purchase!",
+            "Total: $129.00",
+            "Shipping: 2-3 business days",
+          ].join("\n"),
           // 默认就是现在的真实情况：本机 PaddleOCR（PP-OCRv4 中英混排，不报单一语言）
           // ?engine=windows 看回落到系统 OCR 时的样子
           engine: q.get("engine") === "windows" ? "windows" : "paddle",
@@ -282,7 +265,7 @@
             if (failOne && args.serviceId === "deepseek") {
               throw new Error("服务返回 429：当前分组上游负载已饱和，请稍后再试");
             }
-            // 截图识别会要求保持换行：这里照做，好让「原图覆盖」能一行对一行
+            // 截图识别会要求保持换行：这里照做，面板上一行原文对一行译文
             if (args.preserveLines && String(args.text || "").indexOf("Order Confirmation") >= 0) {
               return {
                 serviceId: args.serviceId,
@@ -561,15 +544,6 @@
                 });
               });
             });
-            return;
-          }
-
-          // 结果面板：?mode=overlay 直接切到原图覆盖模式
-          if (isOcr && q.get("mode") === "overlay") {
-            setTimeout(function () {
-              var seg = byText(".ocr-seg span", "原图覆盖");
-              if (seg) seg.click();
-            }, 700);
             return;
           }
 

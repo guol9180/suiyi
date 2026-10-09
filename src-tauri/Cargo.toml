@@ -1,6 +1,6 @@
 [package]
 name = "suiyi"
-version = "0.9.0"
+version = "0.9.1"
 description = "随译 SuiYi · 桌面 AI 翻译助手"
 authors = ["suiyi-dev"]
 license = "MIT"
@@ -67,8 +67,10 @@ windows = { version = "0.61", features = [
 
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration
 [profile.release]
-codegen-units = 1
-lto = true
+# thin LTO + 多代码单元：打包时间大约减半（7~8 分钟 → 3~4 分钟），
+# 代价是体积多几百 KB —— 相对已经 20MB+ 的安装包可以忽略
+codegen-units = 4
+lto = "thin"
 opt-level = 3
 panic = "abort"
 strip = true

@@ -53,37 +53,6 @@ html, body, #root { height: 100%; }
 }
 .ocr-x:hover { color: var(--c-danger); background: var(--c-danger-bg); }
 
-/* ---------- 互斥的两种模式 ---------- */
-.ocr-seg {
-  display: flex;
-  gap: 2px;
-  margin: 10px 12px;
-  padding: 2px;
-  border: 1px solid var(--glass-edge);
-  border-radius: var(--radius-md);
-  background: var(--glass-card);
-  flex: none;
-}
-.ocr-seg span {
-  flex: 1;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  height: 26px;
-  border-radius: var(--radius-sm);
-  font-size: var(--fs-sec);
-  color: var(--c-text-3);
-  cursor: pointer;
-  transition: background 0.14s, color 0.14s;
-}
-.ocr-seg span:hover { background: var(--glass-card-strong); color: var(--c-text); }
-.ocr-seg span.on {
-  background: #fff;
-  color: var(--c-primary-text);
-  font-weight: 600;
-  box-shadow: 0 1px 3px rgba(15, 17, 21, 0.1);
-}
-
 .ocr-notice {
   margin: 0 12px 8px;
   padding: 7px 10px;
@@ -153,56 +122,6 @@ html, body, #root { height: 100%; }
   user-select: text;
 }
 .ocr-err { font-size: var(--fs-sec); line-height: 1.7; color: var(--c-danger); }
-
-/* ---------- 原图覆盖 ---------- */
-.ocr-stage {
-  flex: 1;
-  min-height: 0;
-  overflow: auto;
-  padding: 0 12px 12px;
-}
-.ocr-shot {
-  position: relative;
-  border-radius: var(--radius-md);
-  overflow: hidden;
-  border: 1px solid var(--c-border-strong);
-  background: #000;
-}
-.ocr-shot-img { display: block; width: 100%; height: auto; }
-/* 译文压在原文位置上：半透明底 + 一点点模糊，盖住原文又能看出原来在哪 */
-.otrans {
-  position: absolute;
-  display: flex;
-  align-items: center;
-  padding: 0 4px;
-  font-size: var(--fs-cap);
-  line-height: 1.35;
-  color: var(--c-highlight-text);
-  background: rgba(255, 222, 89, 0.92);
-  border-radius: 3px;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  pointer-events: none;
-}
-.otrans.center {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  white-space: normal;
-}
-/* 行数对不上时不硬贴：整块从第一行开始往下铺，其余原图仍然看得见 */
-.otrans.block {
-  left: 4px;
-  right: 4px;
-  height: auto;
-  min-height: 0;
-  padding: 5px 6px;
-  white-space: pre-wrap;
-  align-items: flex-start;
-  line-height: 1.5;
-}
 
 /* ---------- 动作与引擎 ---------- */
 .ocr-actions {
