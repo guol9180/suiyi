@@ -224,12 +224,13 @@ export default function AboutPage({ forceCheckSignal = 0 }: { forceCheckSignal?:
             <div className="ab-upd-bar">
               <span
                 style={{
-                  width: upd.percent >= 0 ? `${upd.percent}%` : "100%",
+                  // 总量未知时留空，别先摆一个满格再跳回来
+                  width: upd.percent >= 0 ? `${upd.percent}%` : "0%",
                   opacity: upd.phase === "retrying" ? 0.55 : 1,
                 }}
               />
             </div>
-            <span className="m">
+            <span className="m ab-upd-pct">
               {upd.percent >= 0 ? `${upd.percent}%` : `${Math.round(upd.downloaded / 1024)} KB`}
             </span>
           </div>

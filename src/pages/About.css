@@ -76,6 +76,13 @@
   gap: 8px;
   margin-top: 10px;
 }
+/* 百分比是变宽的字（46% → 100%），不锁宽度的话它一变宽，
+   左边的进度条就被挤窄一格，看着像进度回退 */
+.ab-upd-pct {
+  min-width: 46px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
 .ab-upd-bar {
   flex: 1;
   height: 6px;

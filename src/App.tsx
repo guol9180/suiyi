@@ -199,7 +199,8 @@ export default function App() {
               <div className="upd-track" aria-hidden="true">
                 <span
                   style={{
-                    width: upd.percent >= 0 ? `${upd.percent}%` : "100%",
+                    // 总量未知时留空，别先摆一个满格再跳回来
+                    width: upd.percent >= 0 ? `${upd.percent}%` : "0%",
                     opacity: upd.phase === "retrying" ? 0.55 : 1,
                   }}
                 />

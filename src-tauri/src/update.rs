@@ -302,6 +302,15 @@ async fn download_once(
     }
     let total = resp.content_length().unwrap_or(0);
     let mut file = std::fs::File::create(part).map_err(|e| format!("创建文件失败：{e}"))?;
+    // 先报一条「总量已知、一个字节还没收」：界面立刻能画出 0%，
+    // 而不是在总量未知时先摆一个满格进度条再跳回去
+    on_progress(DownloadProgress {
+        downloaded: 0,
+        total,
+        attempt,
+        candidate: host.to_string(),
+        state: "downloading",
+    });
     let mut got: u64 = 0;
     let mut last_emit = Instant::now();
     let mut last_pct: Option<u64> = None;
@@ -580,7 +589,8 @@ mod tests {
         assert!(path.exists(), "成功后应该有正式安装包：{path:?}");
         assert!(!dir.join(format!("{ASSET_NAME}{PART_SUFFIX}")).exists());
         assert!(seen.len() >= 2, "至少要有首末两条进度：{seen:?}");
-        assert!(seen[0].0 > 0, "首块必发：{seen:?}");
+        assert_eq!(seen[0].0, 0, "第一条先报总量与 0%，别让界面先摆一个满格：{seen:?}");
+        assert_eq!(seen[0].1, 64 * 1024, "第一条就要带上总量：{seen:?}");
         let downloaded: Vec<u64> = seen.iter().map(|s| s.0).collect();
         assert!(
             downloaded.windows(2).all(|w| w[0] <= w[1]),
