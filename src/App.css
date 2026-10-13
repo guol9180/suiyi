@@ -97,6 +97,26 @@
 }
 .update-banner .btn.mini { flex: none; }
 
+/* 下载中：细进度条跟在文字后面，宽度只增不减（重试时停在高水位） */
+.upd-track {
+  flex: none;
+  width: 140px;
+  height: 4px;
+  border-radius: var(--radius-pill);
+  background: var(--c-primary-border);
+  overflow: hidden;
+}
+.upd-track span {
+  display: block;
+  height: 100%;
+  background: var(--c-primary-strong);
+  transition: width 0.2s ease;
+}
+.upd-note {
+  font-size: var(--fs-cap);
+  color: var(--c-caption);
+}
+
 /* ---------- 关窗口前的询问 ---------- */
 .ask-mask {
   position: fixed;

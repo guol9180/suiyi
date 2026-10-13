@@ -22,6 +22,11 @@
        *   ?demo=keyerror            选中 DeepSeek 并测试连接（配 ?keyfail=1 看 401 人话提示）
        *   ?demo=close               模拟点窗口 ×，看「直接关闭 / 最小化到任务栏」询问框
        *   ?demo=update              让检查更新返回有新版本，看主窗口提示条与关于页更新卡
+       *   ?demo=downloading         进关于页点「下载并安装」，看下载中（含一次断线重试）
+       *   ?demo=dlbanner            下载开始后切回翻译页，看顶部提示条上的进度
+       *   ?demo=ready               下载完停在「立即安装」
+       *   ?demo=dlcancel            下载中点「取消下载」，看它干净地退回可下载态
+       *   ?demo=updatefail          下载失败 + 重试
        *   ?win=notice               渲染轻提示窗口（配 ?kind=ok|err|info 与 ?text=）
        *   ?keyfail=1                让测试连接返回 DeepSeek 那串 401
        *   ?conflict=1               让「截图识别」显示为被占用，用来看冲突提示
@@ -40,6 +45,16 @@
         var failOne = q.get("fail") === "1";
         // ?ankioff=1 让 Anki 探测失败，用来看「待同步 / 自动排队」那套状态
         var ankiOk = q.get("ankioff") !== "1";
+        // 和更新有关的几个演示态：检查更新统一返回「有新版本」，好走到下载那一步
+        var updDemo = q.get("demo");
+        var updHasNew =
+          updDemo === "update" ||
+          updDemo === "downloading" ||
+          updDemo === "dlbanner" ||
+          updDemo === "ready" ||
+          updDemo === "dlcancel" ||
+          updDemo === "updatefail" ||
+          q.get("update") === "1";
 
         // 覆盖层要一张「冻结帧」当背景，桩里画一张文档样子的图顶着
         var OVERLAY_SHOT =
@@ -218,7 +233,7 @@
           },
           // 更新：?demo=update 让检查结果显示有新版本，用来看提示条与关于页的更新卡
           check_update: function () {
-            var has = q.get("demo") === "update" || q.get("update") === "1";
+            var has = updHasNew;
             return {
               current: "0.7.0",
               latest: has ? "0.8.0" : "0.7.0",
@@ -231,7 +246,31 @@
               pageUrl: "https://github.com/guol9180/suiyi/releases",
             };
           },
-          download_update: function () { return "C:\\Users\\PC\\AppData\\Local\\Temp\\suiyi-update\\SuiYi-Setup-x64.exe"; },
+          cancel_update: function () { return true; },
+          /*
+           * 下载：按脚本逐步发 update-progress，中间故意插一次断线重试。
+           * 用来验两件事：进度条只往右走、切换页面/重挂载不会重新开一次下载。
+           */
+          download_update: function () {
+            var script =
+              q.get("demo") === "ready" || q.get("demo") === "updatefail"
+                ? UPDATE_SCRIPT_READY
+                : UPDATE_SCRIPT;
+            return new Promise(function (resolve, reject) {
+              var i = 0;
+              (function step() {
+                if (i >= script.length) {
+                  if (q.get("demo") === "updatefail") {
+                    return reject("下载失败：suiyi.imhgl.com：服务返回 503。可以点「打开下载页」手动安装。");
+                  }
+                  return resolve("C:\\Users\\PC\\AppData\\Local\\Temp\\suiyi-update\\SuiYi-Setup-x64.exe");
+                }
+                emitEvent("update-progress", script[i]);
+                i += 1;
+                setTimeout(step, 420);
+              })();
+            });
+          },
           install_update: function () { return null; },
           close_action: function () { return null; },
           quit_app: function () { return null; },
@@ -382,6 +421,28 @@
         }
 
         var callbacks = {};
+
+        /*
+         * 更新下载的脚本化进度：总量按真实安装包的 22.7MB 编。
+         * 第 4 条是「换线路重试」——界面该停在 46% 不退回去。
+         */
+        var UPDATE_TOTAL = 23814951;
+        function at(ratio) { return Math.round(UPDATE_TOTAL * ratio); }
+        var UPDATE_SCRIPT = [
+          { downloaded: at(0.04), total: UPDATE_TOTAL, attempt: 1, candidate: "suiyi.imhgl.com", state: "downloading" },
+          { downloaded: at(0.19), total: UPDATE_TOTAL, attempt: 1, candidate: "suiyi.imhgl.com", state: "downloading" },
+          { downloaded: at(0.46), total: UPDATE_TOTAL, attempt: 1, candidate: "suiyi.imhgl.com", state: "downloading" },
+          { downloaded: 0, total: 0, attempt: 2, candidate: "objects.githubusercontent.com", state: "retrying" },
+          { downloaded: at(0.27), total: UPDATE_TOTAL, attempt: 2, candidate: "objects.githubusercontent.com", state: "downloading" },
+          { downloaded: at(0.58), total: UPDATE_TOTAL, attempt: 2, candidate: "objects.githubusercontent.com", state: "downloading" },
+          { downloaded: at(0.91), total: UPDATE_TOTAL, attempt: 2, candidate: "objects.githubusercontent.com", state: "downloading" },
+          { downloaded: UPDATE_TOTAL, total: UPDATE_TOTAL, attempt: 2, candidate: "objects.githubusercontent.com", state: "downloading" },
+        ];
+        /** ?demo=ready 用：两下就下完，直接看「立即安装」那一态 */
+        var UPDATE_SCRIPT_READY = [
+          { downloaded: at(0.62), total: UPDATE_TOTAL, attempt: 1, candidate: "suiyi.imhgl.com", state: "downloading" },
+          { downloaded: UPDATE_TOTAL, total: UPDATE_TOTAL, attempt: 1, candidate: "suiyi.imhgl.com", state: "downloading" },
+        ];
         /*
          * 回调 id → 事件名。
          *
@@ -552,6 +613,51 @@
             setTimeout(function () {
               emitEvent("close-requested", null);
             }, 900);
+            return;
+          }
+
+          /*
+           * 更新下载的几个态：都先进关于页点「下载并安装」。
+           *   ?demo=downloading  下载中（含一次断线重试），进度条只该往右走
+           *   ?demo=dlbanner     下载开始后切回翻译页，看顶部提示条上的进度
+           *   ?demo=ready        两下就下完，看「立即安装」
+           *   ?demo=dlcancel     下载中点「取消下载」，看它干净地退回可下载态
+           *   ?demo=updatefail   下载失败 + 重试按钮
+           */
+          if (
+            updDemo === "downloading" ||
+            updDemo === "dlbanner" ||
+            updDemo === "ready" ||
+            updDemo === "dlcancel" ||
+            updDemo === "updatefail"
+          ) {
+            setTimeout(function () {
+              var t = document.querySelectorAll(".tabbar button")[1];
+              if (t) t.click();
+              setTimeout(function () {
+                var item = byText(".side-item", "关于");
+                if (item) item.click();
+                // 等自动检查回来，更新卡上才会出现「下载并安装」
+                waitFor(
+                  function () { return byText(".ab-upd .btn.primary", "下载并安装"); },
+                  function (btn) {
+                    btn.click();
+                    if (updDemo === "dlbanner") {
+                      setTimeout(function () {
+                        var back = document.querySelectorAll(".tabbar button")[0];
+                        if (back) back.click();
+                      }, 1200);
+                    }
+                    if (updDemo === "dlcancel") {
+                      setTimeout(function () {
+                        var cancel = byText(".ab-upd .btn", "取消下载");
+                        if (cancel) cancel.click();
+                      }, 1200);
+                    }
+                  },
+                );
+              }, 200);
+            }, 200);
             return;
           }
 

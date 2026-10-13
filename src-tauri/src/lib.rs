@@ -77,7 +77,9 @@ pub fn run() {
         .manage(hotkeys::HotkeyState::default())
         .manage(std::sync::Mutex::<Option<screenshot::ShotSession>>::new(None))
         .manage(screenshot::OcrState::default())
-        .manage(notice::NoticeState::default());
+        .manage(notice::NoticeState::default())
+        // 更新下载的单飞与取消标志：界面卸载、用户重复点都得靠它兜住
+        .manage(update::UpdateState::default());
 
     builder
         .setup(move |app| {
@@ -178,6 +180,7 @@ pub fn run() {
             commands::close_action,
             update::check_update,
             update::download_update,
+            update::cancel_update,
             update::install_update,
             notice::notice_last,
             notice::notice_hide,

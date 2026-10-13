@@ -5,21 +5,25 @@
  * 不写「感谢使用」这类空话。本项目许可是 MIT（见仓库 LICENSE），
  * 这里只列实际用到的第三方组件与它们的许可。
  */
-import { useCallback, useEffect, useState } from "react";
-import { listen } from "@tauri-apps/api/event";
+import { useEffect, useState } from "react";
 import { openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import {
   appPaths,
-  checkUpdate,
-  downloadUpdate,
   getSettings,
   hotkeyStatus,
-  installUpdate,
   tailLog,
   type AppPaths,
   type HotkeyStatus,
-  type UpdateInfo,
 } from "../api";
+import {
+  cancelUpdateDownload,
+  checkForUpdate,
+  dismissUpdateError,
+  installDownloadedUpdate,
+  setAboutVisible,
+  startUpdateDownload,
+  useUpdateSnapshot,
+} from "../updateState";
 import { Icon } from "../components/Icon";
 import { formatAccel } from "../hotkeySuggest";
 import "./About.css";
@@ -37,26 +41,13 @@ const LINKS: Array<{ label: string; hint: string; url: string }> = [
 const DOWNLOAD_PAGE = "https://suiyi.imhgl.com/";
 
 export default function AboutPage({ forceCheckSignal = 0 }: { forceCheckSignal?: number } = {}) {
+  /** 更新流程的状态在 updateState 里，这里只是它的一个视图 */
+  const upd = useUpdateSnapshot();
   const [paths, setPaths] = useState<AppPaths | null>(null);
   const [hotkeys, setHotkeys] = useState<HotkeyStatus[]>([]);
   const [notice, setNotice] = useState("");
-  const [update, setUpdate] = useState<UpdateInfo | null>(null);
-  const [checking, setChecking] = useState(false);
-  const [updateErr, setUpdateErr] = useState("");
-  const [progress, setProgress] = useState<{ downloaded: number; total: number } | null>(null);
-  const [installing, setInstalling] = useState(false);
-
-  const doCheck = useCallback(async () => {
-    setChecking(true);
-    setUpdateErr("");
-    try {
-      setUpdate(await checkUpdate());
-    } catch (e) {
-      setUpdateErr(String(e));
-    } finally {
-      setChecking(false);
-    }
-  }, []);
+  /** 下载中（含重试）这一个阶段在两个地方用到，提一嘴省得写两遍 */
+  const downloading = upd.phase === "downloading" || upd.phase === "retrying";
 
   useEffect(() => {
     void appPaths().then(setPaths).catch(() => setPaths(null));
@@ -64,36 +55,22 @@ export default function AboutPage({ forceCheckSignal = 0 }: { forceCheckSignal?:
     // 启动时已经查过一次，这里只在用户开着自动检查时顺手再对一次
     void getSettings()
       .then((s) => {
-        if (s.autoCheckUpdate) void doCheck();
+        if (s.autoCheckUpdate) void checkForUpdate();
       })
       .catch(() => {});
-    const un = listen<{ downloaded: number; total: number }>("update-progress", (e) => {
-      setProgress(e.payload);
-    });
-    return () => {
-      void un.then((f) => f());
-    };
-  }, [doCheck]);
+  }, []);
+
+  // 关于页开着的时候下载完就直接拉安装向导；切走了就停下等用户点，
+  // 免得用户在翻翻译页时应用突然退出
+  useEffect(() => {
+    setAboutVisible(true);
+    return () => setAboutVisible(false);
+  }, []);
 
   // 托盘菜单点「检查更新」：不管自动检查开没开，都当场查一次
   useEffect(() => {
-    if (forceCheckSignal > 0) void doCheck();
-  }, [forceCheckSignal, doCheck]);
-
-  /** 下载 → 拉起安装向导（随译会退出，装完由安装向导把它带回来） */
-  async function downloadAndInstall() {
-    if (!update) return;
-    setInstalling(true);
-    setUpdateErr("");
-    try {
-      const path = await downloadUpdate(update.assetUrl);
-      await installUpdate(path);
-    } catch (e) {
-      setUpdateErr(String(e));
-      setInstalling(false);
-      setProgress(null);
-    }
-  }
+    if (forceCheckSignal > 0) void checkForUpdate();
+  }, [forceCheckSignal]);
 
   /** 把版本、系统、路径、热键状态与日志尾部拼成一段可粘贴的文本 */
   async function copyDiagnostics() {
@@ -184,10 +161,14 @@ export default function AboutPage({ forceCheckSignal = 0 }: { forceCheckSignal?:
               <Icon name="arrow-right" size="sm" />
             </button>
           ))}
-          <button className="ab-link" disabled={checking} onClick={() => void doCheck()}>
+          <button
+            className="ab-link"
+            disabled={upd.phase === "checking"}
+            onClick={() => void checkForUpdate()}
+          >
             <span className="ab-link-name">获取更新</span>
             <span className="ab-link-hint">
-              {checking ? "正在检查…" : `当前 v${__APP_VERSION__}`}
+              {upd.phase === "checking" ? "正在检查…" : `当前 v${__APP_VERSION__}`}
             </span>
             <Icon name="refresh" size="sm" />
           </button>
@@ -201,67 +182,97 @@ export default function AboutPage({ forceCheckSignal = 0 }: { forceCheckSignal?:
         </div>
         <div className="ab-upd">
           <span className="ab-upd-cur">当前版本 v{__APP_VERSION__}</span>
-          {update && update.hasUpdate && (
-            <span className="chip acc mini">发现 v{update.latest}</span>
+          {upd.phase === "available" && upd.info && (
+            <span className="chip acc mini">发现 v{upd.info.latest}</span>
           )}
-          {update && !update.hasUpdate && !checking && (
+          {upd.checkedAt > 0 && upd.phase !== "checking" && upd.info && !upd.info.hasUpdate && (
             <span className="chip ok mini">
               <Icon name="check" size="sm" />
               已是最新
             </span>
           )}
           <span style={{ flex: 1 }} />
-          <button className="btn mini" disabled={checking || installing} onClick={() => void doCheck()}>
+          <button
+            className="btn mini"
+            disabled={upd.phase === "checking" || downloading}
+            onClick={() => void checkForUpdate()}
+          >
             <Icon name="refresh" size="sm" />
-            {checking ? "检查中" : "检查更新"}
+            {upd.phase === "checking" ? "检查中" : "检查更新"}
           </button>
-          {update?.hasUpdate && (
-            <button
-              className="btn primary mini"
-              disabled={installing}
-              onClick={() => void downloadAndInstall()}
-            >
+          {upd.phase === "available" && (
+            <button className="btn primary mini" onClick={() => void startUpdateDownload()}>
               <Icon name="save" size="sm" />
-              {installing ? "下载中" : "下载并安装"}
+              下载并安装
             </button>
           )}
+          {downloading && (
+            <button className="btn mini" onClick={() => void cancelUpdateDownload()}>
+              取消下载
+            </button>
+          )}
+          {upd.phase === "ready" && (
+            <button className="btn primary mini" onClick={() => void installDownloadedUpdate()}>
+              <Icon name="save" size="sm" />
+              立即安装
+            </button>
+          )}
+          {upd.phase === "installing" && <span className="m">正在打开安装向导…</span>}
         </div>
-        {progress && installing && (
+        {downloading && (
           <div className="ab-upd-prog">
             <div className="ab-upd-bar">
               <span
                 style={{
-                  width: progress.total
-                    ? `${Math.min(100, Math.round((progress.downloaded / progress.total) * 100))}%`
-                    : "100%",
+                  width: upd.percent >= 0 ? `${upd.percent}%` : "100%",
+                  opacity: upd.phase === "retrying" ? 0.55 : 1,
                 }}
               />
             </div>
             <span className="m">
-              {progress.total
-                ? `${Math.round((progress.downloaded / progress.total) * 100)}%`
-                : `${Math.round(progress.downloaded / 1024)} KB`}
+              {upd.percent >= 0 ? `${upd.percent}%` : `${Math.round(upd.downloaded / 1024)} KB`}
             </span>
           </div>
         )}
-        {update?.hasUpdate && update.notes.trim() && (
-          <details className="ab-upd-notes">
-            <summary>更新说明</summary>
-            <pre>{update.notes.trim()}</pre>
-          </details>
-        )}
-        {installing && !progress && <div className="thint">正在准备下载…</div>}
-        {installing && (
+        {upd.phase === "retrying" && (
           <div className="thint">
-            下载完成后随译会退出并打开安装向导，装完在向导最后一步勾选「运行 SuiYi」即可。
+            连接断了，正在重试第 {upd.attempt} 次（{upd.candidate}）。进度会停在这里，不会重头再来。
           </div>
         )}
-        {updateErr && (
+        {upd.info?.hasUpdate && upd.info.notes.trim() && (
+          <details className="ab-upd-notes">
+            <summary>更新说明</summary>
+            <pre>{upd.info.notes.trim()}</pre>
+          </details>
+        )}
+        {downloading && (
+          <div className="thint">
+            下载在后台进行，切到别的页面也不会中断。
+          </div>
+        )}
+        {upd.phase === "ready" && (
+          <div className="thint">
+            安装包已下好。点「立即安装」会退出随译并打开安装向导，装完在向导最后一步勾选「运行 SuiYi」即可。
+          </div>
+        )}
+        {upd.phase === "error" && (
           <div className="terr">
             <Icon name="alert" size="sm" />
-            <span>{updateErr}</span>
-            <button className="btn mini" onClick={() => void openUrl(update?.pageUrl ?? DOWNLOAD_PAGE)}>
+            <span>{upd.error}</span>
+            {upd.errorFrom === "check" ? (
+              <button className="btn mini" onClick={() => void checkForUpdate()}>
+                重新检查
+              </button>
+            ) : (
+              <button className="btn mini" onClick={() => void startUpdateDownload()}>
+                重试下载
+              </button>
+            )}
+            <button className="btn mini" onClick={() => void openUrl(upd.info?.pageUrl ?? DOWNLOAD_PAGE)}>
               打开下载页
+            </button>
+            <button className="mini-as-link" title="知道了" onClick={dismissUpdateError}>
+              <Icon name="close" size="sm" />
             </button>
           </div>
         )}

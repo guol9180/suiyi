@@ -150,9 +150,24 @@ export function checkUpdate(): Promise<UpdateInfo> {
   return invoke("check_update");
 }
 
+/** 一条下载进度：retrying 表示正在换地址/重试，界面据此把进度停在高水位 */
+export interface UpdateProgress {
+  downloaded: number;
+  total: number;
+  /** 第几次尝试（跨地址连续计数），从 1 开始 */
+  attempt: number;
+  candidate: string;
+  state: "downloading" | "retrying";
+}
+
 /** 下载安装包到临时目录，返回本地路径。进度走 update-progress 事件 */
 export function downloadUpdate(url: string): Promise<string> {
   return invoke("download_update", { url });
+}
+
+/** 取消正在进行的下载；没有下载在跑时返回 false */
+export function cancelUpdate(): Promise<boolean> {
+  return invoke("cancel_update");
 }
 
 /** 退出随译并拉起安装向导 */
