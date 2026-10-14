@@ -1,40 +1,31 @@
 # 随译 SuiYi · 开发计划
 
-> Windows 桌面 AI 翻译助手：划词翻译、截图识别，多 AI 服务配置。
-> 界面基线：`design/ui-mockup.html`（v0.8，与 v0.9.2 实现对齐）；重设计提案 `design/ui-redesign.html`（v1.0，未实现）。
-> 开发规范与避坑细则见 `AGENTS.md`。
+> Windows 桌面 AI 翻译工具：划词翻译、截图识别，多 AI 服务并发对比。
+> 本文件管开发计划与验收标准；项目概览与技术栈见 `README.md`，开发规范见 `AGENTS.md`。
+> 界面基线：`design/ui-mockup.html`（v0.8，与 v0.9.2 实现对齐）；`design/ui-redesign.html`（v1.0 提案，未实现）。
 
-## 1. 技术栈
-
-| 层 | 选型 | 说明 |
-|---|---|---|
-| 应用框架 | Tauri 2 | 五个 WebView 入口：主窗口、划词弹窗、截图覆盖层、OCR 结果窗、轻提示 |
-| 后端 | Rust stable (MSVC) | 业务内核：服务编排、取词、截图、OCR、朗读、历史、更新 |
-| 前端 | Vite + React + TypeScript | React 19；页面在 `src/pages`，命令出口统一在 `src/api.ts` |
-| 配置存储 | services.json + keyring | API Key 只进系统凭据管理器，配置文件零明文 |
-| 网络 | reqwest stream | OpenAI 兼容 `/chat/completions` 与 SSE 流式 |
-| 取词与按键 | arboard + SendInput | 剪贴板往返取词，发送真实虚拟键码 |
-| 截屏与 OCR | GDI BitBlt + PaddleOCR | 本地 PP-OCRv4 离线识别，失败回落 Windows.Media.OCR |
-| 历史与生词本 | rusqlite (WAL) | `history.db`，保留最近 2000 条 |
-| 插件沙箱 | rquickjs (QuickJS) | 四类扩展点，仅 clipboard 权限，无网络 |
-| 朗读 | Windows.Media.SpeechSynthesis | 本地合成 → 临时 WAV → PlaySoundW 异步播放 |
-
-## 2. 目录结构
+## 1. 目录结构
 
 ```
 suiyi/
-├─ AGENTS.md                 开发规范与避坑手册（先读）
+├─ README.md                 项目概览、构建与使用文档
+├─ AGENTS.md                 开发规范（动手前先读）
 ├─ design/
 │  ├─ ui-mockup.html         UI 基线稿（与实现对齐）
 │  └─ ui-redesign.html       v1.0 重设计提案（未实现）
+├─ scripts/
+│  └─ fetch-ocr-assets.mjs   OCR 模型与 ONNX Runtime 拉取
 ├─ src/
 │  ├─ api.ts                 所有后端调用的唯一出口
 │  ├─ pages/                 Translate、Settings、Popup、OcrResult、Overlay、Notice、About
 │  ├─ components/            Icon、IconSprite、DictionaryCard、SpeechBar、ModelSelect
 │  └─ styles/                tokens.css（设计变量）、base.css（基础组件）
 ├─ src-tauri/
+│  ├─ src/main.rs            程序入口
+│  ├─ src/lib.rs             插件装配、窗口与热键初始化
 │  ├─ src/commands.rs        Tauri 命令层，前后端唯一通道
 │  ├─ src/config.rs          services.json 读写与服务 Schema
+│  ├─ src/keyring.rs         API Key 存取
 │  ├─ src/translator.rs      OpenAI 兼容适配器与 SSE 流式
 │  ├─ src/selection.rs       Alt+D 取词与光标处弹窗
 │  ├─ src/screenshot.rs      Alt+S 冻结帧、覆盖层框选、OCR 流程与结果窗
@@ -45,16 +36,14 @@ suiyi/
 │  ├─ src/anki.rs            AnkiConnect 协议
 │  ├─ src/plugin.rs          插件清单与发现
 │  ├─ src/plugin_js.rs       插件 QuickJS 沙箱
+│  ├─ src/hotkeys.rs         全局热键注册与冲突重试
 │  ├─ src/update.rs          检查更新、下载、拉起安装向导
 │  ├─ src/tray.rs            系统托盘
-│  ├─ src/notice.rs          轻提示窗口
-│  ├─ src/hotkeys.rs         全局热键注册与冲突重试
-│  ├─ src/keyring.rs         API Key 存取
-│  └─ src/lib.rs             插件装配、窗口与热键初始化
+│  └─ src/notice.rs          轻提示窗口
 └─ DEVELOP_PLAN.md           本文件
 ```
 
-## 3. 里程碑
+## 2. 里程碑
 
 ### M0 内核闭环 —— 已完成
 
@@ -135,83 +124,25 @@ Alt+S 冻结所有显示器、全屏覆盖层框选（松开即提交，无确�
 
 macOS 的辅助功能与录屏权限引导；Linux 以 X11 优先，Wayland 走外部调用方案。
 
-## 4. 开发约定
+## 3. 计划约定
 
-1. 一个步骤一个 commit，提交信息写清里程碑与范围，不把无关改动混进同一个提交。
-2. 依赖只加当前阶段需要的，不预装。
-3. API Key 与任何密钥永远不进仓库和配置文件。
-4. 每个里程碑结束跑一次完整验收，再开下一个。
-5. 界面改动以 `design/ui-mockup.html` 为准；设计稿与实现出现分歧时先改稿再改码。
-6. 环境细则、验证要求与避坑清单以 `AGENTS.md` 为准（渲染验证、grep 复查、CSS 注释禁 `*/` 等）。
+通用开发规范（提交粒度、密钥、CSS、验证要求等）见 `AGENTS.md`，此处不重复。计划特有：
 
-## 5. 环境现状
+1. 依赖只加当前阶段需要的，不预装。
+2. 每个里程碑结束跑一次完整验收，再开下一个。
 
-- Node v22.23.2、pnpm 12.5.1（`D:\dev\environment\nodejs`）；pnpm 需用 `pnpm.cmd` 调用（执行策略拦截 .ps1）。
+## 4. 环境现状
+
+- Node v22.23.2、pnpm 12.5.1（`D:\dev\environment\nodejs`）；pnpm 用 `pnpm.cmd` 调用（见 `AGENTS.md`）。
 - Rust 1.98.1，工具链在 `D:\dev\environment\rustup\toolchains\stable-x86_64-pc-windows-msvc`
   - `D:\dev\environment\cargo\bin\cargo.exe` 是 rustup 垫片，需先配好默认 toolchain，或直接调用工具链目录
 - 已配置的翻译服务：Z.ai（`https://api.z.ai/api/paas/v4`，模型 `glm-5.3-flash`）
 - OCR 语言包：系统仅安装 `zh-Hans-CN`
 - `pnpm build` / `cargo test` / `pnpm ocr:assets` 已验证通过；OCR 模型已就位（`src-tauri/ocr/`）
 
-## 6. 待确认
+## 5. 待确认
 
-1. ~~仓库当前没有 LICENSE~~ 已解决：采用 MIT，`LICENSE` 已入库（v0.9.0）。
-2. Windows 回落 OCR 仍优先请求 `en-US` 语言包（本机只有中文包），是否改为按内容自适应——
+1. Windows 回落 OCR 仍优先请求 `en-US` 语言包（本机只有中文包），是否改为按内容自适应——
    本地 PaddleOCR 主路径中英混排后此问题只影响回落场景，保留观察。
-3. `design/ui-redesign.html`（v1.0 工作台重设计）是否实施、分几步实施，待定。
+2. `design/ui-redesign.html`（v1.0 工作台重设计）是否实施、分几步实施，待定。
 
-## 7. 开发日志
-
-- 2026-09-29 S0.1 完成：安装 Rust 与 MSVC Build Tools，用 rsproxy 镜像跑通 hello world。
-- 2026-09-29 S0.2 完成：Tauri 2 react-ts 脚手架并入现有目录，identifier `com.suiyi.dev`。
-- 2026-09-29 S0.3 完成：tokens.css、base.css 迁入设计 token。
-- 2026-09-29 S0.4 与 S0.5 完成：配置层、凭据层、命令层，含凭据管理器真实读写测试。
-- 2026-09-29 S0.6 完成：设置页服务列表与编辑表单，services.json 自动生成。
-- 2026-09-29 S0.7 与 S0.8 完成：OpenAI 兼容流式内核（含 SSE mock 端到端测试）与翻译页。
-- 2026-09-29 M0 验收通过：Z.ai Key 与 glm-5.3-flash 真实服务流式翻译成功。
-  期间确认 bigmodel.cn 会返回 403 model_access_denied，Z.ai 需使用 `https://api.z.ai/api/paas/v4`。
-- 2026-09-30 M1 完成：Alt+D 全局热键、剪贴板取词、光标处无边框弹窗。
-  取词最初用 SendInput 注入 Unicode 字符，无法触发目标程序的复制快捷键，改为发送真实虚拟键码。
-- 2026-09-30 M2 主体完成：Alt+S 冻结帧、覆盖层框选、GDI 裁剪、Windows.Media.OCR、结果投递弹窗。
-  覆盖层一度整屏黑，原因是 JPEG 不支持 Alpha 通道，编码前需把 RGBA 转成 RGB。
-- 2026-09-30 设计稿 v0.4：重做配色、字阶与状态设计，补齐失败态与空态，去掉装饰性 emoji。
-- 2026-09-30 仓库清理：删除脚手架残留资源与过期的设计稿导出图，设计稿合并为 `design/ui-mockup.html` 单一基线，
-  重写 README 与开发计划，修复开发日志的编码损坏。
-- 2026-09-30 M2 验收：截图识别链路修通。曾同时挂着四个缺陷——会话状态被劈成
-  static 与托管状态两把锁、OCR 在 STA 线程上初始化 COM 失败、DataWriter 没有绑定
-  输出流、覆盖层位置落在屏幕原点。多屏策略改为只截鼠标所在的那块显示器。
-- 2026-09-30 设计系统落地：tokens/base 迁移到 v0.4，26 个线性图标替换全部 emoji，
-  划词弹窗语言行独立并加互换、动作条分层，设置页重排并新增「测试连接」命令。
-- 2026-09-30 M3 接线：`writeback.rs` 从死文件变成可用功能，补 Ctrl+A/Ctrl+V 模拟、
-  注册 Alt+T、增加写回失败降级与弹窗告知；划词弹窗的「替换原文」同期接通。
-- 2026-09-30 M4 起步：词典结构化（词典结构结果类型走 JSON 模板、解析失败回退纯文本）
-  与本地语音朗读（合成与播放分离，合成有无副作用验收测试）。
-- 2026-09-30 品牌资产：用 `tauri icon` 从品牌图重新生成全套应用图标，
-  替换掉脚手架默认图标；顺带删掉工具附带的 Android / iOS 图标目录（本项目不做移动端）。
-- 2026-09-30 M4 完成：新增历史记录（rusqlite + WAL，含搜索、按来源过滤、裁剪到 2000 条），
-  翻译页 / 划词弹窗 / 截图识别 / 输入框转译四条链路都会归类入库。
-- 2026-09-30 M5 完成：插件系统落地。manifest 校验（含路径穿越与权限白名单）、
-  QuickJS 沙箱、四类扩展点，以及设置里的插件页；翻译插件直接进入服务列表参与并发对比。
-- 2026-09-30 M3 收尾：接入 AnkiConnect 生词本（后端模块 + 弹窗动作 + 设置项），
-  并补上对假服务端的协议级端到端测试；真实 Anki 的联调留待人工。
-- 2026-10-01 v0.2.0–v0.4.0：多服务并发对比与服务排序、服务商预设添加
-  （选中即填地址 / 协议 / 推荐模型）、热键可改与占用提示、托盘与关闭行为、
-  关于页雏形。详细变更以 GitHub Releases 为准。
-- 2026-10-08 v0.4.1–v0.7.0：轻提示窗口、大区域跳过 OCR 放大重试、
-  模型下拉自动拉取（自定义下拉，分「服务端返回 / 预设推荐」两组）、
-  服务页默认进提供商选择、关于页、热键自占用修复。
-- 2026-10-09 v0.8.0：取词 / OCR / 写回三处修复，界面整理，关于页更新与关闭行为。
-- 2026-10-09 v0.8.1：移除输入框转译（Alt+T），窗口 × 改为询问「直接关闭 / 收进托盘」，
-  修复截图第二张仍是旧图。
-- 2026-10-09 v0.9.0：截图识别改用本地 PaddleOCR（回落系统 OCR）、更新下载修复、
-  「测试连接」改为真实跑一次翻译、采用 MIT 许可；交给 ort 前先探一次 DLL 可加载性。
-- 2026-10-09 v0.9.1：结果面板移除「原图覆盖」入口，只留原文与译文。
-- 2026-10-13 v0.9.2：更新下载进度只增不减、断线重试停在高水位；
-  发布 CI 显式覆盖同名资产。
-- 2026-10-14 设计稿 v0.8：`design/ui-mockup.html` 与 v0.9.2 实现逐节对齐
-  （系统标题栏、设置页签结构、token 实值、窗口参数、移除功能清场）。
-  期间发现并修复 CSS 注释含 `*/` 导致 `:root` 整体失效、设计稿渲染全白的问题，
-  并确立规范：CSS 注释禁 `*/`、版式改动必须渲染截图验收（已录入 AGENTS.md）。
-- 2026-10-14 新增 `design/ui-redesign.html` v1.0 重设计提案（工作台布局：
-  翻译 / 历史 / 设置一级页签、服务识别色条、历史日期分组；未实现）。
-- 2026-10-14 新增 `AGENTS.md` 开发规范；本文件全面更新至 v0.9.2 现状。

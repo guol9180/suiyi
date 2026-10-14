@@ -1,6 +1,10 @@
 # 随译 SuiYi
 
-Windows 桌面翻译工具。三个入口：划词、截图、输入框。翻译请求发给你自己的服务。
+Windows 桌面 AI 翻译工具。两个全局入口：划词翻译（`Alt+D`）与截图识别（`Alt+S`），
+主窗口里也可以手动输入翻译；翻译请求发给你自己配置的服务。
+
+> 文档分工：项目概览与使用看本文件；开发计划与验收标准看 [DEVELOP_PLAN.md](./DEVELOP_PLAN.md)；
+> 开发规范看 [AGENTS.md](./AGENTS.md)。
 
 ## 下载
 
@@ -60,11 +64,12 @@ Prompt 模板支持 `{{from}}` `{{to}}` `{{text}}` 变量，可调 Temperature�
 框选常常只框一行，细长条图对检测模型并不友好，多读一圈上下文更稳，带进来的邻行
 不会混进译文。模型缺失或加载失败时自动回落到 Windows 自带的 OCR，功能不会整个不可用。
 
-**朗读**：用 Windows 自带语音合成朗读译文，离线、不消耗翻译额度。
+**朗读**：用 Windows 自带语音合成朗读译文，音色与语速在设置 → 语音合成 里选，
+离线、不消耗翻译额度。
 
-**历史记录**：每次翻译按来源（划词 / 截图 / 手输 / 输入框）入库，可搜索、按来源筛选、删除与清空。
+**历史记录**：每次翻译按来源（划词 / 截图 / 手动输入）入库，可搜索、按来源筛选、删除与清空。
 失败的记录也会留下并带失败原因。保留最近 2000 条。
-（输入框转译已在 v0.8.1 移除，历史里旧的「输入框」记录仍会展示。）
+（输入框转译已在 v0.8.1 移除，历史里旧的「输入框」来源记录仍会展示。）
 
 **插件**：把一个目录放进插件文件夹就能加插件，分翻译、OCR、语音、动作四类，跑在 QuickJS 沙箱里。
 翻译类插件通过校验并启用后会自动出现在服务列表里参与并发对比。
@@ -72,7 +77,8 @@ Prompt 模板支持 `{{from}}` `{{to}}` `{{text}}` 变量，可调 Temperature�
 ## 快速开始
 
 1. 安装后启动。Windows 11 自带 WebView2；Windows 10 若提示缺失，装一次 WebView2 运行时。
-2. 打开「设置 → 服务配置」，点「添加服务」，协议选 OpenAI 兼容，填 Base URL、API Key 和模型名。
+2. 打开「设置 → 服务配置」，点「添加服务」：选内置提供商会自动填好地址、协议与推荐模型；
+   其他 OpenAI 兼容端点也可以手填 Base URL、API Key 和模型名。
 3. 点「测试连接」确认配置无误。
 4. 在任意应用里选中文字按 `Alt+D` 试用。
 
@@ -84,22 +90,14 @@ API Key 只写进 Windows 凭据管理器，配置文件里零明文。
 
 Windows 10 1809 及以上，x64。需要 WebView2 运行时（Windows 11 自带）。
 
-## 常见问题
-
-**升级后桌面/任务栏还是旧图标？** 安装包里的图标是新的（可以从 exe 属性里看），
-Windows 只是把图标缓存了起来。安装程序装完会自动跑一次 `ie4uinit.exe -show` 并广播
-`SHChangeNotify`，新装或升级后一般直接就是新图标；如果还显示旧的，
-说明是这次安装之前留下的缓存，手动做一次即可：先跑 `ie4uinit.exe -show`，
-仍不生效就重启资源管理器（任务管理器 → Windows 资源管理器 → 重新启动）。
-任务栏上「已钉住」的那一项由注册表缓存，程序改不了，取消固定再钉一次就好。
-
 ## 从源码构建
 
 需要 Node 18 以上、pnpm、Rust stable（MSVC 工具链）。
 
 ```bash
 pnpm install
-pnpm tauri dev      # 开发调试
+pnpm tauri dev      # 整体开发调试
+pnpm dev            # 只起前端（端口 1420）
 pnpm tauri build    # 打包安装程序
 pnpm build          # 只构建前端（tsc + vite）
 ```
@@ -108,7 +106,7 @@ pnpm build          # 只构建前端（tsc + vite）
 改了 `design/brand/logo.svg` 之后跑一次：
 
 ```bash
-node design/brand/build.mjs   # 需要本机装有 Edge（用它把 SVG 渲成位图）
+node design/brand/build.mjs   # 需要本机装有 Edge（用它把 SVG 渲染成位图）
 ```
 
 后端检查与测试在 `src-tauri` 下执行：
@@ -138,29 +136,14 @@ pnpm ocr:check      # 只校验，不下载
 ```
 suiyi/
 ├─ docs/                  下载页（GitHub Pages 从这里发布）
-├─ design/                界面设计基线，单文件 HTML
-├─ src/                   前端：React + TypeScript
-│  ├─ pages/              翻译页、设置页、划词弹窗、截图覆盖层
-│  ├─ components/         图标、词典卡等共用组件
-│  └─ styles/             tokens.css（设计变量）与 base.css（基础组件）
-├─ src-tauri/src/         后端：Rust
-│  ├─ config.rs           services.json 读写
-│  ├─ keyring.rs          API Key 存取
-│  ├─ translator.rs       OpenAI 兼容适配器与 SSE 流式
-│  ├─ selection.rs        Alt+D 取词与光标处弹窗
-│  ├─ screenshot.rs       Alt+S 冻结帧、框选与 OCR
-│  ├─ tray.rs             系统托盘图标与菜单（右下角常驻入口）
-│  ├─ notice.rs           光标旁的轻提示窗口（不抢焦点）
-│  ├─ update.rs           检查更新、下载安装包、拉起安装向导
-│  ├─ speech.rs           本地语音朗读
-│  ├─ history.rs          翻译历史（SQLite）
-│  ├─ anki.rs             生词本（AnkiConnect）
-│  ├─ plugin.rs           插件清单与发现
-│  ├─ plugin_js.rs        插件沙箱（QuickJS）
-│  └─ commands.rs         命令层，前后端唯一通道
-├─ .github/workflows/     发布与下载页的 CI
-└─ DEVELOP_PLAN.md        开发计划与验收标准
+├─ design/                界面设计稿：ui-mockup.html（基线）与 ui-redesign.html（v1.0 提案，未实现）
+├─ src/                   前端：React + TypeScript（页面、组件、样式）
+├─ src-tauri/             后端：Rust（Tauri 命令层与业务内核）
+├─ scripts/               构建辅助脚本（OCR 模型拉取）
+└─ .github/workflows/     发布与下载页的 CI
 ```
+
+逐文件的职责说明见 [DEVELOP_PLAN.md](./DEVELOP_PLAN.md) 的「目录结构」。
 
 ## 技术栈
 
@@ -168,11 +151,11 @@ suiyi/
 |---|---|
 | 应用框架 | Tauri 2 |
 | 后端 | Rust（stable，MSVC） |
-| 前端 | Vite + React + TypeScript |
+| 前端 | Vite + React 19 + TypeScript |
+| 配置存储 | services.json + keyring（API Key 只进系统凭据管理器） |
 | 网络 | reqwest（SSE 流式） |
-| 密钥存储 | keyring（系统凭据管理器） |
 | 取词与按键 | arboard、SendInput |
-| 截屏与 OCR | GDI BitBlt、Windows.Media.OCR |
+| 截屏与 OCR | GDI BitBlt + PaddleOCR（回落 Windows.Media.OCR） |
 | 语音 | Windows.Media.SpeechSynthesis |
 | 历史 | rusqlite（bundled SQLite，WAL） |
 | 插件沙箱 | rquickjs（QuickJS） |
@@ -184,7 +167,7 @@ suiyi/
 - 只在 Windows 上构建与验证过；macOS 与 Linux 尚未实现，代码里只有「当前平台不支持」的提示。
 - OCR 用的是 PP-OCRv4 mobile 的中英文模型：中英混排与常见符号够用，手写体、
   竖排与极小字号仍然会错；模型缺失时回落到 Windows 自带 OCR，那种情况下识别质量会明显下降。
-- 朗读用系统语音，音色一般，还没有语速与音色选择。
+- 朗读用系统自带语音，音色取决于系统装了哪些语音包。
 - 插件不能联网，只能读写剪贴板（需要申请权限）。
 - 热键默认是 Alt+D / Alt+S，可以在设置里改；录制时至少要带一个修饰键。
 - 截图识别会冻结所有显示器，可在任意一块屏起框、跨屏拖选；混合 DPI（两块屏缩放不同）时，
@@ -192,8 +175,10 @@ suiyi/
 
 ## 相关文档
 
-- [DEVELOP_PLAN.md](./DEVELOP_PLAN.md)：里程碑、验收标准与开发日志
-- [design/ui-mockup.html](./design/ui-mockup.html)：界面设计基线（单文件，浏览器直接打开）
+- [DEVELOP_PLAN.md](./DEVELOP_PLAN.md)：开发计划与验收标准
+- [AGENTS.md](./AGENTS.md)：开发规范（动手改代码前先读）
+- [design/ui-mockup.html](./design/ui-mockup.html)：界面设计基线，与实现逐字对齐（单文件，浏览器直接打开）
+- [design/ui-redesign.html](./design/ui-redesign.html)：v1.0 重设计提案，未实现，勿当现状引用
 - [docs/index.html](./docs/index.html)：下载页源码
 
 ## 许可

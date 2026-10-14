@@ -1,29 +1,20 @@
 # AGENTS.md · 随译 SuiYi 开发规范
 
-> 本文件是开发规范，不是问题台账。动手前先读；里程碑与验收标准见 `DEVELOP_PLAN.md`。
+> 本文件是开发规范，不是问题台账。动手前先读；项目概览见 `README.md`，里程碑与验收标准见 `DEVELOP_PLAN.md`。
 
 ## 项目
 
 Windows 桌面 AI 翻译工具：划词翻译（Alt+D）+ 截图识别（Alt+S），多 AI 服务并发对比。
-Tauri 2 + Rust 后端 + React 19 + TypeScript + Vite 8。版本号以 `package.json` 为准。
+技术栈、目录结构与产品行为见 `README.md`；开发计划与验收标准见 `DEVELOP_PLAN.md`。
 
 ## 常用命令
 
-```bash
-pnpm install            # 依赖（registry 走 npmmirror）
-pnpm dev                # 前端开发（端口 1420）
-pnpm tauri dev          # 整体开发调试
-pnpm build              # tsc + vite 前端构建
-pnpm ocr:assets         # 拉取 OCR 模型到 src-tauri/ocr/（模型不入库，打 Tauri 包前必须执行）
-pnpm tauri build        # 打包安装程序
-cd src-tauri && cargo test   # 后端测试
-```
-
-发版：打 `v*` 标签触发 `.github/workflows/release.yml`（测试 → 构建 → 签名 → 发布 → 刷新下载页）。
+构建、测试、OCR 资产与发版命令统一见 `README.md` 的「从源码构建」，此处不重复；
+本机环境的调用限制见下节。
 
 ## 环境注意
 
-- pnpm 一律用 `pnpm.cmd` 调用；`pnpm.ps1` 会被本机执行策略拦截。
+- pnpm 一律用 `pnpm.cmd` 调用；`pnpm.ps1` 会被本机执行策略拦截；registry 走 npmmirror。
 - 代理沙箱内只用文件工具改源码；写 `node_modules`、`target`、`.git` 的命令（pnpm / cargo / git）在无沙箱限制的终端执行。
 
 ## 硬性规范
@@ -35,10 +26,14 @@ cd src-tauri && cargo test   # 后端测试
 5. 版式或结构改动后：先做 div/section 开闭配平计数，再整页渲染截图逐节目检；只读代码不算验证。
 6. 批量替换之后，必须对被替换内容做全局 grep 复查。
 7. 一次提交只做一件事，提交信息用中文写清范围。
+8. 每次开发结束或提交之前，同步更新三份文档：`README.md`（产品行为、构建与已知限制）、
+   `DEVELOP_PLAN.md`（计划、验收标准与环境现状）、`AGENTS.md`（规范与行为约定）；
+   内容按归属写入对应文件，不在多处重复维护。
 
 ## 界面与设计规范
 
-- 视觉真源是 `src/styles/tokens.css`；品牌蓝 #3964FE 只作按钮底，作文字用 #2B52E0（4.38:1 不达标）。
+- 视觉真源是 `src/styles/tokens.css`。品牌蓝 #3964FE 只作按钮底色，不作文字色——
+  它在页面底色上对比度约 4.4:1，不足 4.5:1；文字一律用 #2B52E0。
 - 热键教育只出现在两处：首次使用引导、热键被占用横幅。不进常驻工具栏、侧栏、右栏。
 - 输入框转译与截图原图覆盖已移除，界面与设计稿不得再出现；全局热键只有 Alt+D / Alt+S。
 - 设计稿两份，角色勿混淆：`design/ui-mockup.html` 与实现逐字对齐（改界面先对照）；`design/ui-redesign.html` 是未实现的重设计提案，不得当现状引用。
@@ -48,9 +43,10 @@ cd src-tauri && cargo test   # 后端测试
 
 - 「测试连接」= 用当前协议与模型真实跑一次翻译（消耗几十个 token），不是 /models 探测。
 - 历史记录在后端落库；前端关窗不影响完成与入库，前端不重复记。
-- 窗口清单：主窗 1024×700（最小 900×620，系统标题栏）、划词弹窗 430×540（无边框+Acrylic）、OCR 窗 460×600（无边框+Acrylic）、轻提示 420×66（不聚焦、鼠标穿透）。
+- 五个 WebView 入口：主窗 1024×700（最小 900×620，系统标题栏）、划词弹窗 430×540（无边框+Acrylic）、
+  全屏截图覆盖层（冻结所有显示器）、OCR 结果窗 460×600（无边框+Acrylic）、
+  轻提示 420×66（不聚焦、鼠标穿透）。
 - 设置 8 个页面都在主窗口「设置」页签内，不是独立窗口。
-- 数据目录 `%APPDATA%/com.suiyi.dev/`：`services.json`、`history.db`、`plugins/`。
 
 ## 依赖锁定
 
@@ -58,7 +54,5 @@ cd src-tauri && cargo test   # 后端测试
 
 ## 已知边界（不是 bug）
 
-- 仅支持 Windows 10 1809+ x64 + WebView2；macOS / Linux 未实现。
-- OCR 为 PP-OCRv4 中英文模型：手写体、竖排、极小字号会识别错误；模型缺失自动回落系统 OCR。
-- 插件无网络能力，仅 clipboard 权限。
-- 安装包未签名，首次运行有 SmartScreen 提示（SignPath 接入见 `docs/signing.md`）。
+仅 Windows 平台、OCR 极限场景、插件无网络、安装包未签名等既定边界，
+完整清单见 `README.md` 的「已知限制」——这些是设计取舍，不要当缺陷去修。
