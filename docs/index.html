@@ -21,6 +21,10 @@
  * 形状：6 / 10 / 14 三档。
  * 页头的品牌标直接用应用图标 img/icon.svg，和 exe、任务栏、favicon 是同一枚，
  * 不在这里另画一个方块：标记负责「这是随译」，蓝色只负责「这里可以点」。
+ *
+ * 界面演示不是截图：首屏与「界面」区的产品画面是按 design/ui-mockup.html（v0.8、
+ * 对齐 v0.9.2 实现）用 DOM 复刻的，文案与结构照抄基线稿。应用改版，这里跟着改；
+ * 任何 DPI 都清晰，深浅色随页面 token 自动切换。整块演示对读屏器按一张图宣布（role="img"）。
  */
 :root{
   /* 色雾：与应用 src/App.css 的 --wash-layers 同一组 */
@@ -57,6 +61,9 @@
   --warn:#9a6010;
   --warn-bg:#fbf3e2;
   --warn-line:#ecd9b4;
+  /* 演示里的状态色：文字档都按 4.5:1 挑的 */
+  --ok-ink:#1a7f37;   --ok-bg:#e9f7ee;   --ok-dot:#2f9e5f;
+  --err-ink:#b3261e;  --err-bg:#fdecea;  --err-dot:#d5453c;
   --r-s:6px;
   --r-m:10px;
   --r-l:14px;
@@ -103,6 +110,8 @@
     --warn:#e0b070;
     --warn-bg:#2a2113;
     --warn-line:#54431f;
+    --ok-ink:#58c98b;   --ok-bg:#12291c;   --ok-dot:#3fb975;
+    --err-ink:#ff8f8a;  --err-bg:#3a1512;  --err-dot:#f2756c;
     --shadow-card:0 10px 26px rgba(0,0,0,.34);
     --shadow-shot:0 14px 34px rgba(0,0,0,.44);
   }
@@ -146,10 +155,10 @@ img{display:block;max-width:100%;height:auto}
 .bar nav a{color:var(--ink-2)}
 .bar nav a:hover{color:var(--ink)}
 
-/* ============ 首屏：左文右图，全页只有这一处非对称 ============ */
+/* ============ 首屏：左文右演，全页只有这一处非对称 ============ */
 .hero{
   display:grid;grid-template-columns:minmax(0,1.06fr) minmax(0,.94fr);
-  gap:64px;align-items:center;padding:56px 0 52px;
+  gap:56px;align-items:center;padding:56px 0 52px;
 }
 h1{font-size:var(--t-display);line-height:1.25;font-weight:600;letter-spacing:-.4px}
 .lead{margin-top:16px;max-width:26em;font-size:var(--t-lead);line-height:1.8;color:var(--ink-2)}
@@ -168,12 +177,193 @@ h1{font-size:var(--t-display);line-height:1.25;font-weight:600;letter-spacing:-.
 .alt a{color:var(--ink-2);text-decoration:underline;text-decoration-color:var(--underline);text-underline-offset:3px}
 .alt a:hover{color:var(--link-hover);text-decoration-color:currentColor}
 
-.shot{
-  width:100%;max-width:430px;justify-self:end;
-  background:var(--glass);border:1px solid var(--glass-edge);
-  backdrop-filter:var(--glass-blur);-webkit-backdrop-filter:var(--glass-blur);
-  border-radius:var(--r-l);box-shadow:var(--shadow-shot);
+/* ============ 产品演示（DOM 复刻）公共件 ============ */
+/* 假按钮一律用 span：演示不进键盘焦点链，读屏器整块按一张图宣布 */
+.demo-scene{position:relative;min-height:540px}
+.demo-ico{width:12px;height:12px;flex:none}
+.demo-ico.sm{width:10px;height:10px}
+
+.demo-chip{
+  display:inline-flex;align-items:center;gap:5px;padding:1px 8px;
+  border-radius:99px;font-size:11px;line-height:1.6;white-space:nowrap;
 }
+.demo-chip .dot{width:6px;height:6px;border-radius:50%;flex:none}
+.demo-chip.ok{background:var(--ok-bg);color:var(--ok-ink)}
+.demo-chip.ok .dot{background:var(--ok-dot)}
+.demo-chip.warn{background:var(--warn-bg);color:var(--warn)}
+.demo-chip.warn .dot{background:#d98a1f}
+.demo-chip.err{background:var(--err-bg);color:var(--err-ink)}
+.demo-chip.err .dot{background:var(--err-dot)}
+.demo-chip.plain{background:var(--surface-2);color:var(--ink-3);border:1px solid var(--line)}
+
+.demo-btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:5px;
+  height:24px;padding:0 10px;border-radius:var(--r-s);
+  border:1px solid var(--line);background:var(--surface);
+  font-size:11.5px;font-weight:500;color:var(--ink-2);white-space:nowrap;
+}
+.demo-btn.primary{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.demo-btn.ghost{border-color:transparent;background:transparent;color:var(--ink-3)}
+.demo-btn.icon{width:24px;padding:0}
+
+.demo-dot{width:6px;height:6px;border-radius:50%;background:var(--ok-dot);flex:none}
+.demo-dot.warn{background:#d98a1f}
+.demo-dot.err{background:var(--err-dot)}
+
+/* 首屏场景：背后一份「被划词的文档」，前面浮着弹窗 */
+.hero-demo{justify-self:end;width:100%;max-width:470px}
+.hero-demo .demo-doc{
+  width:100%;background:var(--surface);border:1px solid var(--line);
+  border-radius:var(--r-l);box-shadow:var(--shadow-card);overflow:hidden;
+}
+.hero-demo .docbar{
+  display:flex;align-items:center;gap:8px;height:34px;padding:0 14px;
+  border-bottom:1px solid var(--line-soft);font-size:11px;color:var(--ink-3);
+}
+.hero-demo .docbody{padding:16px 18px 18px}
+.hero-demo .docbody h3{font-size:13px;font-weight:600}
+.hero-demo .docmeta{margin-top:3px;font-size:11px;color:var(--ink-3)}
+.hero-demo .docbody p{margin-top:9px;font-size:12px;line-height:1.85;color:var(--ink-2)}
+.hero-demo mark{
+  background:var(--accent-soft);color:var(--ink);
+  border-bottom:1px solid var(--accent-line);padding:1px 2px;border-radius:3px;
+}
+
+/* 弹窗复刻：430 宽与真实窗口同尺寸 */
+.demo-pop{
+  position:absolute;right:-6px;top:150px;width:430px;
+  background:var(--glass-strong);border:1px solid var(--glass-edge);
+  backdrop-filter:var(--glass-blur);-webkit-backdrop-filter:var(--glass-blur);
+  border-radius:var(--r-l);box-shadow:var(--shadow-shot);overflow:hidden;
+  animation:pop-in .5s ease both;
+}
+@keyframes pop-in{from{opacity:0;transform:translateY(10px)}}
+.demo-pop .phead{display:flex;align-items:center;gap:8px;padding:10px 12px 8px}
+.demo-pop .phead .t{font-size:12px;font-weight:600}
+.demo-pop .phead .sp{flex:1}
+.demo-pop .phead .win-act{color:var(--ink-3);display:inline-flex;padding:2px}
+.demo-pop .phead .win-act.on{color:var(--accent)}
+.demo-pop .phead .win-act.x:hover{color:var(--err-ink)}
+.demo-lrow{
+  display:flex;align-items:center;gap:8px;padding:8px 12px;
+  border-top:1px solid var(--line-soft);border-bottom:1px solid var(--line-soft);
+}
+.demo-lsel{
+  display:inline-flex;align-items:center;justify-content:space-between;gap:6px;
+  width:104px;height:28px;padding:0 8px;
+  border:1px solid var(--line);border-radius:var(--r-s);
+  background:var(--surface);font-size:12px;color:var(--ink-2);
+}
+.demo-lsel .demo-ico{color:var(--ink-3)}
+.demo-swap{
+  display:inline-flex;align-items:center;justify-content:center;
+  width:24px;height:24px;border-radius:50%;color:var(--ink-3);
+  border:1px solid var(--line);background:var(--surface);
+}
+.demo-psrc{padding:10px 12px 2px}
+.demo-psrc .lab{font-size:11px;color:var(--ink-3)}
+.demo-psrc .txt{
+  margin-top:4px;font-size:12px;line-height:1.75;color:var(--ink-2);
+  border-left:2px solid var(--line);padding-left:9px;
+}
+.demo-cards{display:grid;gap:8px;padding:10px 12px}
+.demo-card{
+  background:var(--surface);border:1px solid var(--line);
+  border-radius:var(--r-m);padding:10px 12px;
+}
+.demo-card .rh{display:flex;align-items:center;gap:7px;font-size:11px;color:var(--ink-3);margin-bottom:5px}
+.demo-card .rh .n{font-weight:600;color:var(--ink-2)}
+.demo-card .rh .sp{flex:1}
+.demo-card .rt{font-size:13px;line-height:1.8;color:var(--ink)}
+.demo-card.err{border-color:var(--err-bg);background:var(--err-bg)}
+.demo-card.err .rt{color:var(--err-ink);font-size:12px}
+.demo-pact{
+  display:flex;align-items:center;gap:6px;padding:9px 12px;
+  border-top:1px solid var(--line-soft);
+}
+.demo-pact .sp{flex:1}
+.demo-pstat{display:flex;align-items:center;gap:6px;padding:0 12px 10px;font-size:11px;color:var(--ink-3)}
+.caret{
+  display:inline-block;width:2px;height:.95em;margin-left:2px;vertical-align:-2px;
+  background:var(--accent);animation:caret 1s steps(2) infinite;
+}
+@keyframes caret{50%{opacity:0}}
+
+/* 窗口级复刻（「界面」区）：系统标题栏 + 页签 + 内容 */
+.demo-win{
+  background:var(--wash-base);border:1px solid var(--line);
+  border-radius:var(--r-l);box-shadow:var(--shadow-card);overflow:hidden;
+}
+.demo-sysbar{
+  display:flex;align-items:center;gap:8px;height:32px;padding-left:12px;
+  background:var(--surface-2);border-bottom:1px solid var(--line-soft);
+  font-size:12px;color:var(--ink-3);
+}
+.demo-sysbar .logo{width:16px;height:16px;flex:none}
+.demo-sysbar .sp{flex:1}
+.demo-sysbar .sysbtn{width:40px;height:32px;display:inline-flex;align-items:center;justify-content:center;color:var(--ink-3)}
+.demo-sysbar .sysbtn.cls:hover{background:#c42b1c;color:#fff}
+.demo-tabbar{display:flex;gap:2px;padding:6px 12px 0;background:var(--surface-2);border-bottom:1px solid var(--line-soft)}
+.demo-tabbar span{padding:7px 15px;font-size:12.5px;color:var(--ink-3);border-bottom:2px solid transparent}
+.demo-tabbar span.on{color:var(--accent-hover);border-color:var(--accent);font-weight:600}
+.demo-body{padding:16px 18px;display:grid;gap:10px}
+.demo-rowlab{font-size:11px;color:var(--ink-3)}
+.demo-langrow{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.demo-langrow .sp{flex:1}
+.demo-ta{
+  border:1px solid var(--line);border-radius:var(--r-m);background:var(--surface);
+  padding:11px 12px;font-size:13px;line-height:1.7;color:var(--ink);min-height:76px;
+}
+.demo-act{display:flex;align-items:center;gap:8px}
+.demo-act .big{height:32px;padding:0 22px;font-size:13px;border-radius:var(--r-m)}
+.demo-act .hint{margin-left:6px;font-size:11px;color:var(--ink-3)}
+.demo-rmeta{margin-top:5px;font-size:11px;color:var(--ink-3)}
+
+/* 设置页复刻 */
+.demo-set{display:grid;grid-template-columns:172px minmax(0,1fr);min-height:470px}
+.demo-side{background:var(--surface-2);border-right:1px solid var(--line-soft);padding:10px 8px;display:flex;flex-direction:column}
+.demo-side .it{padding:7px 12px;border-radius:var(--r-s);font-size:12.5px;color:var(--ink-2)}
+.demo-side .it.on{background:var(--accent-soft);color:var(--accent-hover);font-weight:600}
+.demo-side .ft{margin-top:auto;padding:8px 12px;font-size:11px;color:var(--ink-3)}
+.demo-setmain{padding:14px;display:grid;gap:12px;align-content:start}
+.demo-panes{display:grid;grid-template-columns:minmax(0,.92fr) minmax(0,1.08fr);gap:12px;align-items:start}
+.demo-pane{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-m);padding:12px;display:grid;grid-template-columns:minmax(0,1fr);gap:9px}
+.demo-pane .phead{display:flex;align-items:center;gap:8px}
+.demo-pane .phead .t{font-size:12.5px;font-weight:600}
+.demo-pane .phead .m{font-size:11px;color:var(--ink-3)}
+.demo-pane .phead .sp{flex:1}
+.demo-svc{display:flex;align-items:center;gap:9px;border:1.5px solid var(--line);border-radius:var(--r-s);padding:8px 10px}
+.demo-svc.on{border-color:var(--accent-line);background:var(--accent-soft)}
+.demo-svc .nm{flex:1;min-width:0}
+.demo-svc .nm .n{display:block;font-size:12.5px;font-weight:600}
+.demo-svc .nm .m{font-size:11px;color:var(--ink-3)}
+.demo-tgl{width:28px;height:16px;border-radius:99px;background:var(--accent);position:relative;flex:none}
+.demo-tgl::after{content:"";position:absolute;top:2px;right:2px;width:12px;height:12px;border-radius:50%;background:#fff}
+.demo-tgl.off{background:var(--line)}
+.demo-tgl.off::after{right:auto;left:2px}
+.demo-f{display:grid;grid-template-columns:minmax(0,1fr);gap:3px}
+.demo-f label{font-size:11px;color:var(--ink-3)}
+.demo-inp{
+  display:flex;align-items:center;justify-content:space-between;gap:6px;
+  height:28px;padding:0 9px;border:1px solid var(--line);border-radius:var(--r-s);
+  background:var(--surface);font-size:12px;color:var(--ink);
+}
+.demo-inp.mono{font-family:var(--mono);font-size:11.5px}
+.demo-inp.ghost{color:var(--ink-3)}
+.demo-inp .ellip{flex:1 1 0;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.demo-row2{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.demo-testbox{
+  border:1px dashed var(--accent-line);background:var(--accent-soft);
+  border-radius:var(--r-s);padding:9px 10px;
+  display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+}
+.demo-testbox .cap{font-size:11px;color:var(--ink-2)}
+.demo-seg{display:flex;border:1px solid var(--line);border-radius:var(--r-s);overflow:hidden;font-size:11.5px}
+.demo-seg span{flex:1;text-align:center;padding:5px 0;color:var(--ink-3);background:var(--surface)}
+.demo-seg span.on{background:var(--accent-soft);color:var(--accent-hover);font-weight:600}
+.demo-formfoot{display:flex;align-items:center;gap:8px;border-top:1px solid var(--line-soft);padding-top:10px}
+.demo-formfoot .cap{margin-left:auto;display:inline-flex;align-items:center;gap:5px;font-size:11px;color:var(--ink-3)}
+.demo-2col{display:grid;grid-template-columns:1fr 1fr;gap:9px;align-items:center}
 
 /* ============ 事实带：首屏下面一条，四条事实各占一格，不用分隔符串起来 ============ */
 .facts{
@@ -202,12 +392,8 @@ kbd{
 .entry h3{font-size:var(--t-h3);font-weight:600}
 .entry p{margin-top:5px;max-width:38em;color:var(--ink-2)}
 
-/* 界面：真实截图，说明放在图外 */
+/* 界面：DOM 复刻窗口，说明放在图外 */
 .figs{margin-top:26px;display:grid;gap:40px}
-figure img{
-  width:100%;background:var(--glass);border:1px solid var(--glass-edge);
-  border-radius:var(--r-l);box-shadow:var(--shadow-card);
-}
 figcaption{margin-top:12px;max-width:46em;font-size:var(--t-sub);color:var(--ink-3)}
 .code{
   font-family:var(--mono);font-size:var(--t-meta);color:var(--ink-2);
@@ -234,7 +420,7 @@ figcaption{margin-top:12px;max-width:46em;font-size:var(--t-sub);color:var(--ink
 .step h3{font-size:var(--t-h3);font-weight:600}
 .step p{margin-top:4px;color:var(--ink-2)}
 
-/* 已知限制：六条并排，不用圆点，也不逐行画线 */
+/* 已知限制：几条并排，不用圆点，也不逐行画线 */
 .limits{margin-top:24px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:24px 48px}
 .limits p{color:var(--ink-2)}
 
@@ -261,10 +447,16 @@ footer a:hover{color:var(--link-hover)}
 /* ============ 窄屏 ============ */
 @media (max-width:920px){
   .hero{grid-template-columns:1fr;gap:40px;padding:40px 0 40px}
-  .shot{justify-self:start}
+  .hero-demo{justify-self:start}
+  .hero-demo .demo-doc{width:100%}
+  .demo-pop{position:static;margin:-34px 0 0 auto}
   .facts{grid-template-columns:repeat(2,minmax(0,1fr));gap:20px 24px}
   .entry{grid-template-columns:1fr;gap:10px}
   .limits{grid-template-columns:1fr;gap:18px}
+  .demo-panes{grid-template-columns:1fr}
+  .demo-set{grid-template-columns:1fr}
+  .demo-side{flex-direction:row;flex-wrap:wrap;border-right:none;border-bottom:1px solid var(--line-soft)}
+  .demo-side .ft{display:none}
   section{padding:52px 0 0}
   .wrap,.bar .in,footer .in{padding-left:22px;padding-right:22px}
 }
@@ -275,6 +467,8 @@ footer a:hover{color:var(--link-hover)}
   .hero{padding:28px 0 32px;gap:32px}
   .facts{grid-template-columns:1fr;gap:14px}
   .cta{gap:14px}
+  .demo-pop{width:100%;right:auto}
+  .demo-row2,.demo-2col{grid-template-columns:1fr}
   section{padding:44px 0 0}
 }
 @media (prefers-reduced-motion:reduce){
@@ -283,6 +477,22 @@ footer a:hover{color:var(--link-hover)}
 </style>
 </head>
 <body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <symbol id="i-chev" viewBox="0 0 10 10"><path d="M2 3.5l3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-swap" viewBox="0 0 12 12"><path d="M3.2 4.5h5.6M7 2.7l1.8 1.8L7 6.3M8.8 8.5H3.2M5 10.3L3.2 8.5 5 6.7" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 12 12"><rect x="4" y="4" width="6.5" height="6.5" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.2"/><path d="M8 4V3a1.5 1.5 0 0 0-1.5-1.5H3A1.5 1.5 0 0 0 1.5 3v3.5A1.5 1.5 0 0 0 3 8h1" fill="none" stroke="currentColor" stroke-width="1.2"/></symbol>
+  <symbol id="i-grip" viewBox="0 0 12 12"><circle cx="4" cy="3" r="1" fill="currentColor"/><circle cx="8" cy="3" r="1" fill="currentColor"/><circle cx="4" cy="6" r="1" fill="currentColor"/><circle cx="8" cy="6" r="1" fill="currentColor"/><circle cx="4" cy="9" r="1" fill="currentColor"/><circle cx="8" cy="9" r="1" fill="currentColor"/></symbol>
+  <symbol id="i-pin" viewBox="0 0 12 12"><path d="M7.5 1.5l3 3-1.6.4-2 2 .2 2.4-1.4-1.4L3 10.6l1.7-2.7L3.3 6.5l2.4.2 2-2 .4-1.6z" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linejoin="round"/></symbol>
+  <symbol id="i-bolt" viewBox="0 0 12 12"><path d="M6.8 1L2.5 7h3l-.8 4L9.5 5h-3l.3-4z" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linejoin="round"/></symbol>
+  <symbol id="i-check" viewBox="0 0 12 12"><path d="M2 6.4l2.6 2.6L10 3.5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 12 12"><path d="M6 2v8M2 6h8" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 12 12"><path d="M10 6a4 4 0 1 1-1.2-2.8M10 1.5v2.3H7.7" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 12 12"><rect x="2.5" y="5" width="7" height="5" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.2"/><path d="M4.2 5V3.8a1.8 1.8 0 0 1 3.6 0V5" fill="none" stroke="currentColor" stroke-width="1.2"/></symbol>
+  <symbol id="i-min" viewBox="0 0 10 10"><path d="M1 5h8" stroke="currentColor" stroke-width="1"/></symbol>
+  <symbol id="i-max" viewBox="0 0 10 10"><rect x="1.5" y="1.5" width="7" height="7" rx="1" fill="none" stroke="currentColor" stroke-width="1"/></symbol>
+  <symbol id="i-x" viewBox="0 0 10 10"><path d="M1.5 1.5l7 7M8.5 1.5l-7 7" stroke="currentColor" stroke-width="1"/></symbol>
+</defs></svg>
 
 <header class="bar">
   <div class="in">
@@ -317,14 +527,64 @@ footer a:hover{color:var(--link-hover)}
         </span>
       </div>
     </div>
-    <img class="shot" src="img/shot-popup.png" width="430" height="540"
-         alt="划词翻译弹窗：原文在上，ZAI 与 DeepSeek 两个服务的译文并排在下">
+
+    <div class="hero-demo">
+      <div class="demo-scene" role="img"
+           aria-label="划词翻译演示：在阅读器里选中一句英文，划词弹窗里 ZAI 与 DeepSeek 两路译文并排流出，可复制、可替换原文">
+        <div class="demo-doc" aria-hidden="true">
+          <div class="docbar">Transformer Architectures Revisited · 阅读器</div>
+          <div class="docbody">
+            <h3>Transformer Architectures Revisited</h3>
+            <div class="docmeta">Understanding Transformers · arXiv 摘要 · 建议阅读 22 分钟</div>
+            <p>尽管取得了成功，<mark>transformers still struggle with long-context reasoning and efficient retrieval</mark>。为验证这一点，我们控制了上下文长度、检索粒度与缓存策略。</p>
+            <p>Transformer 模型已经成为大多数语言与视觉任务的标准骨干，缩放定律预测性能还会随规模继续增长。</p>
+          </div>
+        </div>
+        <div class="demo-pop" aria-hidden="true">
+          <div class="phead">
+            <svg class="demo-ico sm" style="color:var(--ink-3)"><use href="#i-grip"/></svg>
+            <span class="t">划词翻译</span>
+            <span class="sp"></span>
+            <span class="win-act on"><svg class="demo-ico sm"><use href="#i-pin"/></svg></span>
+            <span class="win-act x"><svg class="demo-ico sm"><use href="#i-x"/></svg></span>
+          </div>
+          <div class="demo-lrow">
+            <span class="demo-lsel">自动检测<svg class="demo-ico sm"><use href="#i-chev"/></svg></span>
+            <span class="demo-swap"><svg class="demo-ico sm"><use href="#i-swap"/></svg></span>
+            <span class="demo-lsel">简体中文<svg class="demo-ico sm"><use href="#i-chev"/></svg></span>
+            <span style="flex:1"></span>
+            <span class="demo-chip ok"><span class="dot"></span>2 服务并发</span>
+          </div>
+          <div class="demo-psrc">
+            <div class="lab">原文</div>
+            <div class="txt">Despite their success, transformers still struggle with long-context reasoning and efficient retrieval.</div>
+          </div>
+          <div class="demo-cards">
+            <div class="demo-card">
+              <div class="rh"><span class="demo-dot"></span><span class="n">ZAI</span><span>1.8s</span><span class="sp"></span><span class="demo-btn icon"><svg class="demo-ico sm"><use href="#i-copy"/></svg></span></div>
+              <div class="rt">尽管取得了成功，Transformer 在长上下文推理和高效检索方面仍然存在困难。</div>
+            </div>
+            <div class="demo-card">
+              <div class="rh"><span class="demo-dot"></span><span class="n">DeepSeek</span><span>流式生成中…</span><span class="sp"></span></div>
+              <div class="rt">虽然成果显著，Transformer 依然难以进行长上下文推理与高效<span class="caret"></span></div>
+            </div>
+          </div>
+          <div class="demo-pact">
+            <span class="demo-btn primary"><svg class="demo-ico sm"><use href="#i-copy"/></svg>复制</span>
+            <span class="demo-btn"><svg class="demo-ico sm"><use href="#i-swap"/></svg>替换原文</span>
+            <span class="sp"></span>
+            <span class="demo-btn">更多</span>
+          </div>
+          <div class="demo-pstat"><span class="demo-dot"></span>就绪，Esc 关闭，拖动标题栏移动</div>
+        </div>
+      </div>
+    </div>
   </section>
 
   <dl class="facts">
     <div><dt>系统</dt><dd>Windows 10 1809 以上，64 位</dd></div>
     <div><dt>安装包</dt><dd>约 22 MB，未签名</dd></div>
-        <div><dt>版本</dt><dd>v0.9.2</dd></div>
+    <div><dt>版本</dt><dd>v0.9.2</dd></div>
     <div><dt>翻译服务</dt><dd>自备 API Key，兼容 OpenAI 协议</dd></div>
   </dl>
 
@@ -343,7 +603,7 @@ footer a:hover{color:var(--link-hover)}
         <div class="keys"><kbd>Alt</kbd><span class="plus">+</span><kbd>S</kbd></div>
         <div>
           <h3>截图识别</h3>
-          <p>冻结鼠标所在的那块屏幕，拖动框选后在本机识别文字，图片不上传。只框一块屏，不支持跨屏拖选。</p>
+          <p>所有显示器一起冻结，在任意一块屏起框、跨屏拖选；文字在本机识别，图片不上传。没框到文字时有重试出口。</p>
         </div>
       </div>
       <div class="entry">
@@ -358,20 +618,122 @@ footer a:hover{color:var(--link-hover)}
 
   <section id="shots">
     <h2>界面</h2>
+    <p class="sub">下面的窗口不是截图，是和界面同步维护的代码复刻——应用更新，这里跟着更新。</p>
     <div class="figs">
+
       <figure>
-        <img src="img/shot-translate.png" width="1024" height="470" loading="lazy" decoding="async"
-             alt="主窗口翻译页：同一句原文下，ZAI 与 DeepSeek 各出一张结果卡">
-        <figcaption>启用多个服务时，一次翻译并发请求，每个服务各占一张结果卡，好坏对着看。</figcaption>
+        <div class="demo-win" role="img"
+             aria-label="主窗口翻译页：启用多个服务时一次翻译并发请求，每个服务各占一张结果卡，流式中、完成、失败三种状态同屏可见">
+        <div class="demo-sysbar" aria-hidden="true">
+          <svg class="logo" viewBox="0 0 16 16"><rect x="1" y="1" width="14" height="14" rx="4" fill="#3964FE"/><circle cx="8" cy="8" r="3" fill="#fff"/></svg>
+          <span>随译 SuiYi</span><span class="sp"></span>
+          <span class="sysbtn"><svg width="10" height="10"><use href="#i-min"/></svg></span>
+          <span class="sysbtn"><svg width="10" height="10"><use href="#i-max"/></svg></span>
+          <span class="sysbtn cls"><svg width="10" height="10"><use href="#i-x"/></svg></span>
+        </div>
+        <div class="demo-tabbar" aria-hidden="true"><span class="on">翻译</span><span>设置</span></div>
+        <div class="demo-body" aria-hidden="true">
+          <div>
+            <div class="demo-rowlab">翻译设置</div>
+            <div class="demo-langrow" style="margin-top:5px">
+              <span class="demo-lsel">自动检测<svg class="demo-ico sm"><use href="#i-chev"/></svg></span>
+              <span class="demo-swap"><svg class="demo-ico sm"><use href="#i-swap"/></svg></span>
+              <span class="demo-lsel">简体中文<svg class="demo-ico sm"><use href="#i-chev"/></svg></span>
+              <span class="sp"></span>
+              <span class="demo-chip warn"><span class="dot"></span>1 / 2 服务成功</span>
+              <span class="demo-btn"><svg class="demo-ico sm"><use href="#i-refresh"/></svg>刷新服务</span>
+            </div>
+          </div>
+          <div class="demo-ta">The quick brown fox jumps over the lazy dog.</div>
+          <div class="demo-act">
+            <span class="demo-btn primary big">翻 译</span>
+            <span class="demo-btn big">截图识别</span>
+            <span class="hint">Ctrl+Enter 翻译</span>
+          </div>
+          <div class="demo-card">
+            <div class="rh"><span class="demo-dot"></span><span class="n">ZAI</span><span>0.9s</span><span class="sp"></span><span class="demo-btn"><svg class="demo-ico sm"><use href="#i-copy"/></svg>复制</span></div>
+            <div class="rt">敏捷的棕色狐狸跳过了那只懒狗。</div>
+            <div class="demo-rmeta">输出 15 字</div>
+          </div>
+          <div class="demo-card">
+            <div class="rh"><span class="demo-dot"></span><span class="n">智谱 GLM</span><span>流式生成中…</span><span class="sp"></span></div>
+            <div class="rt">敏捷的棕色狐<span class="caret"></span></div>
+          </div>
+          <div class="demo-card err">
+            <div class="rh"><span class="demo-dot err"></span><span class="n">Gemini</span><span>1.2s</span><span class="sp"></span><span class="demo-btn">重试</span></div>
+            <div class="rt">请求太频繁，稍后再试</div>
+          </div>
+        </div>
+        </div>
+        <figcaption>启用多个服务时，一次翻译并发请求，每个服务各占一张结果卡；失败的服务单独提示、单独重试，不影响其他服务出结果。</figcaption>
       </figure>
+
       <figure>
-        <img src="img/shot-settings.png" width="1024" height="700" loading="lazy" decoding="async"
-             alt="设置页：左侧服务列表，右侧服务编辑表单，含测试连接按钮">
+        <div class="demo-win" role="img"
+             aria-label="设置页服务配置：左侧八个设置页面，右侧是服务列表与服务编辑表单，测试连接会用当前模型真实跑一次翻译">
+        <div class="demo-sysbar" aria-hidden="true">
+          <svg class="logo" viewBox="0 0 16 16"><rect x="1" y="1" width="14" height="14" rx="4" fill="#3964FE"/><circle cx="8" cy="8" r="3" fill="#fff"/></svg>
+          <span>随译 SuiYi</span><span class="sp"></span>
+          <span class="sysbtn"><svg width="10" height="10"><use href="#i-min"/></svg></span>
+          <span class="sysbtn"><svg width="10" height="10"><use href="#i-max"/></svg></span>
+          <span class="sysbtn cls"><svg width="10" height="10"><use href="#i-x"/></svg></span>
+        </div>
+        <div class="demo-tabbar" aria-hidden="true"><span>翻译</span><span class="on">设置</span></div>
+        <div class="demo-set" aria-hidden="true">
+          <div class="demo-side">
+            <span class="it">通用</span>
+            <span class="it">热键</span>
+            <span class="it on">服务配置</span>
+            <span class="it">历史记录</span>
+            <span class="it">生词本</span>
+            <span class="it">语音合成</span>
+            <span class="it">插件</span>
+            <span class="it">关于</span>
+            <span class="ft">随译 v0.9.2</span>
+          </div>
+          <div class="demo-setmain">
+            <div class="demo-panes">
+              <div class="demo-pane">
+                <div class="phead"><span class="t">翻译服务</span><span class="m">上下调整顺序</span><span class="sp"></span><span class="demo-btn primary"><svg class="demo-ico sm"><use href="#i-plus"/></svg>添加服务</span></div>
+                <div class="demo-svc on"><span class="demo-tgl"></span><span class="nm"><span class="n">ZAI</span><span class="m">glm-5.3-flash</span></span><span class="demo-chip ok"><span class="dot"></span>已启用</span></div>
+                <div class="demo-svc on"><span class="demo-tgl"></span><span class="nm"><span class="n">DeepSeek</span><span class="m">deepseek-flash</span></span><span class="demo-chip ok"><span class="dot"></span>已启用</span></div>
+                <div class="demo-svc"><span class="demo-tgl off"></span><span class="nm"><span class="n">智谱 GLM</span><span class="m">glm-4-flash</span></span><span class="demo-chip warn"><span class="dot"></span>上次失败 429</span></div>
+                <div class="demo-f"><label>内置提供商</label><div class="demo-inp ghost"><span class="ellip">DeepSeek、智谱、Kimi、阿里百炼、火山方舟、硅基流动、Ollama</span><svg class="demo-ico sm" style="color:var(--ink-3)"><use href="#i-chev"/></svg></div></div>
+              </div>
+              <div class="demo-pane">
+                <div class="phead"><span class="t">编辑服务：ZAI</span><span class="demo-chip plain">OpenAI 兼容</span><span class="sp"></span></div>
+                <div class="demo-row2">
+                  <div class="demo-f"><label>名称</label><div class="demo-inp">ZAI</div></div>
+                  <div class="demo-f"><label>协议</label><div class="demo-inp">OpenAI 兼容<svg class="demo-ico sm" style="color:var(--ink-3)"><use href="#i-chev"/></svg></div></div>                </div>
+                <div class="demo-f"><label>Base URL</label><div class="demo-inp mono">https://api.z.ai/api/paas/v4</div></div>
+                <div class="demo-f"><label>API Key（仅存于系统凭据管理器）</label><div class="demo-inp ghost">已保存，留空则不修改<span class="demo-chip ok"><span class="dot"></span>已保存</span></div></div>
+                <div class="demo-testbox">
+                  <span class="demo-btn"><svg class="demo-ico sm"><use href="#i-bolt"/></svg>测试连接</span>
+                  <span class="demo-chip ok"><svg class="demo-ico sm"><use href="#i-check"/></svg>模型可用</span>
+                  <span class="demo-chip plain">342ms</span>
+                  <span class="cap">已用它真实跑通一次翻译（消耗少量 token）</span>
+                </div>
+                <div class="demo-2col">
+                  <div class="demo-f"><label>模型（可手填）</label><div class="demo-inp mono">glm-5.3-flash</div></div>
+                  <div class="demo-f"><label>结果类型</label><div class="demo-seg"><span class="on">纯文本</span><span>词典结构</span></div></div>
+                </div>
+                <div class="demo-formfoot">
+                  <span class="demo-btn primary">保存并测试</span>
+                  <span class="demo-btn">仅保存</span>
+                  <span class="cap"><svg class="demo-ico sm"><use href="#i-lock"/></svg>密钥仅存于 Windows 凭据管理器</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        </div>
         <figcaption>
-          服务配置。填完点一次「测试连接」，它会请求 <span class="code">/models</span>，
-          告诉你 Key 是否有效、网关是否可达、模型在不在权限范围内。
+          服务配置。填完点一次「测试连接」，它会用当前协议与模型真实跑一次翻译——
+          Key 是否有效、网关是否可达、模型能不能用，一次全部验出来。
+          选内置提供商时，地址、协议与推荐模型会自动填好。
         </figcaption>
       </figure>
+
     </div>
   </section>
 
@@ -393,15 +755,15 @@ footer a:hover{color:var(--link-hover)}
         <div>
           <h3>配一个翻译服务</h3>
           <p>
-            设置 → 服务配置 → 添加服务，协议选 OpenAI 兼容，填 Base URL、API Key 和模型名。
-            DeepSeek、智谱、Kimi、Ollama 都能直连。
+            设置 → 服务配置 → 添加服务。选内置提供商会自动填好地址、协议与推荐模型，
+            DeepSeek、智谱、Kimi、Ollama 等都能直连；其他 OpenAI 兼容端点也可以手填。
           </p>
         </div>
       </div>
       <div class="step">
         <div>
           <h3>点「测试连接」确认</h3>
-          <p>确认 Key、网关与模型三件事都对，再开始用。</p>
+          <p>它会真实跑一次翻译，确认 Key、网关与模型三件事都对，再开始用。</p>
         </div>
       </div>
       <div class="step">
@@ -418,7 +780,7 @@ footer a:hover{color:var(--link-hover)}
     <div class="limits">
       <p>只在 Windows 上构建与验证过。macOS 和 Linux 尚未实现，界面上只会提示当前平台不支持。</p>
       <p>截图识别用内置的 PaddleOCR（PP-OCRv4 中英文模型）在本机完成，首次使用不需要联网。手写体、竖排文字与极小字号仍会出错。</p>
-      <p>朗读用系统自带语音，音色一般，也还没有语速和音色选择。</p>
+      <p>朗读用系统自带语音，音色与效果取决于系统装了哪些语音包。</p>
       <p>插件不能联网，只能读写剪贴板，且需要先申请权限。</p>
       <p>API Key 只写进 Windows 凭据管理器，配置文件里零明文。</p>
     </div>
@@ -445,7 +807,7 @@ pnpm tauri build    # 打包安装程序</code></pre>
     <a href="https://github.com/guol9180/suiyi">源码</a>
     <a href="https://github.com/guol9180/suiyi/issues">反馈</a>
     <span class="sp"></span>
-    <span>尚未设置开源协议，仓库暂不授予使用许可</span>
+    <span>以 <a href="https://github.com/guol9180/suiyi/blob/main/LICENSE">MIT 协议</a>开源</span>
   </div>
 </footer>
 
