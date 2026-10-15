@@ -458,20 +458,16 @@ fn crop_rgba(rgba: &[u8], stride: i32, r: Rect) -> Vec<u8> {
     out
 }
 
-/// 这一行算不算「用户框到的」：重叠面积占该行 30% 以上，或者行中心落在选区内。
-/// 外扩会把邻行一起送给引擎，靠这个把它们摘掉。
+/// 这一行算不算「用户框到的」：只要与选区有任何交集就算。
+/// 粗滤只负责把完全在框外的邻行摘掉；框到边缘的行交给交集精修裁定去留——
+/// 旧的「30% 交集或中心在内」会把框住行首片段的行整行丢掉，而精修的输入
+/// 恰恰是过滤后的行，丢了就救不回，「框了却没结果」就是这么来的。
 fn line_belongs(line: (f64, f64, f64, f64), sel: (f64, f64, f64, f64)) -> bool {
     let (lx, ly, lw, lh) = line;
     let (sx, sy, sw, sh) = sel;
     let ix = (lx + lw).min(sx + sw) - lx.max(sx);
     let iy = (ly + lh).min(sy + sh) - ly.max(sy);
-    let inter = ix.max(0.0) * iy.max(0.0);
-    if inter / (lw * lh).max(1.0) >= 0.3 {
-        return true;
-    }
-    let cx = lx + lw / 2.0;
-    let cy = ly + lh / 2.0;
-    cx >= sx && cx <= sx + sw && cy >= sy && cy <= sy + sh
+    ix > 0.0 && iy > 0.0
 }
 
 /// 放大若干倍：小图上的小字识别率明显更差
@@ -669,10 +665,10 @@ pub async fn finish_region(
             return Err("选区太小".into());
         }
         let tight = (sx, sy, sw, sh);
-        // 紧框图：交给 OCR 插件的输入、以及诊断落盘用；行矩形也在这个坐标系里
+        // 紧框图：Paddle 主路识别的输入、OCR 插件的输入、诊断落盘用；行矩形也在这个坐标系里
         let crop = crop_rgba(&s.rgba, s.w, tight);
-        // OCR 输入：向外扩一圈。紧框单行的条状图 Windows OCR 会直接返回 0 行，
-        // 框一行文字偏偏是最常见的用法。
+        // 外扩图：紧框识别空/失败时的回退输入。紧框单行的条状图 Windows OCR 会直接
+        // 返回 0 行，框一行文字偏偏是最常见的用法——兜底路径仍靠外扩保识别率。
         let region = expand_rect(tight, s.w, s.h, OCR_PAD);
         let region_rgba = crop_rgba(&s.rgba, s.w, region);
         let session = ShotSession {
@@ -727,19 +723,24 @@ pub async fn finish_region(
     }
 
     let mut error: Option<String> = None;
-    let (engine, lang, lines) = match plugin_result.ok().flatten() {
+    let (engine, lang, lines, engine_error) = match plugin_result.ok().flatten() {
         // 插件不回传语言，留空让界面别乱猜
-        Some((name, l)) => (format!("plugin:{name}"), String::new(), l),
+        Some((name, l)) => (format!("plugin:{name}"), String::new(), l, None),
         None => {
             // 首选 PaddleOCR（PP-OCRv4，随包分发）：中文与单行框选都比系统 OCR 强得多。
             // 模型缺失或加载失败才回落到 Windows.Media.OCR，识别不可能整个不可用。
-            let img = rgba_to_rgb(&region_rgba, region_w, region_h)
+            //
+            // 主路走紧贴选区的裁剪图：DBNet 只看得见图里的内容，行框构造上不可能越出
+            // 选区——框住一行中间的片段就只返回片段，不会再把整行带回来（与 Pot、
+            // Manggo 同款）。紧框图一行都认不出（贴边小字、条状单行）才回退外扩图：
+            // 老管线整体保留做兜底，宁多勿缺只发生在空结果的场景。
+            let tight_img = rgba_to_rgb(&crop_rgba, crop_w, crop_h)
                 .ok_or_else(|| "选区图转换失败".to_string())?;
             let app_for_ocr = app.clone();
-            let img_for_ocr = img.clone();
+            let tight_for_ocr = tight_img.clone();
             // 识别是几百毫秒的阻塞活儿，丢到阻塞线程池，别把异步运行时的工作线程一起拖住
-            let paddle = match tauri::async_runtime::spawn_blocking(move || {
-                crate::ocr::recognize(&app_for_ocr, &img_for_ocr)
+            let tight = match tauri::async_runtime::spawn_blocking(move || {
+                crate::ocr::recognize(&app_for_ocr, &tight_for_ocr)
             })
             .await
             {
@@ -747,83 +748,42 @@ pub async fn finish_region(
                 Err(e) => Err(format!("OCR 任务调度失败: {e}")),
             };
             crate::selection::log_line(&format!(
-                "screenshot: PaddleOCR 识别耗时 {}ms",
+                "screenshot: PaddleOCR 紧框识别耗时 {}ms",
                 started.elapsed().as_millis()
             ));
-            match paddle {
-                Ok(all) => {
-                    let mut lines =
-                        map_lines_to_selection(all, 1.0, sel_in_region, crop_w, crop_h);
-                    // DBNet 的检测粒度是整行：框住一行中间的片段时，行框会带着整行放行，
-                    // 识别文本就超出了框选范围。行框越出选区时，把「行框 ∩ 选区」的交集
-                    // 裁出来重新识别一遍，让返回文本严格落在框内；精修不出字就回退整行。
-                    if lines.iter().any(|l| box_exceeds(l, sel_in_region, 6.0)) {
-                        let mut refined: Vec<OcrLine> = Vec::new();
-                        for l in &lines {
-                            let Some(rect) = clip_line_to_sel(l, sel_in_region, 6.0) else {
-                                refined.push(l.clone());
-                                continue;
-                            };
-                            let sub = crop_rgb(&img, rect);
-                            match crate::ocr::recognize(&app, &sub) {
-                                Ok(mut ls) if !ls.is_empty() => {
-                                    for x in ls.iter_mut() {
-                                        x.x += rect.0 as f64;
-                                        x.y += rect.1 as f64;
-                                    }
-                                    refined.extend(ls);
-                                }
-                                _ => refined.push(l.clone()),
-                            }
-                        }
-                        refined.sort_by(|a, b| {
-                            if (a.y - b.y).abs() < 14.0 {
-                                a.x.partial_cmp(&b.x).unwrap_or(std::cmp::Ordering::Equal)
-                            } else {
-                                a.y.partial_cmp(&b.y).unwrap_or(std::cmp::Ordering::Equal)
-                            }
-                        });
-                        crate::selection::log_line(&format!(
-                            "screenshot: 交集精修 {} 行 -> {} 行（累计 {}ms）",
-                            lines.len(),
-                            refined.len(),
-                            started.elapsed().as_millis()
-                        ));
-                        lines = refined;
-                    }
-                    (
-                        "paddle".to_string(),
-                        // PP-OCRv4 的中文模型本来就中英混排一起认，没有"识别语言"这一说；
-                        // 留空让结果面板不显示那个语言小标签（引擎名已经写清楚了）
-                        String::new(),
-                        lines,
-                    )
+            match tight {
+                // 紧框图坐标系就是结果坐标系（原点=选区左上角）：行框天然在框内，
+                // 不需要过滤、平移，也没有整行泄漏
+                Ok(lines) if !lines.is_empty() => {
+                    ("paddle".to_string(), String::new(), lines, None)
                 }
-                Err(e) => {
-                    crate::selection::log_line(&format!("screenshot: PaddleOCR 不可用（{e}），回落系统 OCR"));
-                    match ocr_best(&region_rgba, region_w, region_h, "en-US") {
-                        Ok((all, used, scale)) => (
-                            "windows".to_string(),
-                            used,
-                            map_lines_to_selection(
-                                all,
-                                scale as f64,
-                                sel_in_region,
-                                crop_w,
-                                crop_h,
-                            ),
-                        ),
-                        Err(e) => {
-                            // 两种引擎都失败：面板照常打开，把原因写给它看
-                            crate::selection::log_line(&format!("screenshot: OCR 失败 {e}"));
-                            error = Some(e);
-                            ("windows".to_string(), String::new(), Vec::new())
+                fallback => {
+                    match &fallback {
+                        Err(e) => crate::selection::log_line(&format!(
+                            "screenshot: 紧框识别失败（{e}），回退外扩区域"
+                        )),
+                        Ok(_) => {
+                            crate::selection::log_line("screenshot: 紧框识别 0 行，回退外扩区域")
                         }
                     }
+                    recognize_with_region(
+                        &app,
+                        &region_rgba,
+                        region_w,
+                        region_h,
+                        sel_in_region,
+                        crop_w,
+                        crop_h,
+                        started,
+                    )
+                    .await?
                 }
             }
         }
     };
+    if error.is_none() {
+        error = engine_error;
+    }
     let text = lines.iter().map(|l| l.text.as_str()).collect::<Vec<_>>().join("\n");
     crate::selection::log_line(&format!("screenshot: OCR 完成 {} 行 / {} 字符", lines.len(), text.chars().count()));
     if text.trim().is_empty() && error.is_none() {
@@ -863,6 +823,105 @@ pub async fn finish_region(
         );
     }
     Ok(OcrPayload { text })
+}
+
+/// 外扩区域的回退识别：Paddle → 按行过滤 →（行框越界时）交集精修；
+/// Paddle 不可用时回落 Windows OCR。只在紧框识别空/失败时才走——
+/// 宁多勿缺只发生在紧框已经空手而归的场景。
+/// 返回 (引擎, 语言, 行, 错误)，错误非空表示两条引擎链路都失败了。
+async fn recognize_with_region(
+    app: &AppHandle,
+    region_rgba: &[u8],
+    region_w: i32,
+    region_h: i32,
+    sel_in_region: (f64, f64, f64, f64),
+    crop_w: i32,
+    crop_h: i32,
+    started: std::time::Instant,
+) -> Result<(String, String, Vec<OcrLine>, Option<String>), String> {
+    let img =
+        rgba_to_rgb(region_rgba, region_w, region_h).ok_or_else(|| "选区图转换失败".to_string())?;
+    let app_for_ocr = app.clone();
+    let img_for_ocr = img.clone();
+    let paddle = match tauri::async_runtime::spawn_blocking(move || {
+        crate::ocr::recognize(&app_for_ocr, &img_for_ocr)
+    })
+    .await
+    {
+        Ok(r) => r,
+        Err(e) => Err(format!("OCR 任务调度失败: {e}")),
+    };
+    crate::selection::log_line(&format!(
+        "screenshot: 外扩区域识别耗时 {}ms",
+        started.elapsed().as_millis()
+    ));
+    Ok(match paddle {
+        Ok(all) => {
+            let mut lines = map_lines_to_selection(all, 1.0, sel_in_region, crop_w, crop_h);
+            // 外扩图的 DBNet 行框粒度仍是整行：行框越出选区时，把「行框 ∩ 选区」
+            // 的交集裁出来重新识别一遍，让返回文本尽量落在框内；精修不出字就回退整行。
+            if lines.iter().any(|l| box_exceeds(l, sel_in_region, 6.0)) {
+                let mut refined: Vec<OcrLine> = Vec::new();
+                for l in &lines {
+                    let Some(rect) = clip_line_to_sel(l, sel_in_region, 6.0) else {
+                        refined.push(l.clone());
+                        continue;
+                    };
+                    let sub = crop_rgb(&img, rect);
+                    match crate::ocr::recognize(app, &sub) {
+                        Ok(mut ls) if !ls.is_empty() => {
+                            for x in ls.iter_mut() {
+                                x.x += rect.0 as f64;
+                                x.y += rect.1 as f64;
+                            }
+                            refined.extend(ls);
+                        }
+                        _ => refined.push(l.clone()),
+                    }
+                }
+                refined.sort_by(|a, b| {
+                    if (a.y - b.y).abs() < 14.0 {
+                        a.x.partial_cmp(&b.x).unwrap_or(std::cmp::Ordering::Equal)
+                    } else {
+                        a.y.partial_cmp(&b.y).unwrap_or(std::cmp::Ordering::Equal)
+                    }
+                });
+                crate::selection::log_line(&format!(
+                    "screenshot: 交集精修 {} 行 -> {} 行（累计 {}ms）",
+                    lines.len(),
+                    refined.len(),
+                    started.elapsed().as_millis()
+                ));
+                lines = refined;
+            }
+            (
+                "paddle".to_string(),
+                // PP-OCRv4 的中文模型本来就中英混排一起认，没有"识别语言"这一说；
+                // 留空让结果面板不显示那个语言小标签（引擎名已经写清楚了）
+                String::new(),
+                lines,
+                None,
+            )
+        }
+        Err(e) => {
+            crate::selection::log_line(&format!(
+                "screenshot: PaddleOCR 不可用（{e}），回落系统 OCR"
+            ));
+            match ocr_best(region_rgba, region_w, region_h, "en-US") {
+                Ok((all, used, scale)) => (
+                    "windows".to_string(),
+                    used,
+                    map_lines_to_selection(all, scale as f64, sel_in_region, crop_w, crop_h),
+                    None,
+                ),
+                Err(e) => {
+                    // 两种引擎都失败：面板照常打开，把原因写给它看
+                    crate::selection::log_line(&format!("screenshot: OCR 失败 {e}"));
+                    ("windows".to_string(), String::new(), Vec::new(), Some(e))
+                }
+            }
+        }
+    })
 }
 
 // ==================== 屏幕捕获（GDI） ====================
@@ -1233,9 +1292,24 @@ mod tests {
         assert!(!super::line_belongs((36.0, 60.0, 300.0, 19.0), sel), "下一行要滤掉");
         // 大部分在选区外、中心也在外面的行同样滤掉
         let s2 = (0.0, 0.0, 100.0, 100.0);
-        assert!(!super::line_belongs((-70.0, 40.0, 80.0, 20.0), s2));
+        assert!(!super::line_belongs((-190.0, 40.0, 80.0, 20.0), s2));
         // 压在左边界上、有近一半落在选区里的行要留（用户确实框到了它）
         assert!(super::line_belongs((-40.0, 40.0, 80.0, 20.0), s2));
+    }
+
+    /// 框住一行的边缘片段（交集不足 30%、行中心在选区外）也必须放行：
+    /// 粗滤只做「有任何交集」，边缘行交给交集精修裁定去留。按旧的
+    /// 「30% 交集或中心在内」阈值，框住行首约四分之一时整行会被丢掉，
+    /// 精修救不回（精修的输入就是过滤后的行）——「框了却没结果」就是这么来的。
+    #[test]
+    fn line_belongs_keeps_edge_fragment_for_refine() {
+        // 行 (100,34,300,19)，选区 x 10..170 只罩住行左端 70px：
+        // 交集比 70/300 ≈ 23%，行中心 x=250 在选区外
+        let sel = (10.0, 32.0, 160.0, 24.0);
+        assert!(
+            super::line_belongs((100.0, 34.0, 300.0, 19.0), sel),
+            "框到边缘片段的行要留给精修裁定，不能整行丢掉"
+        );
     }
 
     /// 结果面板按这套字段名取值，序列化键改了就前端就断了，在这里钉住
