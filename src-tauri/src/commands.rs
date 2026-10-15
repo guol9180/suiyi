@@ -95,8 +95,13 @@ pub fn save_text_file(
 #[tauri::command]
 pub fn list_services(app: tauri::AppHandle) -> Result<ServicesFile, String> {
     let dir = config_dir(&app)?;
+    // 首次启动把默认内容固化到磁盘；之后每次调用都写盘既慢又没有必要
+    // （原来这里无条件 save，设置页每开一次、面板每挂一次都在写盘）。
+    let existed = dir.join(crate::config::SERVICES_FILE).exists();
     let mut file = load_services(&dir)?;
-    save_services(&dir, &file)?; // 首次启动把默认内容固化到磁盘
+    if !existed {
+        save_services(&dir, &file)?;
+    }
     // 插件服务只出现在返回值里，不写进 services.json：它们随插件目录动态变化
     file.services.extend(plugin_services(&dir));
     Ok(file)
@@ -307,6 +312,25 @@ pub async fn translate_text(
     } else {
         svc.prompt_template.as_deref()
     };
+    let stream_enabled = svc.stream && !dictionary_mode;
+    // 长文本 + 非流式：按段并发请求、按序拼回，整体耗时近似按段数缩短。
+    // 流式服务不分段——增量上屏的顺序体验优先，各段增量交错会打乱文本。
+    if !stream_enabled && text.chars().count() > translator::SEGMENT_MIN_CHARS {
+        return translate_segmented(
+            &dir,
+            svc,
+            &key,
+            template,
+            &from,
+            &to,
+            &text,
+            kind.as_deref(),
+            &service_name,
+            preserve_lines.unwrap_or(false),
+            file.timeout_secs.max(3),
+        )
+        .await;
+    }
     let prompt = translator::build_prompt(template, &from, &to, &text);
     let prompt = if preserve_lines.unwrap_or(false) {
         format!("{prompt}\n\n保持原有换行：逐行翻译，每行对应一行译文，输出行数必须与原文一致。")
@@ -569,6 +593,73 @@ pub async fn run_action_plugin(
 
     // 允许插件返回 null（不需要提示），这时给个空串
     Ok(plugin_js::text_of(&raw).unwrap_or_default())
+}
+
+/// 长文本分段并发翻译（仅非流式服务）：每段独立走一次完整请求，
+/// 按原顺序拼接成整体译文；任一段失败即整体失败（带段序号），历史只记一条。
+/// 段内 preserve_lines 照常生效：逐段保行，拼回后行数与原文一致。
+#[allow(clippy::too_many_arguments)]
+async fn translate_segmented(
+    dir: &std::path::Path,
+    svc: &ServiceConfig,
+    key: &str,
+    template: Option<&str>,
+    from: &str,
+    to: &str,
+    text: &str,
+    kind: Option<&str>,
+    service_name: &str,
+    preserve_lines: bool,
+    timeout_secs: u64,
+) -> Result<DonePayload, String> {
+    let chunks = translator::segment_text(text, translator::SEGMENT_TARGET_CHARS);
+    let started = std::time::Instant::now();
+
+    let mut prompts = Vec::with_capacity(chunks.len());
+    for chunk in &chunks {
+        let mut prompt = translator::build_prompt(template, from, to, chunk);
+        if preserve_lines {
+            prompt.push_str(
+                "\n\n保持原有换行：逐行翻译，每行对应一行译文，输出行数必须与原文一致。",
+            );
+        }
+        prompts.push(prompt);
+    }
+    let futs = prompts.iter().map(|prompt| {
+        translator::translate_inner(
+            None,
+            translator::TranslateParams {
+                service_id: &svc.id,
+                base_url: &svc.base_url,
+                api_key: key,
+                model: &svc.model,
+                prompt,
+                temperature: svc.temperature,
+                stream: false,
+                timeout: Duration::from_secs(timeout_secs),
+            },
+        )
+    });
+
+    let mut full = String::with_capacity(text.len());
+    for (i, r) in futures_util::future::join_all(futs).await.into_iter().enumerate() {
+        match r {
+            Ok((t, _)) => full.push_str(&t),
+            Err(e) => {
+                let msg = format!("分段翻译第 {} 段失败: {e}", i + 1);
+                record_history(dir, kind, text, "", service_name, 0, Some(&msg));
+                return Err(msg);
+            }
+        }
+    }
+    let elapsed_ms = started.elapsed().as_millis() as u64;
+    record_history(dir, kind, text, &full, service_name, elapsed_ms as i64, None);
+    Ok(DonePayload {
+        service_id: svc.id.clone(),
+        dictionary: None,
+        text: full,
+        elapsed_ms,
+    })
 }
 
 /// 记一条历史。失败只写日志，不能影响翻译本身。

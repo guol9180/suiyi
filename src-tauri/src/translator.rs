@@ -191,25 +191,94 @@ fn emit_done(app: Option<&AppHandle>, service_id: &str, text: &str, elapsed_ms: 
     }
 }
 
+/// 组装 /chat/completions 请求体。
+/// max_tokens 给个与输入相称的上限：正常译文与输入同量级（×2 已留足膨胀），
+/// 封顶是为了模型跑偏、复读打转时收敛长尾，不至于一条请求拖满整个超时；
+/// 短输入也给 256 的下限，正常短译文不会被截。
+fn request_body(p: &TranslateParams<'_>) -> serde_json::Value {
+    let max_tokens = (p.prompt.chars().count() * 2 + 128).max(256);
+    json!({
+        "model": p.model,
+        "stream": p.stream,
+        "temperature": p.temperature.unwrap_or(0.3),
+        "max_tokens": max_tokens,
+        "messages": [{ "role": "user", "content": p.prompt }]
+    })
+}
+
+/// 分段阈值的下限：文本超过这么多字符（非流式）才值得并发分段
+pub(crate) const SEGMENT_MIN_CHARS: usize = 500;
+/// 每段的目标字符数：太小则请求数暴增，太大则单段延迟回到未优化状态
+pub(crate) const SEGMENT_TARGET_CHARS: usize = 800;
+
+/// 把长文本切成不超过 target 字符的段：换行优先（保留行结构），
+/// 行内按句读切，连句读都没有的硬切兜底。各段拼回必须等于原文。
+pub(crate) fn segment_text(text: &str, target: usize) -> Vec<String> {
+    if text.chars().count() <= target {
+        return vec![text.to_string()];
+    }
+
+    // 行内先按句读细分成「不超过 target 的小片」，行本身太长时也靠它兜底
+    let split_piece = |line: &str| -> Vec<String> {
+        if line.chars().count() <= target {
+            return vec![line.to_string()];
+        }
+        let mut pieces: Vec<String> = Vec::new();
+        let mut cur = String::new();
+        for ch in line.chars() {
+            cur.push(ch);
+            let len = cur.chars().count();
+            // 硬切优先：迟迟等不到句读也不让单段无限膨胀
+            if len >= target {
+                pieces.push(cur.drain(..).collect());
+            } else if matches!(ch, '。' | '！' | '？' | '；' | '.' | '!' | '?' | ';' | '\n')
+                && len >= target / 2
+            {
+                // 句读留在句尾即可断，避免碎片化
+                pieces.push(cur.drain(..).collect());
+            }
+        }
+        if !cur.is_empty() {
+            pieces.push(cur);
+        }
+        pieces
+    };
+
+    // 按行收集，行累积到接近 target 就封段；行内容先经过句读细分
+    let mut chunks: Vec<String> = Vec::new();
+    let mut cur = String::new();
+    for line in text.split_inclusive('\n') {
+        for piece in split_piece(line) {
+            if cur.chars().count() + piece.chars().count() > target && !cur.is_empty() {
+                chunks.push(std::mem::take(&mut cur));
+            }
+            cur.push_str(&piece);
+            // 单片就超限（理论上 split_piece 已兜底，这里只防边界）——直接封段
+            if cur.chars().count() >= target {
+                chunks.push(std::mem::take(&mut cur));
+            }
+        }
+    }
+    if !cur.is_empty() {
+        chunks.push(cur);
+    }
+    chunks
+}
+
 /// 应用内入口（带事件推送）
 pub async fn translate(app: &AppHandle, p: TranslateParams<'_>) -> Result<(String, u64), String> {
     translate_inner(Some(app), p).await
 }
 
-/// 核心实现；app=None 时不推送事件（供单元测试使用）
-async fn translate_inner(
+/// 核心实现；app=None 时不推送事件（供单元测试与分段并发使用）
+pub(crate) async fn translate_inner(
     app: Option<&AppHandle>,
     p: TranslateParams<'_>,
 ) -> Result<(String, u64), String> {
     let start = Instant::now();
     let client = http_client();
     let url = format!("{}/chat/completions", p.base_url.trim_end_matches('/'));
-    let body = json!({
-        "model": p.model,
-        "stream": p.stream,
-        "temperature": p.temperature.unwrap_or(0.3),
-        "messages": [{ "role": "user", "content": p.prompt }]
-    });
+    let body = request_body(&p);
 
     // 本地服务（Ollama 等）没有密钥：不带 Authorization 头，
     // 而不是发一个空的 Bearer —— 后者会被部分网关直接判 401。
@@ -306,6 +375,66 @@ mod tests {
     #[test]
     fn prewarm_tolerates_missing_config_dir() {
         prewarm_gateways(std::path::Path::new("Z:/suiyi/definitely/not/here"));
+    }
+
+    /// 分段：长文本按目标块大小切开，换行优先、句读次之、兜底硬切；
+    /// 拼回必须等于原文（一行都不能丢），除单段超长的兜底硬切外每块不超限。
+    #[test]
+    fn segment_text_splits_long_text_and_preserves_everything() {
+        // 短文本不切
+        assert_eq!(segment_text("hello", 500), vec!["hello".to_string()]);
+
+        // 多行长文本：按行累积成块，每块不超限，拼回等于原文
+        let mut long = String::new();
+        for i in 0..40 {
+            long.push_str(&format!("line {i} with some words here\n"));
+        }
+        let chunks = segment_text(&long, 300);
+        assert!(chunks.len() > 1, "长文本应被切开");
+        assert_eq!(chunks.concat(), long, "拼回必须等于原文");
+        assert!(chunks.iter().all(|c| c.chars().count() <= 300), "每块不超限");
+
+        // 无换行的长文本：按句读切
+        let one_line = "第一句。".repeat(100);
+        let chunks = segment_text(&one_line, 120);
+        assert!(chunks.len() > 1);
+        assert_eq!(chunks.concat(), one_line);
+        assert!(chunks.iter().all(|c| c.chars().count() <= 120));
+
+        // 连换行带句读都没有的超长行：硬切兜底，仍要拼得回
+        let solid = "a".repeat(1000);
+        let chunks = segment_text(&solid, 300);
+        assert_eq!(chunks.concat(), solid);
+        assert!(chunks.iter().all(|c| c.chars().count() <= 300));
+
+        // 恰好在阈值边上不产生空块
+        for c in segment_text("ab\n", 3) {
+            assert!(!c.is_empty());
+        }
+    }
+
+    /// 请求体带与输入相称的 max_tokens 上限：正常译文与输入同量级，
+    /// 封顶是为了模型跑偏复读时收敛长尾，不让一条请求拖满超时。
+    #[test]
+    fn request_body_caps_max_tokens_relative_to_input() {
+        let p = TranslateParams {
+            service_id: "s",
+            base_url: "http://localhost:9",
+            api_key: "",
+            model: "m",
+            prompt: "hi",
+            temperature: None,
+            stream: false,
+            timeout: Duration::from_secs(1),
+        };
+        let body = request_body(&p);
+        assert_eq!(body["max_tokens"], 256, "短输入也给足下限，不截断正常短译文");
+        let long = "a".repeat(1000);
+        let p2 = TranslateParams { prompt: &long, ..p };
+        let body2 = request_body(&p2);
+        assert_eq!(body2["max_tokens"], 2128, "1000 字符输入 → 2×1000+128");
+        assert_eq!(body2["stream"], false);
+        assert_eq!(body2["messages"][0]["content"], "a".repeat(1000));
     }
 
     /// 起一个零依赖的 SSE mock 服务（TcpListener 线程），端到端验证流式解析

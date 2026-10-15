@@ -197,20 +197,68 @@ pub fn default_services() -> Vec<ServiceConfig> {
     }]
 }
 
-/// 读取 services.json；文件不存在时返回默认内容（不落盘，落盘由调用方决定）
-pub fn load_services(dir: &Path) -> Result<ServicesFile, String> {
-    let path = dir.join(SERVICES_FILE);
-    if !path.exists() {
-        return Ok(ServicesFile {
-            services: default_services(),
-            ..Default::default()
-        });
-    }
-    let raw = fs::read_to_string(&path).map_err(|e| format!("读取配置失败: {e}"))?;
-    serde_json::from_str(&raw).map_err(|e| format!("解析配置失败: {e}"))
+/// services.json 的进程内缓存槽位：翻译每次都要读一遍服务配置，读多写少，
+/// 按「文件是否存在 + 修改时间」判定命中，命中就不碰磁盘。
+/// 外部手改文件会改变 mtime，下一次读取自然失效，不需要额外协议。
+type ServicesCacheSlot = Option<(bool, Option<std::time::SystemTime>, ServicesFile)>;
+
+static SERVICES_CACHE: std::sync::OnceLock<std::sync::Mutex<ServicesCacheSlot>> =
+    std::sync::OnceLock::new();
+
+fn services_cache() -> &'static std::sync::Mutex<ServicesCacheSlot> {
+    SERVICES_CACHE.get_or_init(|| std::sync::Mutex::new(None))
 }
 
-/// 写入 services.json（先写临时文件再改名，避免半写损坏）
+/// 命中判定：签名完全一致才返回缓存内容
+fn cache_get(
+    slot: &ServicesCacheSlot,
+    exists: bool,
+    modified: Option<std::time::SystemTime>,
+) -> Option<ServicesFile> {
+    slot.as_ref()
+        .filter(|(e, m, _)| *e == exists && *m == modified)
+        .map(|(_, _, f)| f.clone())
+}
+
+/// 写入缓存槽位
+fn cache_put(
+    slot: &mut ServicesCacheSlot,
+    exists: bool,
+    modified: Option<std::time::SystemTime>,
+    file: &ServicesFile,
+) {
+    *slot = Some((exists, modified, file.clone()));
+}
+
+/// 读取 services.json；文件不存在时返回默认内容（不落盘，落盘由调用方决定）。
+/// 命中进程内缓存时直接返回副本，不再读磁盘。
+pub fn load_services(dir: &Path) -> Result<ServicesFile, String> {
+    let path = dir.join(SERVICES_FILE);
+    let meta = fs::metadata(&path).ok();
+    let exists = meta.is_some();
+    let modified = meta.and_then(|m| m.modified().ok());
+    if let Ok(guard) = services_cache().lock() {
+        if let Some(cached) = cache_get(&guard, exists, modified) {
+            return Ok(cached);
+        }
+    }
+    let file = if !exists {
+        ServicesFile {
+            services: default_services(),
+            ..Default::default()
+        }
+    } else {
+        let raw = fs::read_to_string(&path).map_err(|e| format!("读取配置失败: {e}"))?;
+        serde_json::from_str(&raw).map_err(|e| format!("解析配置失败: {e}"))?
+    };
+    if let Ok(mut guard) = services_cache().lock() {
+        cache_put(&mut guard, exists, modified, &file);
+    }
+    Ok(file)
+}
+
+/// 写入 services.json（先写临时文件再改名，避免半写损坏）。
+/// 新内容与新的修改时间写穿进缓存，下一次读取不用再碰磁盘。
 pub fn save_services(dir: &Path, file: &ServicesFile) -> Result<(), String> {
     fs::create_dir_all(dir).map_err(|e| format!("创建配置目录失败: {e}"))?;
     let path = dir.join(SERVICES_FILE);
@@ -218,7 +266,12 @@ pub fn save_services(dir: &Path, file: &ServicesFile) -> Result<(), String> {
     let raw =
         serde_json::to_string_pretty(file).map_err(|e| format!("序列化配置失败: {e}"))?;
     fs::write(&tmp, raw).map_err(|e| format!("写入配置失败: {e}"))?;
-    fs::rename(&tmp, &path).map_err(|e| format!("替换配置失败: {e}"))
+    fs::rename(&tmp, &path).map_err(|e| format!("替换配置失败: {e}"))?;
+    let modified = fs::metadata(&path).and_then(|m| m.modified()).ok();
+    if let Ok(mut guard) = services_cache().lock() {
+        cache_put(&mut guard, true, modified, file);
+    }
+    Ok(())
 }
 
 /// 生成短 ID（时间戳 + 计数足够单机使用；不引额外依赖）
@@ -234,6 +287,55 @@ pub fn new_service_id() -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// 缓存命中判定：文件存在性与修改时间都一致才命中，任一变化即失效。
+    /// 这是「读服务配置不再每次碰磁盘」的核心逻辑。
+    #[test]
+    fn services_cache_hits_only_on_matching_signature() {
+        let mut slot: Option<(bool, Option<std::time::SystemTime>, ServicesFile)> = None;
+        assert!(cache_get(&slot, true, None).is_none(), "空缓存不命中");
+
+        let f = ServicesFile::default();
+        cache_put(&mut slot, true, None, &f);
+        assert!(cache_get(&slot, true, None).is_some(), "同签名命中");
+
+        let t = std::time::SystemTime::now();
+        cache_put(&mut slot, true, Some(t), &f);
+        assert!(cache_get(&slot, true, Some(t)).is_some(), "同签名命中");
+        assert!(cache_get(&slot, true, None).is_none(), "mtime 变化要失效");
+        assert!(cache_get(&slot, false, Some(t)).is_none(), "文件被删要失效");
+    }
+
+    /// 进程内缓存必须与磁盘保持一致：save 之后再 load 拿到新内容（写穿），
+    /// 外部绕过 save 直接改文件（mtime 变化）也要能让缓存失效。
+    /// 翻译每次都要读服务配置，缓存命中就不再碰磁盘。
+    #[test]
+    fn services_cache_stays_consistent_with_disk() {
+        let dir = std::env::temp_dir().join(format!("suiyi-cfg-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+
+        let a = ServicesFile::default();
+        save_services(&dir, &a).unwrap();
+        assert!(load_services(&dir).unwrap().services.is_empty());
+
+        // 保存新内容后立刻读取：写穿缓存不允许读到旧值
+        let mut b = a.clone();
+        b.concurrency = 5;
+        save_services(&dir, &b).unwrap();
+        assert_eq!(load_services(&dir).unwrap().concurrency, 5);
+
+        // 模拟外部手改：绕过 save_services 直接写文件，mtime 变化 → 缓存必须失效
+        std::thread::sleep(std::time::Duration::from_millis(60));
+        let path = dir.join(SERVICES_FILE);
+        let mut c: ServicesFile =
+            serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        c.timeout_secs = 42;
+        std::fs::write(&path, serde_json::to_string_pretty(&c).unwrap()).unwrap();
+        assert_eq!(load_services(&dir).unwrap().timeout_secs, 42, "外部改动要能被读到");
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
     /// 老配置文件里没有 requires_key：必须按 true 处理。
     /// 升级不能把云端服务的密钥校验顺手放掉。
