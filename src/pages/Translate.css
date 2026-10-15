@@ -1,35 +1,149 @@
-/* S0.8 翻译页样式（对应设计稿①） */
+/* 翻译页 · v1.0 工作台布局（design/ui-redesign.html §0）：
+   左侧 hero 输入卡 + 结果双列网格，右侧「最近翻译」栏 */
 
-.translate-page {
+.workbench {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 264px;
+  gap: 14px;
+  align-items: start;
   max-width: 980px;
   margin: 0 auto;
-  padding: 18px;
+  padding: 16px;
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  overflow-y: auto;
+}
+.work-main {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  height: 100%;
-  box-sizing: border-box;
-  /* 窗口压得比内容还矮时整页可滚，否则底部那排按钮会被窗口裁掉 */
-  overflow-y: auto;
+  min-width: 0;
+  min-height: 0;
 }
 
-/* 分组标题与它自己的那一行贴在一起，不跟着整页的 12px 间距走 */
-.lang-group { display: flex; flex-direction: column; gap: 6px; }
-.row-label { font-size: var(--fs-cap); color: var(--c-caption); }
-
-.lang-row { display: flex; align-items: center; gap: 10px; }
-.lang-row select.inp { width: auto; min-width: 120px; }
-.muted { font-size: var(--fs-sec); color: var(--c-caption); }
-
-.src-area { min-height: 110px; resize: vertical; }
-
-.actions { display: flex; align-items: center; gap: 12px; }
-
-.cards { display: flex; flex-direction: column; gap: 10px; overflow: auto; flex: 1; min-height: 60px; }
-
-/* 结果卡结构在 base.css（ResultCard 组件共用）；这里只留主窗的毛玻璃表面 */
-.rescard {
+/* ---------- hero 输入卡：语言行、计数、正文、动作条集成在一张卡里 ---------- */
+.hero-input {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
   background: var(--glass-card);
+  border: 1px solid var(--glass-edge);
   backdrop-filter: var(--glass-blur);
   -webkit-backdrop-filter: var(--glass-blur);
+  border-radius: var(--radius-lg);
+  padding: 12px 14px;
+}
+.hero-top { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.hero-top select.inp { width: auto; min-width: 120px; }
+.hero-count {
+  margin-left: auto;
+  font-size: var(--fs-cap);
+  color: var(--c-caption);
+  font-variant-numeric: tabular-nums;
+}
+.hero-area { min-height: 110px; resize: vertical; }
+.hero-actions { display: flex; align-items: center; gap: 8px; }
+.hero-actions .hint { font-size: var(--fs-cap); color: var(--c-caption); }
+
+/* ---------- 结果头：并发数与重试全部 ---------- */
+.resh {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--fs-sub);
+  font-weight: 600;
+}
+.resh .m { font-size: var(--fs-cap); font-weight: 400; color: var(--c-caption); }
+
+/* ---------- 结果区：双列对比网格；无结果时是三步引导 ---------- */
+.results {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  align-items: start;
+  overflow: auto;
+  flex: 1;
+  min-height: 60px;
+}
+.onboard {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  background: var(--glass-card);
+  border: 1px solid var(--glass-edge);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border-radius: var(--radius-lg);
+  padding: 10px 14px;
+}
+.ob-step {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px dashed var(--c-border);
+  color: var(--c-text-2);
+}
+.ob-n {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: var(--radius-sm);
+  background: var(--c-primary-soft);
+  border: 1px solid var(--c-primary-border);
+  color: var(--c-primary-text);
+  font-size: var(--fs-cap);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transform: translateY(3px);
+}
+.ob-act { margin-top: 10px; }
+.gnote { margin-top: 10px; font-size: var(--fs-cap); color: var(--c-caption); }
+
+/* ---------- 右栏：最近翻译 ---------- */
+.rail { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.rail-card {
+  background: var(--glass-card);
+  border: 1px solid var(--glass-edge);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border-radius: var(--radius-lg);
+  padding: 12px;
+}
+.rail-h {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: var(--fs-sub);
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+.rail-h .m { font-size: var(--fs-cap); font-weight: 400; color: var(--c-caption); }
+.quick {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 7px 8px;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+.quick:hover { background: var(--c-surface-2); }
+.qt {
+  font-size: var(--fs-sec);
+  color: var(--c-text-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.qm { font-size: var(--fs-cap); color: var(--c-caption); font-variant-numeric: tabular-nums; }
+.rail-empty { color: var(--c-caption); font-size: var(--fs-cap); padding: 10px 0; }
+.rail-more { margin-top: 8px; display: flex; }
+
+/* ---------- 窄窗：右栏退到下方单列 ---------- */
+@media (max-width: 960px) {
+  .workbench { grid-template-columns: 1fr; }
 }

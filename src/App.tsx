@@ -257,7 +257,12 @@ export default function App() {
         </div>
       )}
       <div className="tab-body">
-        {tab === "translate" && <TranslatePage onOpenSettings={() => setTab("settings")} />}
+        {tab === "translate" && (
+          <TranslatePage
+            onOpenSettings={() => setTab("settings")}
+            onOpenHistory={() => setTab("history")}
+          />
+        )}
         {tab === "history" && <HistoryPage />}
         {tab === "settings" && (
           <SettingsPage focusAboutSignal={aboutSignal} checkUpdateSignal={updateCheckSignal} />

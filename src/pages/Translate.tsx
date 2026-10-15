@@ -3,14 +3,16 @@ import { useCallback, useEffect, useState } from "react";
 import { emit, listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
-import { listServices } from "../api";
+import { listHistory, listServices } from "../api";
 import { recordResult } from "../lastResult";
 import {
   enabledTranslations,
   type CardState,
+  type HistoryEntry,
   type ServiceConfig,
   type TranslateResult,
 } from "../types";
+import { formatTime } from "../format";
 import { Icon } from "../components/Icon";
 import { ResultCard } from "../components/ResultCard";
 import { LangPicker } from "../components/LangPicker";
@@ -48,13 +50,28 @@ function errText(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
 }
 
-export default function TranslatePage(props: { onOpenSettings?: () => void } = {}) {
+export default function TranslatePage(props: {
+  onOpenSettings?: () => void;
+  onOpenHistory: () => void;
+}) {
   const [services, setServices] = useState<ServiceConfig[]>([]);
   const [from, setFrom] = useState("自动检测");
   const [to, setTo] = useState("简体中文");
   const [text, setText] = useState("");
   const [cards, setCards] = useState<CardState[]>([]);
   const [busy, setBusy] = useState(false);
+  /** 右栏「最近翻译」：历史库的前 5 条，翻译一轮后刷新 */
+  const [recent, setRecent] = useState<HistoryEntry[]>([]);
+
+  const loadRecent = useCallback(() => {
+    listHistory({ limit: 5 })
+      .then(setRecent)
+      .catch(() => setRecent([]));
+  }, []);
+
+  useEffect(() => {
+    loadRecent();
+  }, [loadRecent]);
 
   useEffect(() => {
     void listServices().then((f) => setServices(enabledTranslations(f.services)));
@@ -124,6 +141,8 @@ export default function TranslatePage(props: { onOpenSettings?: () => void } = {
       }),
     );
     setBusy(false);
+    // 右栏最近翻译跟着这一轮刷新
+    loadRecent();
   }
 
   /** 单独重跑一路服务：失败卡片上的「重试」 */
@@ -163,73 +182,110 @@ export default function TranslatePage(props: { onOpenSettings?: () => void } = {
     [services, text, from, to],
   );
 
-  const doneCount = cards.filter((c) => c.status === "done").length;
-  const failedCount = cards.filter((c) => c.status === "error").length;
-  const settledCount = doneCount + failedCount;
-
   return (
-    <div className="translate-page">
-      <div className="lang-group">
-        <div className="row-label">翻译设置</div>
-        <div className="lang-row">
-        <LangPicker from={from} to={to} onChangeFrom={setFrom} onChangeTo={setTo} selectClassName="inp" />
-        <span style={{ flex: 1 }} />
-        {services.length > 0 && (
-          settledCount > 0 ? (
-            <span className={`chip ${failedCount > 0 ? "warn" : "ok"}`}>
-              {doneCount} / {services.length} 服务成功
-            </span>
+    <div className="workbench">
+      <div className="work-main">
+        <div className="hero-input">
+          <div className="hero-top">
+            <LangPicker from={from} to={to} onChangeFrom={setFrom} onChangeTo={setTo} selectClassName="inp" />
+            <span className="hero-count">{text.length} / 5000 字</span>
+          </div>
+          <textarea
+            className="inp hero-area"
+            maxLength={5000}
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && e.ctrlKey) void doTranslate();
+            }}
+            placeholder="输入要翻译的文本…"
+          />
+          <div className="hero-actions">
+            <span className="hint">Ctrl+Enter 翻译</span>
+            <span style={{ flex: 1 }} />
+            <button className="btn mini" disabled={!text} onClick={() => setText("")}>
+              清空
+            </button>
+            <button className="btn" onClick={() => void invoke("start_screenshot").catch(console.error)}>
+              <Icon name="frame" size="sm" />截图识别
+            </button>
+            <button className="btn primary" disabled={busy || !text.trim()} onClick={() => void doTranslate()}>
+              {busy ? "翻译中…" : "翻 译"}
+            </button>
+          </div>
+        </div>
+
+        <div className="resh">
+          翻译结果
+          <span className="m">{services.length} 个服务并发 · 失败按顺序回退</span>
+          <span style={{ flex: 1 }} />
+          <button className="btn mini" disabled={busy || !text.trim()} onClick={() => void doTranslate()}>
+            <Icon name="refresh" size="sm" />重试全部
+          </button>
+        </div>
+
+        <div className="results">
+          {cards.length === 0 ? (
+            <div className="onboard">
+              {/* 三步引导：还没有结果时占住结果区，完成首次翻译自动让位 */}
+              <div className="ob-step">
+                <span className="ob-n">1</span>
+                <span>到「设置 → 服务配置」选择一个提供商并启用</span>
+              </div>
+              <div className="ob-step">
+                <span className="ob-n">2</span>
+                <span>
+                  在任意应用选中文字，按 <span className="kbd">Alt</span>
+                  <span className="kbd">D</span> 划词翻译
+                </span>
+              </div>
+              <div className="ob-step">
+                <span className="ob-n">3</span>
+                <span>
+                  任意界面按 <span className="kbd">Alt</span>
+                  <span className="kbd">S</span> 截图识别
+                </span>
+              </div>
+              {props.onOpenSettings && (
+                <div className="ob-act">
+                  <button className="btn primary mini" onClick={props.onOpenSettings}>
+                    <Icon name="sliders" size="sm" />打开设置
+                  </button>
+                </div>
+              )}
+              <div className="gnote">完成首次翻译后，这里显示结果，引导自动收起。</div>
+            </div>
           ) : (
-            <span className="chip">{services.length} 个服务待命</span>
-          )
-        )}
-        <button className="btn mini" onClick={() => void listServices().then((f) =>
-          setServices(enabledTranslations(f.services)),
-          )}><Icon name="refresh" size="sm" />刷新服务</button>
+            cards.map((c) => (
+              <ResultCard key={c.id} card={c} svc={svcColor(c.id)} onRetry={retryOne} copyLabel="复制" showMeta />
+            ))
+          )}
         </div>
       </div>
 
-      <textarea
-        className="inp src-area"
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" && e.ctrlKey) void doTranslate();
-        }}
-        placeholder="输入要翻译的文本…"
-      />
-
-      <div className="actions">
-        <button className="btn primary" disabled={busy || !text.trim()} onClick={() => void doTranslate()}>
-          {busy ? "翻译中…" : "翻 译"}
-        </button>
-        <button className="btn" onClick={() => void invoke("start_screenshot").catch(console.error)}>
-          <Icon name="frame" size="sm" />截图识别
-        </button>
-        <span className="muted">Ctrl+Enter 翻译</span>
-      </div>
-
-      <div className="cards">
-        {/* 一个服务都没启用时的空态：设计稿附录 A 的「无服务」是带下一步动作的，
-            这里同样给一个能直接点的入口，不让用户自己找路 */}
-        {services.length === 0 && cards.length === 0 && (
-          <div className="emptybox">
-            还没有可用的翻译服务
-            <br />
-            请到「设置 → 服务配置」启用并填写 API Key
-            {props.onOpenSettings && (
-              <span style={{ display: "block", marginTop: 10 }}>
-                <button className="btn primary mini" onClick={props.onOpenSettings}>
-                  <Icon name="sliders" size="sm" />
-                  打开设置
-                </button>
-              </span>
-            )}
+      <div className="rail">
+        <div className="rail-card">
+          <div className="rail-h">
+            最近翻译<span className="m">最近 5 条</span>
           </div>
-        )}
-        {cards.map((c) => (
-          <ResultCard key={c.id} card={c} svc={svcColor(c.id)} onRetry={retryOne} copyLabel="复制" showMeta />
-        ))}
+          {recent.length === 0 && <div className="rail-empty">还没有翻译记录</div>}
+          {recent.map((h) => (
+            <div
+              key={h.id}
+              className="quick"
+              title="把原文填回输入框"
+              onClick={() => setText(h.source)}
+            >
+              <span className="qt">{h.source}</span>
+              <span className="qm">{formatTime(h.createdAt)}</span>
+            </div>
+          ))}
+          <div className="rail-more">
+            <button className="btn mini" onClick={props.onOpenHistory}>
+              <Icon name="arrow-right" size="sm" />打开历史
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );
