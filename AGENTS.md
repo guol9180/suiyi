@@ -16,6 +16,7 @@ Windows 桌面 AI 翻译工具：划词翻译（Alt+D）+ 截图识别（Alt+S�
 
 - 终端命令一律用 PowerShell 7：`D:\software\powershell7\7\pwsh.exe`（7.6.7 x86，已登记 App Paths 但不在 PATH）。
   系统默认的 5.1 会吞掉传给原生命令的内嵌双引号——脚本用 here-string 存变量再传，或走 `-EncodedCommand`。
+- GitHub CLI 在 `D:\dev\environment\gh-cli\bin\gh.exe`（已登录 guol9180，未入 PATH）；仓库与发布操作优先用它。
 - pnpm 一律用 `pnpm.cmd` 调用；`pnpm.ps1` 会被本机执行策略拦截；registry 走 npmmirror。
 - 代理沙箱内只用文件工具改源码；写 `node_modules`、`target`、`.git` 的命令（pnpm / cargo / git）在无沙箱限制的终端执行。
 
