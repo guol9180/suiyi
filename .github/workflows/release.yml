@@ -42,6 +42,14 @@ jobs:
         with:
           workspaces: src-tauri
 
+      # Tauri 打包器（NSIS 与 WiX）每次运行会现场下载到 %LOCALAPPDATA%\tauri，
+      # 缓存后省掉每次发版的下载时间
+      - name: 缓存打包器工具
+        uses: actions/cache@v4
+        with:
+          path: ~/AppData/Local/tauri
+          key: tauri-bundler-${{ runner.os }}
+
       # OCR 模型与 ONNX Runtime 约 34MB，按哈希缓存，避免每次 CI 重新下载
       - name: 缓存 OCR 模型
         uses: actions/cache@v4
@@ -56,11 +64,14 @@ jobs:
       - name: 拉取 OCR 模型
         run: pnpm ocr:assets
 
+      # 测试与构建共用 release profile：省掉整个 debug 依赖编译（每次发版约省 3~4 分钟），
+      # 测试编译出的 release 依赖直接被下一步 tauri build 复用。
+      # panic=abort 下测试框架工作正常（本地实测 79 用例通过）。
       - name: 运行后端测试
         working-directory: src-tauri
         shell: pwsh
         run: |
-          cargo test 2>&1 | Tee-Object -FilePath ../test-output.txt
+          cargo test --release 2>&1 | Tee-Object -FilePath ../test-output.txt
           if ($LASTEXITCODE -ne 0) {
             # 把失败摘要发成注解：没有日志读取权限时也能在 check 上看到原因
             Get-Content ../test-output.txt |
