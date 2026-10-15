@@ -14,6 +14,8 @@ Windows 桌面 AI 翻译工具：划词翻译（Alt+D）+ 截图识别（Alt+S�
 
 ## 环境注意
 
+- 终端命令一律用 PowerShell 7：`D:\software\powershell7\7\pwsh.exe`（7.6.7 x86，已登记 App Paths 但不在 PATH）。
+  系统默认的 5.1 会吞掉传给原生命令的内嵌双引号——脚本用 here-string 存变量再传，或走 `-EncodedCommand`。
 - pnpm 一律用 `pnpm.cmd` 调用；`pnpm.ps1` 会被本机执行策略拦截；registry 走 npmmirror。
 - 代理沙箱内只用文件工具改源码；写 `node_modules`、`target`、`.git` 的命令（pnpm / cargo / git）在无沙箱限制的终端执行。
 
@@ -31,6 +33,9 @@ Windows 桌面 AI 翻译工具：划词翻译（Alt+D）+ 截图识别（Alt+S�
    内容按归属写入对应文件，不在多处重复维护。
 9. 前端页面有大改动时，提交前评估并同步产品下载页 `docs/index.html`：界面复刻以
    `design/ui-mockup.html` 为真源，功能描述与已知限制对照新现状核一遍，改完按规范 5 渲染目检。
+10. 代码以复用为先，但不过度设计：同一逻辑或结构出现第二份就抽公共函数、样式或组件；
+    前端页面表现优先组件化，共用结构（图标、结果卡、表单行、状态徽标等）从 `src/components/`
+    取用，保证表现统一、改动只落一处。
 
 ## 界面与设计规范
 
