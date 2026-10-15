@@ -317,7 +317,7 @@ textarea.inp { height: auto; min-height: 86px; padding: 9px 11px; line-height: 1
 .rc-err { color: var(--c-danger); font-size: var(--fs-sec); }
 /* 失败卡片底部的排查提示与重试 */
 .rc-foot { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
-.rc-foot .muted { flex: 1; min-width: 0; }
+.rc-foot .muted { flex: 1; min-width: 0; font-size: var(--fs-cap); color: var(--c-caption); }
 /* 成功卡片的第二信息行 */
 .rc-meta {
   margin-top: 8px;
@@ -363,6 +363,15 @@ textarea.inp { height: auto; min-height: 86px; padding: 9px 11px; line-height: 1
   color: var(--c-caption);
   background: var(--c-surface-2);
 }
+/* 轻量空态：只有一行说明，不带虚线框（设置页与历史页共用） */
+.empty-hint {
+  color: var(--c-caption);
+  font-size: var(--fs-sec);
+  padding: 28px 8px;
+  text-align: center;
+}
+/* 横贯整行的宽面板：历史与生词本这类双栏内容用 */
+.panel.wide { max-width: none; }
 
 /* ---------- 词典结果卡 ---------- */
 .dict-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 6px; }
@@ -383,14 +392,20 @@ textarea.inp { height: auto; min-height: 86px; padding: 9px 11px; line-height: 1
 .dict .sense .def { font-size: var(--fs-body); color: var(--c-text); }
 .dict .sense .eg { font-size: var(--fs-sec); color: var(--c-text-3); margin-top: 3px; }
 
+/* 全局提示条：固定右下角（设置页与历史页共用），配色见下面的语义档 */
 .toast {
+  position: fixed;
+  bottom: 18px;
+  right: 18px;
+  z-index: 10;
   display: flex;
   align-items: center;
   gap: 9px;
   border-radius: var(--radius-md);
-  padding: 9px 12px;
+  padding: 9px 16px;
   font-size: var(--fs-sec);
   border: 1px solid;
+  box-shadow: var(--shadow-pop);
 }
 .toast.float { box-shadow: var(--shadow-float); }
 .toast.ok { background: var(--c-success-bg); border-color: var(--c-success-border); color: var(--c-success-ink); }

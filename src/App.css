@@ -171,3 +171,6 @@
   overflow: auto;
 }
 .tab-body > * { height: 100%; }
+/* 页签保挂载：每个 pane 占满，内部页面自己滚动 */
+.tab-pane { height: 100%; }
+.tab-pane > * { height: 100%; }

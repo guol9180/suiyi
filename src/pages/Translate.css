@@ -22,6 +22,13 @@
   min-height: 0;
 }
 
+/* 结果卡表面：主窗毛玻璃（结构在 base.css，弹窗的实底覆盖在 Popup.css） */
+.rescard {
+  background: var(--glass-card);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+}
+
 /* ---------- hero 输入卡：语言行、计数、正文、动作条集成在一张卡里 ---------- */
 .hero-input {
   display: flex;

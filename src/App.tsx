@@ -257,16 +257,19 @@ export default function App() {
         </div>
       )}
       <div className="tab-body">
-        {tab === "translate" && (
+        {/* 三页保持挂载，只切显示：工作台的输入与结果不因跳历史而丢失 */}
+        <div className="tab-pane" style={{ display: tab === "translate" ? undefined : "none" }}>
           <TranslatePage
             onOpenSettings={() => setTab("settings")}
             onOpenHistory={() => setTab("history")}
           />
-        )}
-        {tab === "history" && <HistoryPage />}
-        {tab === "settings" && (
+        </div>
+        <div className="tab-pane" style={{ display: tab === "history" ? undefined : "none" }}>
+          <HistoryPage />
+        </div>
+        <div className="tab-pane" style={{ display: tab === "settings" ? undefined : "none" }}>
           <SettingsPage focusAboutSignal={aboutSignal} checkUpdateSignal={updateCheckSignal} />
-        )}
+        </div>
       </div>
 
       {closeAsk && (
