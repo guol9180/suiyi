@@ -2,7 +2,8 @@
 
 > Windows 桌面 AI 翻译工具：划词翻译、截图识别，多 AI 服务并发对比。
 > 本文件管开发计划与验收标准；项目概览与技术栈见 `README.md`，开发规范见 `AGENTS.md`。
-> 界面基线：`design/ui-mockup.html`（v0.8，与 v0.9.2 实现对齐）；`design/ui-redesign.html`（v1.0 提案，未实现）。
+> 界面：工作台 / 历史 / 划词弹窗 / 截图识别见 `design/ui-redesign.html`（v1.0，已实现）；
+> 设置等其余页面基线 `design/ui-mockup.html`。
 
 ## 1. 目录结构
 
@@ -145,5 +146,4 @@ macOS 的辅助功能与录屏权限引导；Linux 以 X11 优先，Wayland 走�
 
 1. Windows 回落 OCR 仍优先请求 `en-US` 语言包（本机只有中文包），是否改为按内容自适应——
    本地 PaddleOCR 主路径中英混排后此问题只影响回落场景，保留观察。
-2. `design/ui-redesign.html`（v1.0 工作台重设计）是否实施、分几步实施，待定。
 

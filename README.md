@@ -177,8 +177,8 @@ suiyi/
 
 - [DEVELOP_PLAN.md](./DEVELOP_PLAN.md)：开发计划与验收标准
 - [AGENTS.md](./AGENTS.md)：开发规范（动手改代码前先读）
-- [design/ui-mockup.html](./design/ui-mockup.html)：界面设计基线，与实现逐字对齐（单文件，浏览器直接打开）
-- [design/ui-redesign.html](./design/ui-redesign.html)：v1.0 重设计提案，未实现，勿当现状引用
+- [design/ui-redesign.html](./design/ui-redesign.html)：工作台 / 历史 / 划词弹窗 / 截图识别的设计稿（v1.0，已实现）
+- [design/ui-mockup.html](./design/ui-mockup.html)：设置等其余页面的设计基线（单文件，浏览器直接打开）
 - [docs/index.html](./docs/index.html)：下载页源码
 
 ## 许可

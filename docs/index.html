@@ -268,8 +268,13 @@ h1{font-size:var(--t-display);line-height:1.25;font-weight:600;letter-spacing:-.
 }
 .demo-cards{display:grid;gap:8px;padding:10px 12px}
 .demo-card{
+  position:relative;overflow:hidden;
   background:var(--surface);border:1px solid var(--line);
-  border-radius:var(--r-m);padding:10px 12px;
+  border-radius:var(--r-m);padding:10px 12px 10px 15px;
+}
+.demo-card::before{
+  content:"";position:absolute;left:0;top:0;bottom:0;width:3px;
+  background:var(--svc,var(--accent));
 }
 .demo-card .rh{display:flex;align-items:center;gap:7px;font-size:11px;color:var(--ink-3);margin-bottom:5px}
 .demo-card .rh .n{font-weight:600;color:var(--ink-2)}
@@ -560,11 +565,11 @@ footer a:hover{color:var(--link-hover)}
             <div class="txt">Despite their success, transformers still struggle with long-context reasoning and efficient retrieval.</div>
           </div>
           <div class="demo-cards">
-            <div class="demo-card">
+            <div class="demo-card" style="--svc:#3964FE">
               <div class="rh"><span class="demo-dot"></span><span class="n">ZAI</span><span>1.8s</span><span class="sp"></span><span class="demo-btn icon"><svg class="demo-ico sm"><use href="#i-copy"/></svg></span></div>
               <div class="rt">尽管取得了成功，Transformer 在长上下文推理和高效检索方面仍然存在困难。</div>
             </div>
-            <div class="demo-card">
+            <div class="demo-card" style="--svc:#8B5CF6">
               <div class="rh"><span class="demo-dot"></span><span class="n">DeepSeek</span><span>流式生成中…</span><span class="sp"></span></div>
               <div class="rt">虽然成果显著，Transformer 依然难以进行长上下文推理与高效<span class="caret"></span></div>
             </div>
@@ -631,7 +636,7 @@ footer a:hover{color:var(--link-hover)}
           <span class="sysbtn"><svg width="10" height="10"><use href="#i-max"/></svg></span>
           <span class="sysbtn cls"><svg width="10" height="10"><use href="#i-x"/></svg></span>
         </div>
-        <div class="demo-tabbar" aria-hidden="true"><span class="on">翻译</span><span>设置</span></div>
+        <div class="demo-tabbar" aria-hidden="true"><span class="on">翻译</span><span>历史</span><span>设置</span></div>
         <div class="demo-body" aria-hidden="true">
           <div>
             <div class="demo-rowlab">翻译设置</div>
@@ -650,16 +655,16 @@ footer a:hover{color:var(--link-hover)}
             <span class="demo-btn big">截图识别</span>
             <span class="hint">Ctrl+Enter 翻译</span>
           </div>
-          <div class="demo-card">
+          <div class="demo-card" style="--svc:#3964FE">
             <div class="rh"><span class="demo-dot"></span><span class="n">ZAI</span><span>0.9s</span><span class="sp"></span><span class="demo-btn"><svg class="demo-ico sm"><use href="#i-copy"/></svg>复制</span></div>
             <div class="rt">敏捷的棕色狐狸跳过了那只懒狗。</div>
             <div class="demo-rmeta">输出 15 字</div>
           </div>
-          <div class="demo-card">
+          <div class="demo-card" style="--svc:#8B5CF6">
             <div class="rh"><span class="demo-dot"></span><span class="n">智谱 GLM</span><span>流式生成中…</span><span class="sp"></span></div>
             <div class="rt">敏捷的棕色狐<span class="caret"></span></div>
           </div>
-          <div class="demo-card err">
+          <div class="demo-card err" style="--svc:#C42B1C">
             <div class="rh"><span class="demo-dot err"></span><span class="n">Gemini</span><span>1.2s</span><span class="sp"></span><span class="demo-btn">重试</span></div>
             <div class="rt">请求太频繁，稍后再试</div>
           </div>
@@ -684,7 +689,6 @@ footer a:hover{color:var(--link-hover)}
             <span class="it">通用</span>
             <span class="it">热键</span>
             <span class="it on">服务配置</span>
-            <span class="it">历史记录</span>
             <span class="it">生词本</span>
             <span class="it">语音合成</span>
             <span class="it">插件</span>
