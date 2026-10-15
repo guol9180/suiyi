@@ -13,30 +13,18 @@ import {
   stopSpeaking,
   wordbookAdd,
 } from "../api";
-import { describeError } from "../errorText";
 import {
-  SOURCE_LANGS,
-  TARGET_LANGS,
-  swapLanguages,
-  type DictionaryResult,
+  enabledTranslations,
+  type CardState,
   type HistoryKind,
   type PluginInfo,
   type ServiceConfig,
   type TranslateResult,
 } from "../types";
 import { Icon } from "../components/Icon";
-import { DictionaryCard } from "../components/DictionaryCard";
+import { ResultCard } from "../components/ResultCard";
+import { LangPicker } from "../components/LangPicker";
 import "./Popup.css";
-
-interface CardState {
-  id: string;
-  name: string;
-  text: string;
-  status: "streaming" | "done" | "error";
-  elapsedMs?: number;
-  error?: string;
-  dictionary?: DictionaryResult;
-}
 
 export default function PopupPage() {
   const [source, setSource] = useState("");
@@ -53,12 +41,14 @@ export default function PopupPage() {
   // 当前这轮文本的来源，历史归类用；用 ref 避免重建 doTranslate
   const kindRef = useRef<HistoryKind>("selection");
 
+  // 第一条成功译文与「有没有成功译文」：这个谓词在文件里出现十来次，收敛成两个值
+  const doneCard = cards.find((c) => c.status === "done" && c.text);
+  const hasDone = doneCard != null;
+
   const refreshServices = useCallback(async () => {
     try {
       const f = await listServices();
-      setServices(
-        f.services.filter((s) => s.enabled && s.kind === "translation").sort((a, b) => a.order - b.order),
-      );
+      setServices(enabledTranslations(f.services));
     } catch {
       /* 弹窗静默 */
     }
@@ -187,7 +177,8 @@ export default function PopupPage() {
   }
 
   function copyResult() {
-    const done = cards.find((c) => c.status === "done" && c.text) ?? cards.find((c) => c.text);
+    // 复制兜底放宽到「有任何文本」：流式中途也能先拿到一部分
+    const done = doneCard ?? cards.find((c) => c.text);
     if (done) void navigator.clipboard.writeText(done.text);
   }
 
@@ -196,11 +187,10 @@ export default function PopupPage() {
    * 主进程会先把弹窗藏起来、把焦点送回取词时的窗口，校验通过才粘贴。
    */
   async function replaceOriginal() {
-    const done = cards.find((c) => c.status === "done" && c.text);
-    if (!done) return;
+    if (!doneCard) return;
     setReplacing(true);
     try {
-      await replaceSelection(done.text);
+      await replaceSelection(doneCard.text);
     } catch (e) {
       setNotice(String(e));
     } finally {
@@ -210,10 +200,9 @@ export default function PopupPage() {
 
   /** 用本地语音朗读第一条成功译文（重复点击会打断上一次播放） */
   async function speakResult() {
-    const done = cards.find((c) => c.status === "done" && c.text);
-    if (!done) return;
+    if (!doneCard) return;
     try {
-      await speakText(done.text);
+      await speakText(doneCard.text);
     } catch (e) {
       setNotice(String(e));
     }
@@ -229,10 +218,9 @@ export default function PopupPage() {
 
   /** 把「原文 → 第一条译文」推进生词本（先落本地，Anki 没开也留得住） */
   async function addToAnki() {
-    const done = cards.find((c) => c.status === "done" && c.text);
-    if (!done || !source.trim()) return;
+    if (!doneCard || !source.trim()) return;
     try {
-      const r = await wordbookAdd(source.trim(), done.text, { source: "selection" });
+      const r = await wordbookAdd(source.trim(), doneCard.text, { source: "selection" });
       if (r.duplicate) setNotice(r.error ?? "这条已经在生词本里了");
       else if (r.synced) setNotice("已加入生词本并同步到 Anki");
       else setNotice("已加入生词本，等 Anki 可用时自动同步");
@@ -243,10 +231,9 @@ export default function PopupPage() {
 
   /** 运行动作插件，把它返回的提示展示出来 */
   async function runAction(p: PluginInfo) {
-    const done = cards.find((c) => c.status === "done" && c.text);
-    if (!done) return;
+    if (!doneCard) return;
     try {
-      const msg = await runActionPlugin(p.id, source, done.text);
+      const msg = await runActionPlugin(p.id, source, doneCard.text);
       setNotice(msg || `已执行「${p.name}」`);
     } catch (e) {
       setNotice(String(e));
@@ -298,28 +285,7 @@ export default function PopupPage() {
 
         {/* 语言方向 */}
         <div className="pop-langrow">
-          <select className="pop-lang" value={from} onChange={(e) => setFrom(e.target.value)}>
-            {SOURCE_LANGS.map((l) => (
-              <option key={l} value={l}>{l}</option>
-            ))}
-          </select>
-          <button
-            className="swap"
-            title="互换语言方向"
-            aria-label="互换语言方向"
-            onClick={() => {
-              const next = swapLanguages(from, to);
-              setFrom(next.from);
-              setTo(next.to);
-            }}
-          >
-            <Icon name="swap" size="sm" />
-          </button>
-          <select className="pop-lang" value={to} onChange={(e) => setTo(e.target.value)}>
-            {TARGET_LANGS.map((l) => (
-              <option key={l} value={l}>{l}</option>
-            ))}
-          </select>
+          <LangPicker from={from} to={to} onChangeFrom={setFrom} onChangeTo={setTo} selectClassName="pop-lang" />
           <span style={{ flex: 1 }} />
           {services.length > 0 && (
             <span className="chip ok mini"><span className="dot" />{services.length} 服务并发</span>
@@ -349,37 +315,7 @@ export default function PopupPage() {
             </div>
           )}
           {cards.map((c) => (
-            <div key={c.id} className="rescard">
-              <div className="rh">
-                <span className={`dot${c.status === "error" ? " err" : ""}`} />
-                <b>{c.name}</b>
-                {c.status === "done" && c.elapsedMs != null && (
-                  <span>{(c.elapsedMs / 1000).toFixed(1)}s</span>
-                )}
-                {c.status === "streaming" && <span>流式生成中…</span>}
-                <span style={{ flex: 1 }} />
-                {c.text && (
-                  <button
-                    className="btn mini"
-                    title="复制这条译文"
-                    onClick={() => void navigator.clipboard.writeText(c.text)}
-                  >
-                    <Icon name="copy" size="sm" />
-                  </button>
-                )}
-              </div>
-              {c.error ? (
-                // 弹窗窄，只放结论；完整原文留在历史记录里，这里悬停可看
-                <div className="rt rc-err" title={c.error}>{describeError(c.error).title}</div>
-              ) : c.dictionary ? (
-                <DictionaryCard dict={c.dictionary} />
-              ) : (
-                <div className="rt">
-                  {c.text}
-                  {c.status === "streaming" && <span className="caret" />}
-                </div>
-              )}
-            </div>
+            <ResultCard key={c.id} card={c} />
           ))}
         </div>
 
@@ -391,7 +327,7 @@ export default function PopupPage() {
           <button
             className="btn mini"
             title="用第一条译文替换原应用里选中的文字"
-            disabled={replacing || !cards.some((c) => c.status === "done" && c.text)}
+            disabled={replacing || !hasDone}
             onClick={() => void replaceOriginal()}
           >
             <Icon name="swap" size="sm" />替换原文
@@ -409,7 +345,7 @@ export default function PopupPage() {
           <div className="more-menu">
             <button
               className="mi"
-              disabled={!cards.some((c) => c.status === "done" && c.text)}
+              disabled={!hasDone}
               onClick={() => { setMoreOpen(false); void speakResult(); }}
             >
               <Icon name="speaker" size="sm" />朗读译文
@@ -419,7 +355,7 @@ export default function PopupPage() {
             </button>
             <button
               className="mi"
-              disabled={!source.trim() || !cards.some((c) => c.status === "done" && c.text)}
+              disabled={!source.trim() || !hasDone}
               onClick={() => { setMoreOpen(false); void addToAnki(); }}
             >
               <Icon name="bookmark" size="sm" />加入生词本
@@ -428,7 +364,7 @@ export default function PopupPage() {
               <button
                 key={p.id}
                 className="mi"
-                disabled={!cards.some((c) => c.status === "done" && c.text)}
+                disabled={!hasDone}
                 onClick={() => { setMoreOpen(false); void runAction(p); }}
               >
                 <Icon name="bolt" size="sm" />{p.name}

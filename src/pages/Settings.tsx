@@ -1,6 +1,8 @@
 // S0.6 设置页：服务配置（对应设计稿④）
 import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import "./Settings.css";
+import { formatSecs, formatTime } from "../format";
+import { enabledTranslations } from "../types";
 import {
   ankiStatus,
   createSamplePlugin,
@@ -109,26 +111,10 @@ const IDLE_SPEECH: SpeechState = {
 };
 const DEFAULT_PREVIEW = "这是一段试听文本，用来确认音色与语速。";
 
-/** 历史时间显示成「今天 14:22」这种更好读的形式 */
 /** 把 "alt+d" 这种加速度拆成键帽上该显示的字符 */
 function accelKeys(accel: string): string[] {
   const named: Record<string, string> = { ctrl: "Ctrl", alt: "Alt", shift: "Shift", super: "Win" };
   return accel.split("+").map((p) => named[p] ?? p.toUpperCase());
-}
-
-function formatTime(ms: number): string {
-  const d = new Date(ms);
-  const today = new Date();
-  const yesterday = new Date(today.getTime() - 86_400_000);
-  const day =
-    d.toDateString() === today.toDateString()
-      ? "今天"
-      : d.toDateString() === yesterday.toDateString()
-        ? "昨天"
-        : `${d.getMonth() + 1} 月 ${d.getDate()} 日`;
-  const hh = String(d.getHours()).padStart(2, "0");
-  const mm = String(d.getMinutes()).padStart(2, "0");
-  return `${day} ${hh}:${mm}`;
 }
 
 function Toggle(props: { on: boolean; onClick: () => void }) {
@@ -1163,7 +1149,7 @@ export default function SettingsPage({
                   <span className="meta">
                     <span>{HISTORY_KIND_LABELS[h.kind] ?? h.kind}</span>
                     <span>{formatTime(h.createdAt)}</span>
-                    {h.ok && h.elapsedMs > 0 && <span>{(h.elapsedMs / 1000).toFixed(1)}s</span>}
+                    {h.ok && h.elapsedMs > 0 && <span>{formatSecs(h.elapsedMs)}</span>}
                   </span>
                     </div>
                   </div>
@@ -1187,7 +1173,7 @@ export default function SettingsPage({
                     </div>
                     <div className="hmeta">
                       <span>{formatTime(selectedEntry.createdAt)}</span>
-                      {selectedEntry.ok && <span>{(selectedEntry.elapsedMs / 1000).toFixed(1)}s</span>}
+                      {selectedEntry.ok && <span>{formatSecs(selectedEntry.elapsedMs)}</span>}
                     </div>
                     <div className="hact">
                       <button
@@ -1220,8 +1206,7 @@ export default function SettingsPage({
                         }}
                       >
                         <option value="">换服务重译…</option>
-                        {(file?.services ?? [])
-                          .filter((s) => s.enabled && s.kind === "translation")
+                        {enabledTranslations(file?.services ?? [])
                           .filter((s) => s.name !== selectedEntry.serviceName)
                           .map((s) => (
                             <option key={s.id} value={s.id}>{s.name}</option>

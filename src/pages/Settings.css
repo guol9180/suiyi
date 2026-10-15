@@ -230,7 +230,7 @@
 input[type="range"] { accent-color: var(--c-primary); }
 select.inp { appearance: auto; }
 
-/* ---------- 全局提示条 ---------- */
+/* 全局提示条：定位与阴影在这里，配色沿用 base.css 的 .toast.ok 与 .toast.err */
 .toast {
   position: fixed;
   bottom: 18px;
@@ -240,16 +240,6 @@ select.inp { appearance: auto; }
   font-size: var(--fs-sec);
   box-shadow: var(--shadow-pop);
   z-index: 10;
-}
-.toast.ok {
-  background: var(--c-success-bg);
-  color: var(--c-success);
-  border: 1px solid var(--c-success-border);
-}
-.toast.err {
-  background: var(--c-danger-bg);
-  color: var(--c-danger);
-  border: 1px solid var(--c-danger-border);
 }
 
 /* ---------- 侧边栏分组与未实现项 ---------- */

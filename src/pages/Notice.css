@@ -5,12 +5,6 @@
  * 不设拖拽区、不加 hover 态 —— 整个窗口鼠标穿透，任何可交互的样子都是骗人。
  */
 
-html,
-body,
-#root {
-  height: 100%;
-}
-
 .nt-root {
   height: 100%;
   display: flex;

@@ -242,3 +242,25 @@ export const TARGET_LANGS = ["中文", "简体中文", "English", "日本語"];
 export function swapLanguages(from: string, to: string): { from: string; to: string } {
   return { from: to, to: from === "自动检测" ? "English" : from };
 }
+
+/**
+ * 已启用的翻译服务，按配置顺序排序。
+ * 翻译页、划词弹窗、OCR 结果窗与历史重译下拉都走这一个出口，
+ * 保证服务顺序全应用一致（重译下拉曾因漏排序漂移过）。
+ */
+export function enabledTranslations(list: ServiceConfig[]): ServiceConfig[] {
+  return list
+    .filter((s) => s.enabled && s.kind === "translation")
+    .sort((a, b) => a.order - b.order);
+}
+
+/** 一路服务的翻译卡片状态。翻译页与划词弹窗共用 ResultCard 渲染 */
+export interface CardState {
+  id: string;
+  name: string;
+  text: string;
+  status: "streaming" | "done" | "error";
+  elapsedMs?: number;
+  error?: string;
+  dictionary?: DictionaryResult;
+}

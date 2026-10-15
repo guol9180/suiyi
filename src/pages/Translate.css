@@ -19,29 +19,7 @@
 
 .lang-row { display: flex; align-items: center; gap: 10px; }
 .lang-row select.inp { width: auto; min-width: 120px; }
-.lang-row .arrow { color: var(--c-icon); }
 .muted { font-size: var(--fs-sec); color: var(--c-caption); }
-
-/* 互换语言方向 */
-.swap {
-  width: 28px;
-  height: 28px;
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid var(--c-border-strong);
-  border-radius: var(--radius-md);
-  background: var(--c-surface);
-  color: var(--c-text-2);
-  cursor: pointer;
-  transition: background 0.14s, border-color 0.14s, color 0.14s;
-}
-.swap:hover {
-  background: var(--c-primary-soft);
-  border-color: var(--c-primary-border);
-  color: var(--c-primary-text);
-}
 
 .src-area { min-height: 110px; resize: vertical; }
 
@@ -49,51 +27,9 @@
 
 .cards { display: flex; flex-direction: column; gap: 10px; overflow: auto; flex: 1; min-height: 60px; }
 
+/* 结果卡结构在 base.css（ResultCard 组件共用）；这里只留主窗的毛玻璃表面 */
 .rescard {
-  border: 1px solid var(--glass-edge);
-  border-radius: var(--radius-lg);
-  padding: 10px 12px;
   background: var(--glass-card);
   backdrop-filter: var(--glass-blur);
   -webkit-backdrop-filter: var(--glass-blur);
 }
-.rh {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  font-size: var(--fs-cap);
-  color: var(--c-text-3);
-  margin-bottom: 6px;
-}
-.rh b { font-size: var(--fs-sec); color: var(--c-text); }
-.dot.err { background: var(--c-danger); }
-.rt {
-  font-size: var(--fs-sub);
-  line-height: 1.8;
-  white-space: pre-wrap;
-  color: var(--c-text);
-}
-.rc-err { color: var(--c-danger); font-size: var(--fs-sec); }
-
-/* 失败卡片底部的排查提示与重试 */
-.rc-foot { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
-.rc-foot .muted { flex: 1; min-width: 0; }
-
-/* 成功卡片的第二信息行 */
-.rc-meta {
-  margin-top: 8px;
-  font-size: var(--fs-cap);
-  color: var(--c-caption);
-  font-variant-numeric: tabular-nums;
-}
-
-.caret {
-  display: inline-block;
-  width: 2px;
-  height: 14px;
-  background: var(--c-primary);
-  vertical-align: -2px;
-  margin-left: 1px;
-  animation: blink 1s step-start infinite;
-}
-@keyframes blink { 50% { opacity: 0; } }

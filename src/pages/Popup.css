@@ -1,7 +1,5 @@
 /* 划词弹窗样式（设计稿①） */
 
-html, body, #root { height: 100%; }
-
 .popup-root {
   height: 100%;
   padding: 6px; /* 给窗口阴影/圆角留边 */
@@ -66,26 +64,6 @@ html, body, #root { height: 100%; }
   cursor: pointer;
 }
 .pop-lang:hover { border-color: var(--c-border-hover); }
-.swap {
-  width: 28px;
-  height: 28px;
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid var(--c-border-strong);
-  border-radius: var(--radius-md);
-  background: var(--c-surface);
-  color: var(--c-text-2);
-  cursor: pointer;
-  transition: background 0.14s, border-color 0.14s, color 0.14s;
-}
-.swap:hover {
-  background: var(--c-primary-soft);
-  border-color: var(--c-primary-border);
-  color: var(--c-primary-text);
-}
-
 /* 写回降级等一次性提示 */
 .pop-notice {
   display: flex;
@@ -148,33 +126,13 @@ html, body, #root { height: 100%; }
   line-height: 2;
 }
 
+/* 结果卡结构在 base.css（ResultCard 组件共用）；这里只留弹窗的实底白与小一号圆角 */
 .rescard {
-  border: 1px solid var(--c-border);
-  border-radius: 10px;
+  border-color: var(--c-border);
+  border-radius: var(--radius-md);
   padding: 8px 10px;
   background: var(--c-surface);
 }
-.rh {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: var(--fs-cap);
-  color: var(--c-text-3);
-  margin-bottom: 4px;
-}
-.rh b { font-size: var(--fs-sec); color: var(--c-text); }
-.rt { font-size: var(--fs-body); line-height: 1.75; white-space: pre-wrap; color: var(--c-text); }
-.rc-err { color: var(--c-danger); font-size: var(--fs-sec); }
-.caret {
-  display: inline-block;
-  width: 2px;
-  height: 13px;
-  background: var(--c-primary);
-  vertical-align: -2px;
-  margin-left: 1px;
-  animation: blink 1s step-start infinite;
-}
-@keyframes blink { 50% { opacity: 0; } }
 
 /* ---------- 动作条与状态 ---------- */
 .pop-actions {
@@ -221,7 +179,6 @@ html, body, #root { height: 100%; }
 .more-menu .mi:hover { background: var(--c-app-bg); }
 .more-menu .mi:disabled { color: var(--c-muted-ink); cursor: not-allowed; }
 .more-menu .mi:disabled:hover { background: var(--c-mile-bg); }
-.more-menu .soon { margin-left: auto; font-size: var(--fs-cap); color: var(--c-muted-ink); }
 .more-menu .sep { height: 1px; background: var(--c-border-soft); margin: 4px 0; }
 .pop-status {
   display: flex;

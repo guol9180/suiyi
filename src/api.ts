@@ -116,14 +116,6 @@ export function tailLog(lines = 40): Promise<string> {
 }
 
 /**
- * 真正退出应用。点窗口的 × 只是收起主窗口（全局热键要继续可用），
- * 所以退出必须有一个显式入口。
- */
-export function quitApp(): Promise<void> {
-  return invoke("quit_app");
-}
-
-/**
  * 点 × 之后的选择：quit 退出进程，minimize 最小化到任务栏。
  * remember 为真时把选择记进配置，下次不再问。
  */

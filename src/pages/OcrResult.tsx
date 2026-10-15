@@ -6,7 +6,8 @@ import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { listServices } from "../api";
 import { Icon } from "../components/Icon";
-import type { ServiceConfig, TranslateResult } from "../types";
+import { formatSecs } from "../format";
+import { enabledTranslations, type ServiceConfig, type TranslateResult } from "../types";
 import "./OcrResult.css";
 
 /** 识别结果。只带文本与引擎信息：选区图与行矩形不再往界面传（见 screenshot.rs 的说明） */
@@ -117,13 +118,7 @@ export default function OcrResultPage() {
 
   useEffect(() => {
     void listServices()
-      .then((f) =>
-        setServices(
-          f.services
-            .filter((s) => s.enabled && s.kind === "translation")
-            .sort((a, b) => a.order - b.order),
-        ),
-      )
+      .then((f) => setServices(enabledTranslations(f.services)))
       .catch(() => setServices([]));
   }, []);
 
@@ -216,7 +211,7 @@ export default function OcrResultPage() {
             截图识别
           </span>
           {busy && <span className="chip mile mini">翻译中</span>}
-          {!busy && first && <span className="chip ok mini">{(first.elapsedMs / 1000).toFixed(1)}s</span>}
+          {!busy && first && <span className="chip ok mini">{formatSecs(first.elapsedMs)}</span>}
           <span style={{ flex: 1 }} />
           <button className="ocr-x" title="关闭" onClick={() => void closePanel()}>
             <Icon name="close" size="sm" />

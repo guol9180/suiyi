@@ -176,6 +176,27 @@ input[type="radio"] {
 .tgl[aria-checked="false"] { background: var(--c-idle-dot); }
 .tgl[aria-checked="false"]::after { left: 2px; }
 
+/* ---------- 互换语言方向（翻译页与划词弹窗共用） ---------- */
+.swap {
+  width: 28px;
+  height: 28px;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--c-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--c-surface);
+  color: var(--c-text-2);
+  cursor: pointer;
+  transition: background 0.14s, border-color 0.14s, color 0.14s;
+}
+.swap:hover {
+  background: var(--c-primary-soft);
+  border-color: var(--c-primary-border);
+  color: var(--c-primary-text);
+}
+
 /* ---------- 输入框 ---------- */
 .inp {
   width: 100%;
@@ -258,6 +279,50 @@ textarea.inp { height: auto; min-height: 86px; padding: 9px 11px; line-height: 1
 }
 .card-head .hname { font-size: var(--fs-sub); font-weight: 600; }
 .card-head .m { font-size: var(--fs-cap); color: var(--c-caption); }
+
+/* ---------- 多服务结果卡（翻译页与划词弹窗共用 ResultCard） ---------- */
+/* 结构与字号在此统一；表面（毛玻璃或实底、圆角与内距档位）由页面 CSS 覆盖 */
+.rescard {
+  border: 1px solid var(--glass-edge);
+  border-radius: var(--radius-lg);
+  padding: 10px 12px;
+}
+.rh {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: var(--fs-cap);
+  color: var(--c-text-3);
+  margin-bottom: 6px;
+}
+.rh b { font-size: var(--fs-sec); color: var(--c-text); }
+.rt {
+  font-size: var(--fs-sub);
+  line-height: 1.8;
+  white-space: pre-wrap;
+  color: var(--c-text);
+}
+.rc-err { color: var(--c-danger); font-size: var(--fs-sec); }
+/* 失败卡片底部的排查提示与重试 */
+.rc-foot { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
+.rc-foot .muted { flex: 1; min-width: 0; }
+/* 成功卡片的第二信息行 */
+.rc-meta {
+  margin-top: 8px;
+  font-size: var(--fs-cap);
+  color: var(--c-caption);
+  font-variant-numeric: tabular-nums;
+}
+.caret {
+  display: inline-block;
+  width: 2px;
+  height: 14px;
+  background: var(--c-primary);
+  vertical-align: -2px;
+  margin-left: 1px;
+  animation: blink 1s step-start infinite;
+}
+@keyframes blink { 50% { opacity: 0; } }
 
 /* ---------- 键位标签 ---------- */
 .kbd {
