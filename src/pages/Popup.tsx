@@ -24,6 +24,7 @@ import {
 import { Icon } from "../components/Icon";
 import { ResultCard } from "../components/ResultCard";
 import { LangPicker } from "../components/LangPicker";
+import { svcColor } from "../svcColor";
 import "./Popup.css";
 
 export default function PopupPage() {
@@ -315,7 +316,7 @@ export default function PopupPage() {
             </div>
           )}
           {cards.map((c) => (
-            <ResultCard key={c.id} card={c} />
+            <ResultCard key={c.id} card={c} svc={svcColor(c.id)} />
           ))}
         </div>
 

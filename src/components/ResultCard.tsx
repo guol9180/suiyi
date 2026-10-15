@@ -6,6 +6,7 @@
  * - 「输出 N 字」只有翻译页显示。
  * 卡片的视觉结构在 base.css 的 .rescard 一节，页面 CSS 只许覆盖表面（底色、圆角、内距）。
  */
+import type { CSSProperties } from "react";
 import { Icon } from "./Icon";
 import { DictionaryCard } from "./DictionaryCard";
 import { describeError, statusCodeOf } from "../errorText";
@@ -14,6 +15,8 @@ import type { CardState } from "../types";
 
 interface ResultCardProps {
   card: CardState;
+  /** 服务识别色（svcColor(id)），画在卡片左缘 3px 色条；不传则落品牌蓝 */
+  svc?: string;
   /** 传入则失败卡显示排查提示与「重试」按钮 */
   onRetry?: (serviceId: string) => void;
   /** 复制按钮的文字；不传则渲染纯图标（弹窗窄，title 兜底语义） */
@@ -22,14 +25,20 @@ interface ResultCardProps {
   showMeta?: boolean;
 }
 
-export function ResultCard({ card: c, onRetry, copyLabel, showMeta }: ResultCardProps) {
+export function ResultCard({ card: c, svc, onRetry, copyLabel, showMeta }: ResultCardProps) {
   return (
-    <div className="rescard">
+    <div className="rescard" style={svc ? ({ "--svc": svc } as CSSProperties) : undefined}>
       <div className="rh">
-        <span className={`dot${c.status === "error" ? " err" : ""}`} />
         <b>{c.name}</b>
-        {c.status === "done" && c.elapsedMs != null && <span>{formatSecs(c.elapsedMs)}</span>}
-        {c.status === "streaming" && <span>流式生成中…</span>}
+        {c.status === "done" && c.elapsedMs != null && (
+          <span className="chip ok mini">完成 · {formatSecs(c.elapsedMs)}</span>
+        )}
+        {c.status === "streaming" && <span className="chip acc mini">流式生成中…</span>}
+        {c.status === "error" && (
+          <span className="chip err mini">
+            失败{c.elapsedMs != null ? ` · ${formatSecs(c.elapsedMs)}` : ""}
+          </span>
+        )}
         <span style={{ flex: 1 }} />
         {c.text && (
           <button

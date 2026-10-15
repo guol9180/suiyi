@@ -14,6 +14,7 @@ import {
 import { Icon } from "../components/Icon";
 import { ResultCard } from "../components/ResultCard";
 import { LangPicker } from "../components/LangPicker";
+import { svcColor } from "../svcColor";
 import "./Translate.css";
 
 /** 打开划词弹窗并投递文本（M1 将由取词服务自动调用） */
@@ -227,7 +228,7 @@ export default function TranslatePage(props: { onOpenSettings?: () => void } = {
           </div>
         )}
         {cards.map((c) => (
-          <ResultCard key={c.id} card={c} onRetry={retryOne} copyLabel="复制" showMeta />
+          <ResultCard key={c.id} card={c} svc={svcColor(c.id)} onRetry={retryOne} copyLabel="复制" showMeta />
         ))}
       </div>
     </div>

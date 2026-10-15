@@ -283,9 +283,21 @@ textarea.inp { height: auto; min-height: 86px; padding: 9px 11px; line-height: 1
 /* ---------- 多服务结果卡（翻译页与划词弹窗共用 ResultCard） ---------- */
 /* 结构与字号在此统一；表面（毛玻璃或实底、圆角与内距档位）由页面 CSS 覆盖 */
 .rescard {
+  position: relative;
+  overflow: hidden;
   border: 1px solid var(--glass-edge);
   border-radius: var(--radius-lg);
-  padding: 10px 12px;
+  padding: 10px 12px 10px 15px;
+}
+/* 服务识别色条：颜色由调用方以 --svc 注入（svcColor），缺省落品牌蓝 */
+.rescard::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--svc, var(--c-primary));
 }
 .rh {
   display: flex;
