@@ -7,8 +7,55 @@
 use futures_util::StreamExt;
 use serde::Serialize;
 use serde_json::json;
+use std::sync::OnceLock;
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter};
+
+/// 全局共享的 HTTP 客户端。连接池按 host 复用 TCP+TLS 连接：
+/// 每次翻译都新建 Client 的话，每次都要重付 DNS + TLS 握手（国内网关几十到上百毫秒，
+/// 海外更久），HTTP/2 多路复用与 keepalive 也全部失效。
+/// 客户端构建时读取一次系统代理；用户改系统代理后重启应用生效。
+static HTTP: OnceLock<reqwest::Client> = OnceLock::new();
+
+pub(crate) fn http_client() -> reqwest::Client {
+    HTTP.get_or_init(|| {
+        reqwest::Client::builder()
+            .pool_max_idle_per_host(8)
+            .pool_idle_timeout(Duration::from_secs(90))
+            .tcp_nodelay(true)
+            .build()
+            .unwrap_or_else(|_| reqwest::Client::new())
+    })
+    .clone()
+}
+
+/// 启动预热：对已启用翻译服务的网关各发一次轻量 GET，把 DNS、TCP 与 TLS 握手
+/// 在后台先建好，用户第一次翻译直接吃现成连接。只求建连不求结果：
+/// 404、超时都无所谓，失败静默——预热只是优化，不能变成启动故障。
+pub fn prewarm_gateways(dir: &std::path::Path) {
+    let Ok(file) = crate::config::load_services(dir) else {
+        return;
+    };
+    let urls: Vec<String> = file
+        .services
+        .iter()
+        .filter(|s| {
+            s.enabled
+                && s.kind == crate::config::ServiceKind::Translation
+                && !s.base_url.trim().is_empty()
+        })
+        .map(|s| s.base_url.trim().trim_end_matches('/').to_string())
+        .collect();
+    if urls.is_empty() {
+        return;
+    }
+    let client = http_client();
+    tauri::async_runtime::spawn(async move {
+        for u in urls {
+            let _ = tokio::time::timeout(Duration::from_secs(5), client.get(&u).send()).await;
+        }
+    });
+}
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -155,7 +202,7 @@ async fn translate_inner(
     p: TranslateParams<'_>,
 ) -> Result<(String, u64), String> {
     let start = Instant::now();
-    let client = reqwest::Client::new();
+    let client = http_client();
     let url = format!("{}/chat/completions", p.base_url.trim_end_matches('/'));
     let body = json!({
         "model": p.model,
@@ -245,6 +292,21 @@ async fn translate_inner(
 mod tests {
     use super::*;
     use std::io::{Read, Write};
+
+    /// 全局 HTTP 客户端只在首次取用时构建，之后一直复用同一个：
+    /// 连接池、HTTP/2 与 keepalive 才能跨请求生效。
+    #[test]
+    fn http_client_is_cached_in_the_global_pool() {
+        let _first = http_client();
+        assert!(HTTP.get().is_some(), "首次取用后应已把客户端缓存进全局槽位");
+        let _second = http_client(); // 再次取用走缓存，不重建
+    }
+
+    /// 启动预热读不到配置时必须安静返回：预热只是优化，不能变成启动故障
+    #[test]
+    fn prewarm_tolerates_missing_config_dir() {
+        prewarm_gateways(std::path::Path::new("Z:/suiyi/definitely/not/here"));
+    }
 
     /// 起一个零依赖的 SSE mock 服务（TcpListener 线程），端到端验证流式解析
     #[tokio::test]

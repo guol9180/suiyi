@@ -739,7 +739,7 @@ struct ModelsProbe {
 async fn probe_models(base_url: &str, key: &str, timeout_secs: u64) -> ModelsProbe {
     let url = format!("{}/models", base_url.trim_end_matches('/'));
     let timeout = Duration::from_secs(timeout_secs.clamp(3, 120).min(15));
-    let client = reqwest::Client::new();
+    let client = crate::translator::http_client();
     let mut req = client.get(&url);
     if !key.trim().is_empty() {
         req = req.header("Authorization", format!("Bearer {}", key.trim()));
