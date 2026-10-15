@@ -32,9 +32,12 @@ pub struct HistoryEntry {
     pub error: Option<String>,
 }
 
-/// 待写入的记录（还没有 id 与时间戳）
+/// 待写入的记录（还没有 id；created_at 由调用方给**翻译开始时刻**，
+/// 而不是各服务完成的时刻——同一轮的每条服务记录共享同一个开始时间戳，
+/// 历史列表才能按「翻译轮次」排序，而不是被各服务的完成顺序搅乱）
 #[derive(Debug, Clone)]
 pub struct NewEntry {
+    pub created_at: i64,
     pub kind: String,
     pub source: String,
     pub translated: String,
@@ -44,7 +47,7 @@ pub struct NewEntry {
     pub error: Option<String>,
 }
 
-fn now_ms() -> i64 {
+pub fn now_ms() -> i64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_millis() as i64)
@@ -82,7 +85,7 @@ pub fn record(dir: &Path, entry: NewEntry) -> Result<i64, String> {
            (created_at, kind, source, translated, service_name, elapsed_ms, ok, error)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
         params![
-            now_ms(),
+            entry.created_at,
             entry.kind,
             entry.source,
             entry.translated,
@@ -190,8 +193,9 @@ mod tests {
         d
     }
 
-    fn entry(src: &str, dst: &str, ok: bool) -> NewEntry {
+    fn entry_at(created_at: i64, src: &str, dst: &str, ok: bool) -> NewEntry {
         NewEntry {
+            created_at,
             kind: "selection".into(),
             source: src.into(),
             translated: dst.into(),
@@ -202,13 +206,39 @@ mod tests {
         }
     }
 
+    /// 排序看调用方给的 created_at（翻译开始时刻），与插入先后无关：
+    /// 一轮翻译的多条服务记录共享同一时间戳，轮与轮严格按开始时间排。
+    #[test]
+    fn ordering_follows_provided_created_at() {
+        let dir = tmp_dir("ordering");
+
+        // 先插「新的」，再插「旧的」，最后插中间：列表仍按时间倒序
+        record(&dir, entry_at(200, "newer", "新", true)).unwrap();
+        record(&dir, entry_at(100, "older", "旧", true)).unwrap();
+        record(&dir, entry_at(150, "middle", "中", true)).unwrap();
+
+        let all = list(&dir, None, None, 50, 0).unwrap();
+        let sources: Vec<&str> = all.iter().map(|h| h.source.as_str()).collect();
+        assert_eq!(sources, vec!["newer", "middle", "older"], "按 created_at 倒序");
+
+        // 同一轮的两条服务记录时间戳相同：并列时按写入顺序倒排（id DESC），稳定
+        record(&dir, entry_at(300, "same-round", "svc1", true)).unwrap();
+        record(&dir, entry_at(300, "same-round", "svc2", true)).unwrap();
+        let all = list(&dir, None, None, 50, 0).unwrap();
+        assert_eq!(all[0].source, "same-round");
+        assert_eq!(all[0].translated, "svc2", "同时间戳按 id 倒序，后写的在前");
+        assert_eq!(all[1].translated, "svc1");
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
     #[test]
     fn insert_list_search_delete() {
         let dir = tmp_dir("basic");
 
-        record(&dir, entry("hello world", "你好世界", true)).unwrap();
-        record(&dir, entry("good morning", "早上好", true)).unwrap();
-        record(&dir, entry("fail case", "", false)).unwrap();
+        record(&dir, entry_at(1, "hello world", "你好世界", true)).unwrap();
+        record(&dir, entry_at(2, "good morning", "早上好", true)).unwrap();
+        record(&dir, entry_at(3, "fail case", "", false)).unwrap();
 
         // 默认按时间倒序，最新的在前
         let all = list(&dir, None, None, 50, 0).unwrap();
@@ -241,7 +271,7 @@ mod tests {
     fn trims_to_max_entries() {
         let dir = tmp_dir("trim");
         for i in 0..15 {
-            record(&dir, entry(&format!("src-{i}"), "译文", true)).unwrap();
+            record(&dir, entry_at(1_000 + i, &format!("src-{i}"), "译文", true)).unwrap();
         }
         assert_eq!(count(&dir).unwrap(), 15);
 

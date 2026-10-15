@@ -268,10 +268,23 @@ pub async fn translate_text(
     preserve_lines: Option<bool>,
 ) -> Result<DonePayload, String> {
     let dir = config_dir(&app)?;
+    // 历史记录的时间戳统一用**翻译开始时刻**：同一轮的多条服务记录共享同一个
+    // 时间戳，历史列表才能按「翻译轮次」排序——按各服务完成时刻排会把上一轮的
+    // 慢服务记录挤到下一轮后面，列表顺序看起来就是乱的。
+    let started_at = crate::history::now_ms();
 
     // 插件服务走插件运行时，不碰 API Key 与 HTTP
     if let Some(plugin_id) = service_id.strip_prefix(PLUGIN_SERVICE_PREFIX) {
-        return translate_with_plugin(&dir, plugin_id, &text, &from, &to, kind.as_deref()).await;
+        return translate_with_plugin(
+            &dir,
+            plugin_id,
+            &text,
+            &from,
+            &to,
+            kind.as_deref(),
+            started_at,
+        )
+        .await;
     }
 
     let file = load_services(&dir)?;
@@ -288,12 +301,12 @@ pub async fn translate_text(
         .ok_or_else(|| format!("服务不存在: {service_id}"))?;
     if !svc.enabled {
         let msg = "该服务未启用".to_string();
-        record_history(&dir, kind.as_deref(), &text, "", &service_name, 0, Some(&msg));
+        record_history(&dir, started_at, kind.as_deref(), &text, "", &service_name, 0, Some(&msg));
         return Err(msg);
     }
     if svc.kind != ServiceKind::Translation {
         let msg = "该服务不是翻译服务".to_string();
-        record_history(&dir, kind.as_deref(), &text, "", &service_name, 0, Some(&msg));
+        record_history(&dir, started_at, kind.as_deref(), &text, "", &service_name, 0, Some(&msg));
         return Err(msg);
     }
     // 不需要密钥的服务（Ollama 这类本地服务）允许留空；需要的服务缺 Key 时
@@ -301,7 +314,7 @@ pub async fn translate_text(
     let key = keyring::get_api_key(&service_id)?.unwrap_or_default();
     if key.trim().is_empty() && svc.requires_key {
         let msg = "该服务尚未设置 API Key，请到设置页填写".to_string();
-        record_history(&dir, kind.as_deref(), &text, "", &service_name, 0, Some(&msg));
+        record_history(&dir, started_at, kind.as_deref(), &text, "", &service_name, 0, Some(&msg));
         return Err(msg);
     }
     // 词典结构化：没有自定义模板时用内置的 JSON 模板，并且强制非流式，
@@ -318,6 +331,7 @@ pub async fn translate_text(
     if !stream_enabled && text.chars().count() > translator::SEGMENT_MIN_CHARS {
         return translate_segmented(
             &dir,
+            started_at,
             svc,
             &key,
             template,
@@ -350,12 +364,13 @@ pub async fn translate_text(
     let (translated, elapsed_ms) = match translator::translate(&app, params).await {
         Ok(v) => v,
         Err(e) => {
-            record_history(&dir, kind.as_deref(), &text, "", &service_name, 0, Some(&e));
+            record_history(&dir, started_at, kind.as_deref(), &text, "", &service_name, 0, Some(&e));
             return Err(e);
         }
     };
     record_history(
         &dir,
+        started_at,
         kind.as_deref(),
         &text,
         &translated,
@@ -384,6 +399,7 @@ async fn translate_with_plugin(
     from: &str,
     to: &str,
     kind: Option<&str>,
+    started_at: i64,
 ) -> Result<DonePayload, String> {
     let found = plugin::discover(dir)
         .into_iter()
@@ -417,6 +433,7 @@ async fn translate_with_plugin(
     let translated = plugin_js::text_of(&raw)?;
     record_history(
         dir,
+        started_at,
         kind,
         text,
         &translated,
@@ -601,6 +618,7 @@ pub async fn run_action_plugin(
 #[allow(clippy::too_many_arguments)]
 async fn translate_segmented(
     dir: &std::path::Path,
+    started_at: i64,
     svc: &ServiceConfig,
     key: &str,
     template: Option<&str>,
@@ -647,13 +665,13 @@ async fn translate_segmented(
             Ok((t, _)) => full.push_str(&t),
             Err(e) => {
                 let msg = format!("分段翻译第 {} 段失败: {e}", i + 1);
-                record_history(dir, kind, text, "", service_name, 0, Some(&msg));
+                record_history(dir, started_at, kind, text, "", service_name, 0, Some(&msg));
                 return Err(msg);
             }
         }
     }
     let elapsed_ms = started.elapsed().as_millis() as u64;
-    record_history(dir, kind, text, &full, service_name, elapsed_ms as i64, None);
+    record_history(dir, started_at, kind, text, &full, service_name, elapsed_ms as i64, None);
     Ok(DonePayload {
         service_id: svc.id.clone(),
         dictionary: None,
@@ -662,9 +680,11 @@ async fn translate_segmented(
     })
 }
 
-/// 记一条历史。失败只写日志，不能影响翻译本身。
+/// 记一条历史。created_at 由调用方给**翻译开始时刻**（同一轮的多条服务记录
+/// 共享它，历史列表才能按翻译轮次排序）。失败只写日志，不能影响翻译本身。
 fn record_history(
     dir: &std::path::Path,
+    created_at: i64,
     kind: Option<&str>,
     source: &str,
     translated: &str,
@@ -673,6 +693,7 @@ fn record_history(
     error: Option<&str>,
 ) {
     let entry = NewEntry {
+        created_at,
         kind: kind.unwrap_or("manual").to_string(),
         source: source.to_string(),
         translated: translated.to_string(),
@@ -1067,7 +1088,7 @@ mod tests {
         )
         .unwrap();
 
-        let out = translate_with_plugin(&dir, "com.x.upper", "hello", "EN", "中文", Some("manual"))
+        let out = translate_with_plugin(&dir, "com.x.upper", "hello", "EN", "中文", Some("manual"), 1_000)
             .await
             .expect("插件翻译应成功");
         assert_eq!(out.text, "HELLO");
@@ -1083,13 +1104,13 @@ mod tests {
         // 停用后不再参与翻译
         crate::plugin::set_enabled(&dir, "com.x.upper", false).unwrap();
         assert!(
-            translate_with_plugin(&dir, "com.x.upper", "hello", "EN", "中文", None)
+            translate_with_plugin(&dir, "com.x.upper", "hello", "EN", "中文", None, 1_000)
                 .await
                 .is_err()
         );
 
         // 不存在的插件给出明确错误
-        let err = translate_with_plugin(&dir, "com.x.nope", "hi", "EN", "中文", None)
+        let err = translate_with_plugin(&dir, "com.x.nope", "hi", "EN", "中文", None, 1_000)
             .await
             .unwrap_err();
         assert!(err.contains("插件不存在"), "实际: {err}");
