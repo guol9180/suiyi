@@ -81,6 +81,27 @@ export default function OcrResultPage() {
     [],
   );
 
+  /** 流式增量的迟到包用 busyRef 挡住：settle 之后的 delta 直接忽略 */
+  const busyRef = useRef(false);
+  useEffect(() => {
+    busyRef.current = busy;
+  }, [busy]);
+
+  // 翻译增量流式上屏：与主窗/弹窗同一套体感，不等最慢的服务才出字
+  useEffect(() => {
+    const un = listen<{ serviceId: string; delta: string }>("translate-delta", (e) => {
+      if (!busyRef.current) return;
+      setPieces((ps) =>
+        ps.map((p) =>
+          p.serviceId === e.payload.serviceId ? { ...p, text: p.text + e.payload.delta } : p,
+        ),
+      );
+    });
+    return () => {
+      void un.then((f) => f());
+    };
+  }, []);
+
   /**
    * 关闭面板。走 Rust 的 ocr_close 命令而不是 getCurrentWindow().hide()：
    * 命令是我们自己注册的，不受 capability 权限集影响；`hide()` 依赖 core:window 权限，

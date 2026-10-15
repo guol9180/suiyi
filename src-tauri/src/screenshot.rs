@@ -535,6 +535,35 @@ fn invert_rgba(rgba: &[u8]) -> Vec<u8> {
     out
 }
 
+/// 行框是否越出选区容差：DBNet 的检测粒度是整行，用户框住行中片段时行框必然越出
+fn box_exceeds(l: &OcrLine, sel: (f64, f64, f64, f64), tol: f64) -> bool {
+    l.x < sel.0 - tol
+        || l.y < sel.1 - tol
+        || l.x + l.w > sel.0 + sel.2 + tol
+        || l.y + l.h > sel.1 + sel.3 + tol
+}
+
+/// 行框与选区的交集。交集任一边不足 min_side 视为没有精修价值（太窄识别不出东西）
+fn clip_line_to_sel(l: &OcrLine, sel: (f64, f64, f64, f64), min_side: f64) -> Option<Rect> {
+    let x0 = l.x.max(sel.0);
+    let y0 = l.y.max(sel.1);
+    let x1 = (l.x + l.w).min(sel.0 + sel.2);
+    let y1 = (l.y + l.h).min(sel.1 + sel.3);
+    if x1 - x0 < min_side || y1 - y0 < min_side {
+        return None;
+    }
+    Some((x0 as i32, y0 as i32, (x1 - x0) as i32, (y1 - y0) as i32))
+}
+
+/// 从 RGB 图裁一块（交集精修用）；坐标越界时截到图内
+fn crop_rgb(img: &image::RgbImage, r: Rect) -> image::RgbImage {
+    let x = r.0.max(0) as u32;
+    let y = r.1.max(0) as u32;
+    let w = r.2.min(img.width().saturating_sub(x) as i32).max(1) as u32;
+    let h = r.3.min(img.height().saturating_sub(y) as i32).max(1) as u32;
+    image::imageops::crop_imm(img, x, y, w, h).to_image()
+}
+
 fn char_count(lines: &[OcrLine]) -> usize {
     lines.iter().map(|l| l.text.chars().count()).sum()
 }
@@ -672,9 +701,21 @@ pub async fn finish_region(
     };
 
     hide_overlay(&app);
+    // 面板先行：识别要几百毫秒，先把「正在读取」的壳亮出来——挂载时用 ocr_last 兜底，
+    // 识别完成后事件补发内容，两个通道把竞态堵死了。体感上不用对着冻结的屏幕干等。
+    let panel_open = match show_ocr_panel(&app) {
+        Ok(()) => true,
+        Err(e) => {
+            crate::selection::log_line(&format!(
+                "screenshot: 结果面板提前打开失败（{e}），识别完成后退回弹窗"
+            ));
+            false
+        }
+    };
     crate::selection::log_line(&format!(
         "screenshot: 选区 {crop_w}x{crop_h}，送识别区域 {region_w}x{region_h}（外扩 {OCR_PAD}px）"
     ));
+    let started = std::time::Instant::now();
 
     // 装了 OCR 插件就优先用插件（插件收到紧框图）；
     // 插件失败不让整条链路挂掉，回落到系统离线 OCR。
@@ -692,17 +733,72 @@ pub async fn finish_region(
         None => {
             // 首选 PaddleOCR（PP-OCRv4，随包分发）：中文与单行框选都比系统 OCR 强得多。
             // 模型缺失或加载失败才回落到 Windows.Media.OCR，识别不可能整个不可用。
-            let paddle = rgba_to_rgb(&region_rgba, region_w, region_h)
-                .ok_or_else(|| "选区图转换失败".to_string())
-                .and_then(|img| crate::ocr::recognize(&app, &img));
+            let img = rgba_to_rgb(&region_rgba, region_w, region_h)
+                .ok_or_else(|| "选区图转换失败".to_string())?;
+            let app_for_ocr = app.clone();
+            let img_for_ocr = img.clone();
+            // 识别是几百毫秒的阻塞活儿，丢到阻塞线程池，别把异步运行时的工作线程一起拖住
+            let paddle = match tauri::async_runtime::spawn_blocking(move || {
+                crate::ocr::recognize(&app_for_ocr, &img_for_ocr)
+            })
+            .await
+            {
+                Ok(r) => r,
+                Err(e) => Err(format!("OCR 任务调度失败: {e}")),
+            };
+            crate::selection::log_line(&format!(
+                "screenshot: PaddleOCR 识别耗时 {}ms",
+                started.elapsed().as_millis()
+            ));
             match paddle {
-                Ok(all) => (
-                    "paddle".to_string(),
-                    // PP-OCRv4 的中文模型本来就中英混排一起认，没有"识别语言"这一说；
-                    // 留空让结果面板不显示那个语言小标签（引擎名已经写清楚了）
-                    String::new(),
-                    map_lines_to_selection(all, 1.0, sel_in_region, crop_w, crop_h),
-                ),
+                Ok(all) => {
+                    let mut lines =
+                        map_lines_to_selection(all, 1.0, sel_in_region, crop_w, crop_h);
+                    // DBNet 的检测粒度是整行：框住一行中间的片段时，行框会带着整行放行，
+                    // 识别文本就超出了框选范围。行框越出选区时，把「行框 ∩ 选区」的交集
+                    // 裁出来重新识别一遍，让返回文本严格落在框内；精修不出字就回退整行。
+                    if lines.iter().any(|l| box_exceeds(l, sel_in_region, 6.0)) {
+                        let mut refined: Vec<OcrLine> = Vec::new();
+                        for l in &lines {
+                            let Some(rect) = clip_line_to_sel(l, sel_in_region, 6.0) else {
+                                refined.push(l.clone());
+                                continue;
+                            };
+                            let sub = crop_rgb(&img, rect);
+                            match crate::ocr::recognize(&app, &sub) {
+                                Ok(mut ls) if !ls.is_empty() => {
+                                    for x in ls.iter_mut() {
+                                        x.x += rect.0 as f64;
+                                        x.y += rect.1 as f64;
+                                    }
+                                    refined.extend(ls);
+                                }
+                                _ => refined.push(l.clone()),
+                            }
+                        }
+                        refined.sort_by(|a, b| {
+                            if (a.y - b.y).abs() < 14.0 {
+                                a.x.partial_cmp(&b.x).unwrap_or(std::cmp::Ordering::Equal)
+                            } else {
+                                a.y.partial_cmp(&b.y).unwrap_or(std::cmp::Ordering::Equal)
+                            }
+                        });
+                        crate::selection::log_line(&format!(
+                            "screenshot: 交集精修 {} 行 -> {} 行（累计 {}ms）",
+                            lines.len(),
+                            refined.len(),
+                            started.elapsed().as_millis()
+                        ));
+                        lines = refined;
+                    }
+                    (
+                        "paddle".to_string(),
+                        // PP-OCRv4 的中文模型本来就中英混排一起认，没有"识别语言"这一说；
+                        // 留空让结果面板不显示那个语言小标签（引擎名已经写清楚了）
+                        String::new(),
+                        lines,
+                    )
+                }
                 Err(e) => {
                     crate::selection::log_line(&format!("screenshot: PaddleOCR 不可用（{e}），回落系统 OCR"));
                     match ocr_best(&region_rgba, region_w, region_h, "en-US") {
@@ -751,25 +847,20 @@ pub async fn finish_region(
         *g = Some(result.clone());
     }
 
-    // 结果面板就近弹出。识别为空也照样打开：面板里那个「未识别到文字」
-    // 的状态比什么都不弹更有用，用户可以直接重新框选。
-    match show_ocr_panel(&app) {
-        Ok(()) => {
-            // 不 sleep 等前端挂载：面板自己会在挂载时用 ocr_last 兜一次，
-            // 事件比页面先到也不会丢内容，这里 sleep 只会白白卡住调用线程。
-            let _ = app.emit("ocr-set-source", &result);
-        }
-        Err(e) => {
-            // 面板开不出来就退回弹窗，至少别让用户白框一次
-            crate::selection::log_line(&format!("screenshot: 结果面板打开失败（{e}），退回弹窗"));
-            if !text.trim().is_empty() {
-                let _ = crate::selection::ensure_popup_at_cursor(&app);
-                let _ = app.emit(
-                    "popup-set-source",
-                    serde_json::json!({ "text": text, "autoTranslate": true, "kind": "screenshot" }),
-                );
-            }
-        }
+    // 面板在识别前就已打开（panel-first），这里只补发一次结果事件
+    crate::selection::log_line(&format!(
+        "screenshot: 截图识别全流程耗时 {}ms",
+        started.elapsed().as_millis()
+    ));
+    if panel_open {
+        let _ = app.emit("ocr-set-source", &result);
+    } else if !text.trim().is_empty() {
+        // 面板开不出来就退回弹窗，至少别让用户白框一次
+        let _ = crate::selection::ensure_popup_at_cursor(&app);
+        let _ = app.emit(
+            "popup-set-source",
+            serde_json::json!({ "text": text, "autoTranslate": true, "kind": "screenshot" }),
+        );
     }
     Ok(OcrPayload { text })
 }
@@ -1164,6 +1255,43 @@ mod tests {
         for gone in ["cropUrl", "cropW", "cropH", "lines"] {
             assert!(v.get(gone).is_none(), "不该再出现字段 {gone}");
         }
+    }
+
+    /// 行级检测框（DBNet 粒度是整行）超出选区一定容差，就值得做交集精修：
+    /// 用户框住一行中间的几个词时，行框会整行放行，识别文本超出框选范围。
+    #[test]
+    fn box_exceeds_flags_only_real_overhang() {
+        let sel = (32.0, 32.0, 86.0, 24.0);
+        // 整行框：左端越出选区
+        assert!(super::box_exceeds(
+            &super::OcrLine { text: String::new(), x: 0.0, y: 33.0, w: 150.0, h: 20.0 },
+            sel,
+            6.0
+        ));
+        // 完全贴着选区的框不算超出
+        assert!(!super::box_exceeds(
+            &super::OcrLine { text: String::new(), x: 30.0, y: 30.0, w: 90.0, h: 26.0 },
+            sel,
+            6.0
+        ));
+        // 只越出 2px，在容差内
+        assert!(!super::box_exceeds(
+            &super::OcrLine { text: String::new(), x: 31.0, y: 33.0, w: 86.0, h: 20.0 },
+            sel,
+            6.0
+        ));
+    }
+
+    /// 行框与选区的交集：有足够大的交集才返回（太窄的条识别不出东西，没有精修价值）
+    #[test]
+    fn clip_rect_to_sel_returns_intersection_with_min_size() {
+        let sel = (32.0, 32.0, 86.0, 24.0);
+        let line = super::OcrLine { text: String::new(), x: 0.0, y: 33.0, w: 150.0, h: 20.0 };
+        let r = super::clip_line_to_sel(&line, sel, 6.0).expect("有交集应返回 Some");
+        assert_eq!(r, (32, 33, 86, 20));
+        // 交集只剩 2px 高：低于最小尺寸，返回 None
+        let thin = super::OcrLine { text: String::new(), x: 0.0, y: 54.0, w: 150.0, h: 20.0 };
+        assert!(super::clip_line_to_sel(&thin, sel, 6.0).is_none());
     }
 
     /// OCR 固定样本测试，覆盖 COM 单元选择、内存流写入、位图解码与识别引擎四段。
