@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import SettingsPage from "./pages/Settings";
 import TranslatePage from "./pages/Translate";
+import HistoryPage from "./pages/HistoryPage";
 import {
   closeAction,
   getSettings,
@@ -21,7 +22,7 @@ import { Icon } from "./components/Icon";
 import { formatAccel, suggestionFor } from "./hotkeySuggest";
 import "./App.css";
 
-type Tab = "translate" | "settings";
+type Tab = "translate" | "history" | "settings";
 
 export default function App() {
   const [tab, setTab] = useState<Tab>("translate");
@@ -149,6 +150,9 @@ export default function App() {
         <button className={tab === "translate" ? "on" : ""} onClick={() => setTab("translate")}>
           翻译
         </button>
+        <button className={tab === "history" ? "on" : ""} onClick={() => setTab("history")}>
+          历史
+        </button>
         <button className={tab === "settings" ? "on" : ""} onClick={() => setTab("settings")}>
           设置
         </button>
@@ -253,9 +257,9 @@ export default function App() {
         </div>
       )}
       <div className="tab-body">
-        {tab === "translate" ? (
-          <TranslatePage onOpenSettings={() => setTab("settings")} />
-        ) : (
+        {tab === "translate" && <TranslatePage onOpenSettings={() => setTab("settings")} />}
+        {tab === "history" && <HistoryPage />}
+        {tab === "settings" && (
           <SettingsPage focusAboutSignal={aboutSignal} checkUpdateSignal={updateCheckSignal} />
         )}
       </div>

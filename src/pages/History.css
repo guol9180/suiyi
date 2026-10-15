@@ -1,0 +1,120 @@
+/* 历史记录页样式（v1.0 一级页签）：样式自 Settings.css 迁入，日期分组 .dg 为新增 */
+
+.history-page {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 16px;
+  height: 100%;
+  box-sizing: border-box;
+  overflow-y: auto;
+}
+/* .empty-hint 与 .panel.wide 已归位 base.css（与设置页共用） */
+
+/* ---------- 工具条：搜索 / 来源 / 服务 / 时间 ---------- */
+.hist-tools {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--c-border-soft);
+}
+.hist-tools .chip { cursor: pointer; }
+.hist-tools .search {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--c-text-3);
+  flex: 1;
+  min-width: 180px;
+}
+.hist-tools .search .inp { height: 30px; font-size: var(--fs-sec); }
+/* 三组筛选之间的细分隔线，替代「用圆点分隔」的写法 */
+.hist-sep { flex: none; width: 1px; height: 16px; background: var(--c-border-strong); margin: 0 3px; }
+
+/* ---------- 列表：日期分组 + 行 ---------- */
+.hist { display: flex; min-height: 380px; margin-top: 10px; }
+.hist-list {
+  flex: 1.15 1 0;
+  min-width: 0;
+  border-right: 1px solid var(--c-border-soft);
+  max-height: 460px;
+  overflow: auto;
+}
+/* 日期分组标题：中性灰小标，只承载分类不承载状态（v1.0 设计说明） */
+.dg {
+  padding: 10px 10px 4px;
+  font-size: var(--fs-cap);
+  font-weight: 600;
+  color: var(--c-caption);
+  position: sticky;
+  top: 0;
+  background: var(--c-app-bg);
+}
+.hrow {
+  padding: 9px 10px;
+  border-bottom: 1px solid var(--c-border-soft);
+  border-left: 2px solid transparent;
+  cursor: pointer;
+}
+.hrow:hover { background: var(--c-surface-2); }
+.hrow.on { background: var(--c-primary-soft); border-left-color: var(--c-primary-strong); }
+.hrow .hl1 { display: flex; align-items: center; gap: 6px; font-size: var(--fs-sec); color: var(--c-text); }
+.hrow .hl1 .t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hrow .hl2 { display: flex; align-items: baseline; gap: 10px; margin-top: 3px; color: var(--c-caption); }
+.hrow .hl2 .sum {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--fs-sec);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.hrow .hl2 .meta {
+  flex: none;
+  display: flex;
+  gap: 8px;
+  font-size: var(--fs-cap);
+  font-variant-numeric: tabular-nums;
+}
+.hrow .hl2.err .sum { color: var(--c-danger); }
+
+/* ---------- 详情栏 ---------- */
+.hist-detail {
+  flex: 1 1 0;
+  min-width: 320px;
+  padding-left: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.hist-detail .lab { font-size: var(--fs-sec); color: var(--c-caption); }
+.hist-detail .t-body { white-space: pre-wrap; }
+.hist-detail .terr { color: var(--c-danger); }
+.hmeta {
+  display: flex;
+  gap: 8px;
+  font-size: var(--fs-cap);
+  color: var(--c-caption);
+  font-variant-numeric: tabular-nums;
+}
+.hact { display: flex; gap: 6px; flex-wrap: wrap; margin-top: auto; }
+
+/* 历史详情里的「换服务重译」下拉：做成紧凑的胶囊，和按钮同一行高度 */
+.mini-sel {
+  width: auto;
+  height: 26px;
+  padding: 0 8px;
+  border-radius: var(--radius-pill);
+  font-size: var(--fs-cap);
+  color: var(--c-text-2);
+}
+.retrans {
+  margin-top: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--glass-edge);
+  border-radius: var(--radius-lg);
+  background: var(--glass-card);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+}
