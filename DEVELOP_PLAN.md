@@ -171,7 +171,8 @@ services.json 与凭据读取缓存、长文本按句分段并发。
 
 ## 4. 环境现状
 
-- PowerShell 7.6.7（x86）在 `D:\software\powershell7\7`，未入 PATH；工作终端规范见 `AGENTS.md` 环境注意。
+- PowerShell 7.6.7（x86）在 `D:\software\powershell7\7`，已在机器级 PATH
+  （2026-10-15 核实，与 Windows PowerShell 5.1 并存互不影响）；工作终端规范见 `AGENTS.md` 环境注意。
 - Node v22.23.2、pnpm 12.5.1（`D:\dev\environment\nodejs`）；pnpm 用 `pnpm.cmd` 调用（见 `AGENTS.md`）。
 - Rust 1.98.1，工具链在 `D:\dev\environment\rustup\toolchains\stable-x86_64-pc-windows-msvc`
   - `D:\dev\environment\cargo\bin\cargo.exe` 是 rustup 垫片，需先配好默认 toolchain，或直接调用工具链目录
