@@ -51,6 +51,8 @@ function errText(e: unknown): string {
 }
 
 export default function TranslatePage(props: {
+  /** 本页签是否处于激活状态：页签是 keep-mounted 的，激活时重拉最近翻译，删掉的历史才不会残留 */
+  active: boolean;
   onOpenSettings?: () => void;
   onOpenHistory: () => void;
 }) {
@@ -69,9 +71,11 @@ export default function TranslatePage(props: {
       .catch(() => setRecent([]));
   }, []);
 
+  // 挂载与每次切回本页签时都重拉最近翻译：划词/截图在其他窗口产生记录，
+  // 历史页里的删除也发生在别的页签——不重拉就会看到残留的「幽灵」记录
   useEffect(() => {
-    loadRecent();
-  }, [loadRecent]);
+    if (props.active) loadRecent();
+  }, [props.active, loadRecent]);
 
   useEffect(() => {
     void listServices().then((f) => setServices(enabledTranslations(f.services)));

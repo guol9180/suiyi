@@ -45,7 +45,7 @@ function groupByDay(rows: HistoryEntry[]): DayGroup[] {
   return groups;
 }
 
-export default function HistoryPage() {
+export default function HistoryPage(props: { active: boolean }) {
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [services, setServices] = useState<ServiceConfig[]>([]);
   const [histQuery, setHistQuery] = useState("");
@@ -74,9 +74,11 @@ export default function HistoryPage() {
     }
   }, [histQuery, histKind]);
 
+  // 页签是 keep-mounted 的：只在挂载时拉一次的话，划词/截图的新记录永远进不来，
+  // 用户只能手动刷新。每次切到本页签时重新拉取。
   useEffect(() => {
-    void loadHistory();
-  }, [loadHistory]);
+    if (props.active) void loadHistory();
+  }, [props.active, loadHistory]);
 
   useEffect(() => {
     void listServices()
