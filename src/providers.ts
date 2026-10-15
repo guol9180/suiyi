@@ -6,6 +6,9 @@
  * 文档会变，改预设前请重新打开链接核对，并把 checkedAt 一起更新。
  * 模型清单只是「推荐值 + 下拉候选」，真正的可用列表以服务端 /models 返回为准，
  * 所以模型输入框始终允许手填（中转站与自建网关全靠它）。
+ *
+ * 排列约定：models[0] 是选中提供商后的默认值。划词与截图翻译对首字延迟敏感，
+ * 同一家有快慢档时把快档放首位（质量档留在候选里，用户随时可换）。
  */
 
 import type { Protocol } from "./types";
@@ -50,7 +53,8 @@ export const PROVIDERS: ProviderPreset[] = [
     blurb: "bigmodel.cn 开放平台",
     protocol: "open_ai_compatible",
     baseUrl: "https://open.bigmodel.cn/api/paas/v4",
-    models: ["glm-5.3", "glm-5.3-flash", "glm-5.2"],
+    // flash 档首字快、成本低，翻译场景做默认；5.3 质量档留作候选
+    models: ["glm-5.3-flash", "glm-5.3", "glm-5.2"],
     keyUrl: "https://bigmodel.cn/usercenter/proj-mgmt/apikeys",
     requiresKey: true,
     docsUrl: "https://docs.bigmodel.cn/cn/guide/develop/openai/introduction",
@@ -77,7 +81,8 @@ export const PROVIDERS: ProviderPreset[] = [
     baseUrl: "",
     baseUrlPlaceholder: "https://{WorkspaceId}.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
     baseUrlNote: "去百炼控制台复制兼容模式的地址，中间的 {WorkspaceId} 换成你的工作空间 ID。",
-    models: ["qwen3.8-max", "qwen-plus", "qwen-turbo"],
+    // turbo 档首字快，翻译场景做默认；max 质量档留作候选
+    models: ["qwen-turbo", "qwen-plus", "qwen3.8-max"],
     keyUrl: "https://bailian.console.aliyun.com/model/settings/api-key",
     requiresKey: true,
     docsUrl:
@@ -93,7 +98,7 @@ export const PROVIDERS: ProviderPreset[] = [
     baseUrlNote: "主机名带地域，控制台在别的地域时按官方文档改；地址与鉴权说明见文档链接。",
     // 方舟的模型有两种写法：接入点 ID（ep-…）或模型 ID，文档里没有固定默认值
     models: [],
-    modelHint: "填接入点 ID（ep-…），或 doubao-seed-2.0 这类模型 ID",
+    modelHint: "填接入点 ID（ep-…），或 doubao-seed-2.0 这类模型 ID；要首字快选 lite 档",
     keyUrl: "https://console.volcengine.com/ark",
     requiresKey: true,
     docsUrl: "https://www.volcengine.com/docs/82379/1298454",
