@@ -77,6 +77,7 @@ pub fn run() {
         .manage(hotkeys::HotkeyState::default())
         .manage(std::sync::Mutex::<Option<screenshot::ShotSession>>::new(None))
         .manage(screenshot::OcrState::default())
+        .manage(selection::PopupPending(std::sync::Mutex::new(None)))
         .manage(notice::NoticeState::default())
         // 更新下载的单飞与取消标志：界面卸载、用户重复点都得靠它兜住
         .manage(update::UpdateState::default());
@@ -149,6 +150,11 @@ pub fn run() {
             // OCR 模型在后台先加载好（约一秒），第一次截图就不用等
             ocr::warm_up(handle.clone());
 
+            // 网关连接预热：把已启用服务的 DNS/TCP/TLS 在后台先建好，首次翻译免握手
+            if let Ok(dir) = commands::config_dir(&handle) {
+                translator::prewarm_gateways(&dir);
+            }
+
             // 旧实例退出、别的程序让出热键都需要时间：后台退避重试到全部注册成功为止，
             // 冲突消失（比如用户关掉 PixPin）时自动接管默认键。
             #[cfg(desktop)]
@@ -205,6 +211,7 @@ pub fn run() {
             wordbook::wordbook_sync,
             wordbook::wordbook_remove,
             selection::replace_selection,
+            selection::take_popup_pending,
             speech::speak_text,
             speech::speech_state,
             speech::pause_speaking,

@@ -19,6 +19,71 @@ const POPUP_H: f64 = 540.0;
 /// 否则粘贴会落到别的地方。
 static LAST_TARGET: AtomicIsize = AtomicIsize::new(0);
 
+/// 弹窗暂存负载：投递给弹窗的下一条内容。
+/// 复用已存在的窗口时事件即时可达；新建窗口挂载前事件会丢，
+/// 靠「先暂存、挂载后自取」把这条竞态堵死——再也不用 sleep 赌挂载完成。
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum PendingPayload {
+    /// 选中文本，等翻译。kind 沿用历史归类（selection / screenshot / …）
+    Text { text: String, kind: String },
+    /// 取词失败等原因说明
+    Notice { text: String },
+}
+
+/// 弹窗暂存槽位（Tauri 托管状态）
+pub struct PopupPending(pub std::sync::Mutex<Option<PendingPayload>>);
+
+fn store_pending(slot: &mut Option<PendingPayload>, payload: PendingPayload) {
+    *slot = Some(payload);
+}
+
+fn take_pending(slot: &mut Option<PendingPayload>) -> Option<PendingPayload> {
+    slot.take()
+}
+
+/// 把负载暂存进弹窗状态（窗口挂载后由 take_popup_pending 自取）
+fn store_pending_state(app: &AppHandle, payload: PendingPayload) {
+    if let Ok(mut g) = app.state::<PopupPending>().0.lock() {
+        store_pending(&mut g, payload);
+    }
+}
+
+/// 投递选中文本：先暂存，窗口已存在时同时推事件（复用路径零等待）。
+/// 返回是否已通过事件送达（false = 新窗口/无窗口，靠挂载后自取）。
+pub fn deliver_text(app: &AppHandle, text: &str, kind: &str) -> bool {
+    store_pending_state(
+        app,
+        PendingPayload::Text { text: text.to_string(), kind: kind.to_string() },
+    );
+    let delivered = app.get_webview_window("popup").is_some();
+    if delivered {
+        let _ = app.emit(
+            "popup-set-source",
+            serde_json::json!({ "text": text, "autoTranslate": true, "kind": kind }),
+        );
+    }
+    delivered
+}
+
+/// 投递一条说明（取词失败等）：先暂存，窗口已存在时同时推事件
+pub fn deliver_notice(app: &AppHandle, text: &str) {
+    store_pending_state(app, PendingPayload::Notice { text: text.to_string() });
+    if app.get_webview_window("popup").is_some() {
+        let _ = app.emit("popup-notice", serde_json::json!({ "text": text }));
+    }
+}
+
+/// 新窗口挂载后自取暂存内容：取走即清，旧文本不会被第二次翻出来
+#[tauri::command]
+pub fn take_popup_pending(state: tauri::State<'_, PopupPending>) -> Option<PendingPayload> {
+    let mut taken = None;
+    if let Ok(mut g) = state.0.lock() {
+        taken = take_pending(&mut g);
+    }
+    taken
+}
+
 pub(crate) fn last_target() -> isize {
     LAST_TARGET.load(Ordering::SeqCst)
 }
@@ -133,24 +198,28 @@ pub fn trigger_selection_translate(app: AppHandle) {
                 // 不再静默退出：贴一条说明到光标旁边，用户才知道该改什么
                 let reason = explain_capture_failure(&app);
                 log_line(&format!("capture: 未取到选中文本（{reason}）"));
-                if let Err(e) = ensure_popup_at_cursor(&app) {
-                    log_line(&format!("popup: 弹窗创建/定位失败: {e}"));
+                match ensure_popup_at_cursor(&app) {
+                    Ok(_) => deliver_notice(&app, &reason),
+                    Err(e) => log_line(&format!("popup: 弹窗创建/定位失败: {e}")),
                 }
-                let _ = app.emit("popup-notice", serde_json::json!({ "text": reason }));
                 return;
             }
         };
-        if let Err(e) = ensure_popup_at_cursor(&app) {
-            log_line(&format!("popup: 弹窗创建/定位失败: {e}"));
-            return;
+        match ensure_popup_at_cursor(&app) {
+            Ok(_) => {}
+            Err(e) => {
+                log_line(&format!("popup: 弹窗创建/定位失败: {e}"));
+                return;
+            }
         }
-        // 等弹窗 webview 完成挂载监听
-        std::thread::sleep(Duration::from_millis(150));
-        let _ = app.emit(
-            "popup-set-source",
-            serde_json::json!({ "text": text, "autoTranslate": true, "kind": "selection" }),
-        );
-        log_line("emit: 已投递文本到弹窗");
+        // 文本先暂存再投递：复用窗口事件即时到达；新建窗口挂载后自取暂存，
+        // 不再 sleep 赌 webview 挂载完成——弹窗启动时就预创建，这条路径本来就快。
+        let reused = deliver_text(&app, &text, "selection");
+        log_line(if reused {
+            "emit: 已投递文本到弹窗（复用窗口）"
+        } else {
+            "popup: 新窗口挂载后自取暂存文本"
+        });
     });
 }
 
@@ -354,8 +423,10 @@ fn capture_selection() -> Option<String> {
     }
 }
 
-/// 确保弹窗存在并定位到光标附近（越界时往屏幕内收）
-pub(crate) fn ensure_popup_at_cursor(app: &AppHandle) -> Result<(), String> {
+/// 确保弹窗存在并定位到光标附近（越界时往屏幕内收）。
+/// 返回 true 表示复用了已存在的窗口（事件即时可达），
+/// false 表示刚刚新建（挂载后的自取流程负责接住内容）。
+pub(crate) fn ensure_popup_at_cursor(app: &AppHandle) -> Result<bool, String> {
     let cursor = app.cursor_position().map_err(|e| e.to_string())?;
     let (mut px, mut py) = (cursor.x + 14.0, cursor.y + 14.0);
 
@@ -394,7 +465,7 @@ pub(crate) fn ensure_popup_at_cursor(app: &AppHandle) -> Result<(), String> {
             let _ = win.set_position(tauri::LogicalPosition::new(lx, ly));
             let _ = win.show();
             let _ = win.set_focus();
-            Ok(())
+            Ok(true)
         }
         None => WebviewWindowBuilder::new(app, "popup", WebviewUrl::App("popup.html".into()))
             .title("随译 · 划词翻译")
@@ -413,7 +484,7 @@ pub(crate) fn ensure_popup_at_cursor(app: &AppHandle) -> Result<(), String> {
                 interactive: false,
             })
             .build()
-            .map(|_| ())
+            .map(|_| false)
             .map_err(|e| format!("创建弹窗失败: {e}")),
     }
 }
@@ -478,4 +549,26 @@ pub fn replace_selection(app: AppHandle, text: String) -> Result<(), String> {
 #[tauri::command]
 pub fn replace_selection(_app: AppHandle, _text: String) -> Result<(), String> {
     Err("当前平台暂不支持替换原文".into())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// 暂存文本是「取一次就没」的：新窗口挂载后自取，取走即清——
+    /// 否则下次打开弹窗会把上一轮的旧文本又翻一遍。
+    #[test]
+    fn popup_pending_is_consumed_once() {
+        let mut slot = None;
+        store_pending(
+            &mut slot,
+            PendingPayload::Text { text: "hello".into(), kind: "selection".into() },
+        );
+        let taken = take_pending(&mut slot);
+        assert!(
+            matches!(&taken, Some(PendingPayload::Text { text, .. }) if text == "hello"),
+            "应能取回刚暂存的文本"
+        );
+        assert!(take_pending(&mut slot).is_none(), "取过一次就该清空");
+    }
 }

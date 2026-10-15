@@ -27,6 +27,11 @@ import { LangPicker } from "../components/LangPicker";
 import { svcColor } from "../svcColor";
 import "./Popup.css";
 
+/** 后端暂存的待译负载：新窗口挂载后自取（复用窗口走 popup-set-source 事件） */
+type PendingPayload =
+  | { type: "text"; text: string; kind?: HistoryKind }
+  | { type: "notice"; text: string };
+
 export default function PopupPage() {
   const [source, setSource] = useState("");
   const [from, setFrom] = useState("自动检测");
@@ -41,6 +46,8 @@ export default function PopupPage() {
   const [actionPlugins, setActionPlugins] = useState<PluginInfo[]>([]);
   // 当前这轮文本的来源，历史归类用；用 ref 避免重建 doTranslate
   const kindRef = useRef<HistoryKind>("selection");
+  /** 有待自动翻译的文本时置位；文本与服务列表都就绪立即翻译——无定时、无竞态 */
+  const autoRef = useRef(false);
 
   // 第一条成功译文与「有没有成功译文」：这个谓词在文件里出现十来次，收敛成两个值
   const doneCard = cards.find((c) => c.status === "done" && c.text);
@@ -105,7 +112,16 @@ export default function PopupPage() {
     [services, from, to],
   );
 
-  // 主窗口（或未来的取词服务）投递选中文本
+  // 文本与服务列表都就绪就自动翻译。原来这里是 120ms 定时赌服务列表先回来，
+  // 赌输就静默漏翻；现在改成条件触发，就绪即翻，谁先到都不丢。
+  useEffect(() => {
+    if (!autoRef.current) return;
+    if (!source.trim() || services.length === 0 || busy) return;
+    autoRef.current = false;
+    void doTranslate(source);
+  }, [source, services, busy, doTranslate]);
+
+  // 主窗口（或未来的取词服务）投递选中文本：复用窗口时事件即时到达
   useEffect(() => {
     const un = listen<{ text: string; autoTranslate?: boolean; kind?: HistoryKind }>(
       "popup-set-source",
@@ -115,8 +131,7 @@ export default function PopupPage() {
         setNotice("");
         kindRef.current = e.payload.kind ?? "selection";
         if (e.payload.autoTranslate !== false) {
-          // 等服务列表就绪后自动翻译
-          window.setTimeout(() => void doTranslate(e.payload.text), 120);
+          autoRef.current = true;
         }
       },
     );
@@ -124,6 +139,26 @@ export default function PopupPage() {
       void un.then((f) => f());
     };
   }, [doTranslate]);
+
+  // 新建窗口挂载后自取暂存内容（后端在投递时已暂存；取走即清）
+  useEffect(() => {
+    invoke<PendingPayload | null>("take_popup_pending")
+      .then((p) => {
+        if (!p) return;
+        if (p.type === "notice") {
+          setSource("");
+          setCards([]);
+          setNotice(p.text || "没取到选中文字");
+          return;
+        }
+        setSource(p.text);
+        setCards([]);
+        setNotice("");
+        kindRef.current = p.kind ?? "selection";
+        autoRef.current = true;
+      })
+      .catch(() => {});
+  }, []);
 
   // 取词失败：主进程把原因投过来，别让用户对着一个空窗口猜。
   useEffect(() => {

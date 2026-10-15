@@ -815,12 +815,11 @@ pub async fn finish_region(
     if panel_open {
         let _ = app.emit("ocr-set-source", &result);
     } else if !text.trim().is_empty() {
-        // 面板开不出来就退回弹窗，至少别让用户白框一次
+        // 面板开不出来就退回弹窗，至少别让用户白框一次：
+        // 先确保窗口存在（没有就建），文本走「暂存 + 复用即推」的同一套投递，
+        // 新建窗口挂载后自取，不再依赖事件时序。
         let _ = crate::selection::ensure_popup_at_cursor(&app);
-        let _ = app.emit(
-            "popup-set-source",
-            serde_json::json!({ "text": text, "autoTranslate": true, "kind": "screenshot" }),
-        );
+        crate::selection::deliver_text(&app, &text, "screenshot");
     }
     Ok(OcrPayload { text })
 }
