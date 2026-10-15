@@ -143,6 +143,54 @@
   flex: none;
 }
 
+/* 原文行头：标题居左、复制原文居右 */
+.ocr-src-lab {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.ocr-mini-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 9px;
+  font-size: var(--fs-cap);
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--c-border);
+  background: none;
+  color: var(--c-caption);
+  cursor: pointer;
+}
+.ocr-mini-btn:hover {
+  color: var(--c-text);
+  border-color: var(--c-border-hover);
+  background: var(--glass-card-strong);
+}
+
+/* 翻译动作行：识别与翻译解耦后的入口，语言自选、点击才翻 */
+.ocr-tr-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+.ocr-tr-cap {
+  font-size: var(--fs-cap);
+  color: var(--c-caption);
+}
+.ocr-tr-lang {
+  width: 118px;
+  height: var(--h-btn-mini);
+  padding: 0 8px;
+  font-size: var(--fs-sec);
+}
+.ocr-nosvc {
+  margin-top: 8px;
+  font-size: var(--fs-cap);
+  line-height: 1.6;
+  color: var(--c-caption);
+}
+
 .ocr-fallback {
   display: flex;
   justify-content: center;

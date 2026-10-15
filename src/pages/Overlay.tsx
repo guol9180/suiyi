@@ -126,7 +126,7 @@ export default function OverlayPage() {
           {Math.round(rect.w)} × {Math.round(rect.h)}
         </span>
       )}
-        <div className="ov-hint">拖动框选区域，松开后自动识别并翻译（Esc 取消）</div>
+        <div className="ov-hint">拖动框选区域，松开后自动识别（Esc 取消）</div>
     </div>
   );
 }

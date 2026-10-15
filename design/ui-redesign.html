@@ -1009,23 +1009,31 @@ font-size:11px;font-weight:700;display:inline-flex;align-items:center;justify-co
               <span class="x"><svg class="ico sm"><use href="#i-close"/></svg></span></div>
             <div class="ocr-privacy"><svg class="ico sm"><use href="#i-info"/></svg><span>识别在本机完成，截图不上传；只有识别出的文字会发给你配置的服务。</span></div>
             <div class="ocr-body">
+              <div class="ocr-lab" style="display:flex;align-items:center;justify-content:space-between">
+                <span>原文<span class="chip mini" style="margin-left:6px">英文</span></span>
+                <button class="btn mini" style="height:20px;padding:0 9px;font-size:11px;border-radius:999px">复制</button>
+              </div>
               <div class="ocr-line">Order Confirmation<br>Thank you for your purchase!<br>Total: $129.00<br>Shipping: 2–3 business days</div>
-              <div class="conf"><span class="chip acc">英文</span></div>
+              <div style="display:flex;align-items:center;gap:7px;margin-top:10px">
+                <span style="font-size:11px;color:#8a8580">翻译</span>
+                <span class="chip">简体中文</span><svg class="ico sm" style="margin-left:-4px"><use href="#i-chev-down"/></svg>
+                <button class="btn primary mini"><svg class="ico sm"><use href="#i-globe"/></svg>翻译</button>
+              </div>
+              <div class="ocr-lab" style="margin-top:12px">译文 → 简体中文</div>
               <div class="ocr-trans" style="border-left:3px solid #3964FE">
                 <div class="ocr-who">ZAI</div>
-                <div class="lab">译文 → 简体中文</div>
                 <div class="tt">订单确认<br>感谢您的购买！<br>总计：$129.00<br>配送：2–3 个工作日</div>
               </div>
             </div>
             <div class="ocr-actions">
-              <button class="btn primary mini"><svg class="ico sm"><use href="#i-copy"/></svg>复制</button>
+              <button class="btn primary mini"><svg class="ico sm"><use href="#i-copy"/></svg>复制译文</button>
               <button class="btn mini"><svg class="ico sm"><use href="#i-save"/></svg>保存</button>
-              <button class="btn mini"><svg class="ico sm"><use href="#i-refresh"/></svg>重新框选</button>
+              <button class="btn mini"><svg class="ico sm"><use href="#i-frame"/></svg>重新框选</button>
             </div>
             <div class="engine">引擎 PaddleOCR（本地）· 本地离线识别<span style="flex:1"></span>
               <span class="chip ok mini">本机完成</span></div>
           </div>
-          <div class="ov-hint"><svg class="ico sm"><use href="#i-frame"/></svg>拖动框选区域，松开后自动识别并翻译（Esc 取消）</div>
+          <div class="ov-hint"><svg class="ico sm"><use href="#i-frame"/></svg>拖动框选区域，松开后自动识别（Esc 取消）</div>
         </div>
       </div>
     </div>
@@ -2024,6 +2032,7 @@ font-size:11px;font-weight:700;display:inline-flex;align-items:center;justify-co
         <li>截图框选不画四角把手：松开即提交、不能二次调整。截图识别无 AI 视觉兜底开关——纯文本模型不支持图片输入。</li>
         <li>全局热键只有划词 Alt+D 与截图 Alt+S 两条；窗口 × 的行为是「直接关闭 / 收进托盘」，托盘常驻右下角。</li>
         <li>截图识别用本机 PaddleOCR（PP-OCRv4 + ONNX Runtime，离线），失败自动回落系统 OCR；「测试连接」真实跑一次翻译而不是只看 /models。</li>
+        <li>识别与翻译解耦：结果窗先出原文（可复制），由用户选目标语言点「翻译」再出译文——不自动消耗翻译额度；识别主路紧贴选区裁剪，框哪识别哪，紧框为空才外扩重试。</li>
         <li>更新下载是窗口级事务：切页不中断，进度只增不减，断线重试停在高水位并标注重试次数。</li>
         <li>添加服务先挑提供商：预设填地址、推荐模型与密钥页链接；本地服务（Ollama）显式标「不需要密钥」，请求不带 Authorization。</li>
         <li>服务端报错换成人话：401/402/403/404/429 各配动作按钮，原始 JSON 折叠在「详情」，能抓到 Key 尾号就一并显示。</li>

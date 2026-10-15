@@ -7,7 +7,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { listServices } from "../api";
 import { Icon } from "../components/Icon";
 import { formatSecs } from "../format";
-import { enabledTranslations, type ServiceConfig, type TranslateResult } from "../types";
+import { enabledTranslations, TARGET_LANGS, type ServiceConfig, type TranslateResult } from "../types";
 import "./OcrResult.css";
 
 /** 识别结果。只带文本与引擎信息：选区图与行矩形不再往界面传（见 screenshot.rs 的说明） */
@@ -30,7 +30,8 @@ interface Piece {
   error?: string;
 }
 
-const TARGET = "简体中文";
+/** 识别后的动作阶段：idle=只出原文；running/done=用户点了翻译之后 */
+type Phase = "idle" | "running" | "done";
 
 export default function OcrResultPage() {
   const [result, setResult] = useState<OcrResult | null>(null);
@@ -40,18 +41,26 @@ export default function OcrResultPage() {
   const [notice, setNotice] = useState("");
   /** 3 秒还没等到识别结果：面板不再显示「正在读取…」，给明确的重新框选/关闭 */
   const [waitedLong, setWaitedLong] = useState(false);
+  /** 翻译不自动触发：识别完成后由用户点「翻译」，语言自己选 */
+  const [phase, setPhase] = useState<Phase>("idle");
+  const [target, setTarget] = useState("简体中文");
+  /** 本次译文实际用的目标语言（展示用），改了语言但还没重翻时不会张冠李戴 */
+  const [usedLang, setUsedLang] = useState("简体中文");
   /** 每次新的识别结果进来就换一个批次号，过期的翻译结果直接丢掉 */
   const batchRef = useRef(0);
 
   const runTranslate = useCallback(
-    async (text: string, list: ServiceConfig[]) => {
+    async (text: string, list: ServiceConfig[], to: string) => {
       const batch = ++batchRef.current;
       if (!text.trim() || list.length === 0) {
         setPieces([]);
         setBusy(false);
+        setPhase("idle");
         return;
       }
       setBusy(true);
+      setPhase("running");
+      setUsedLang(to);
       setPieces(list.map((s) => ({ serviceId: s.id, name: s.name, text: "", elapsedMs: 0 })));
       const settled = await Promise.allSettled(
         list.map((s) =>
@@ -59,7 +68,7 @@ export default function OcrResultPage() {
             serviceId: s.id,
             text,
             from: "自动检测",
-            to: TARGET,
+            to,
             kind: "screenshot",
             // 结果要按行盖回原文位置，让模型保持换行
             preserveLines: true,
@@ -77,6 +86,7 @@ export default function OcrResultPage() {
         }),
       );
       setBusy(false);
+      setPhase("done");
     },
     [],
   );
@@ -130,6 +140,9 @@ export default function OcrResultPage() {
     const un = listen<OcrResult>("ocr-set-source", (e) => {
       setResult(e.payload);
       setNotice("");
+      // 新的识别结果：回到「未翻译」，上一份译文不再适用
+      setPhase("idle");
+      setPieces([]);
     });
     return () => {
       window.clearTimeout(timer);
@@ -143,11 +156,17 @@ export default function OcrResultPage() {
       .catch(() => setServices([]));
   }, []);
 
-  // 有识别结果就自动翻译一次
-  useEffect(() => {
-    if (!result) return;
-    void runTranslate(result.text, services);
-  }, [result, services, runTranslate]);
+  /** 翻译是用户点出来的动作：识别完成后不再自动触发 */
+  const startTranslate = useCallback(() => {
+    if (!result?.text.trim() || services.length === 0 || busy) return;
+    void runTranslate(result.text, services, target);
+  }, [result, services, target, busy, runTranslate]);
+
+  async function copySource() {
+    if (!result?.text.trim()) return;
+    await navigator.clipboard.writeText(result.text);
+    setNotice("原文已复制");
+  }
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -292,31 +311,70 @@ export default function OcrResultPage() {
             </div>
           ) : (
             <>
-              <div className="ocr-lab">
-                原文
-                {langLabel && <span className="chip mini" style={{ marginLeft: 6 }}>{langLabel}</span>}
+              <div className="ocr-lab ocr-src-lab">
+                <span>
+                  原文
+                  {langLabel && <span className="chip mini" style={{ marginLeft: 6 }}>{langLabel}</span>}
+                </span>
+                <button className="ocr-mini-btn" title="复制原文" onClick={() => void copySource()}>
+                  <Icon name="copy" size="sm" />
+                  复制
+                </button>
               </div>
               <div className="ocr-line">{result.text}</div>
-              <div className="ocr-lab" style={{ marginTop: 12 }}>
-                译文 → {TARGET}
+
+              {/* 识别与翻译解耦（对齐 Manggo/Pot）：要不要翻、翻成什么语言，由用户点选 */}
+              <div className="ocr-tr-row">
+                <span className="ocr-tr-cap">翻译</span>
+                <select
+                  className="inp ocr-tr-lang"
+                  value={target}
+                  title="译文目标语言"
+                  onChange={(e) => setTarget(e.target.value)}
+                >
+                  {TARGET_LANGS.map((l) => (
+                    <option key={l} value={l}>{l}</option>
+                  ))}
+                </select>
+                <button
+                  className="btn primary mini"
+                  onClick={startTranslate}
+                  disabled={busy || services.length === 0}
+                  title={services.length === 0 ? "先到设置里启用一个翻译服务" : `翻译为${target}`}
+                >
+                  <Icon name="globe" size="sm" />
+                  {phase === "done" ? "重新翻译" : "翻译"}
+                </button>
               </div>
-              {pieces.length === 0 && <div className="emptybox">还没有配置可用的翻译服务</div>}
-              {pieces.map((p) => (
-                <div className="ocr-trans" key={p.serviceId}>
-                  <span className="ocr-who">{p.name}</span>
-                  {p.error ? (
-                    <span className="ocr-err">{p.error}</span>
-                  ) : (
-                    <span className="tt">{p.text || "…"}</span>
-                  )}
-                </div>
-              ))}
+              {services.length === 0 && (
+                <div className="ocr-nosvc">还没有启用的翻译服务：到主窗口「设置 → 服务配置」添加并启用</div>
+              )}
+
+              {phase !== "idle" && (
+                <>
+                  <div className="ocr-lab" style={{ marginTop: 12 }}>译文 → {usedLang}</div>
+                  {pieces.map((p) => (
+                    <div className="ocr-trans" key={p.serviceId}>
+                      <span className="ocr-who">{p.name}</span>
+                      {p.error ? (
+                        <span className="ocr-err">{p.error}</span>
+                      ) : (
+                        <span className="tt">{p.text || "…"}</span>
+                      )}
+                    </div>
+                  ))}
+                </>
+              )}
             </>
           )}
         </div>
 
         <div className="ocr-actions">
-          <button className="btn primary mini" onClick={() => void copyTranslation()}>
+          <button
+            className="btn primary mini"
+            onClick={() => void copyTranslation()}
+            disabled={!pieces.some((p) => !p.error && p.text)}
+          >
             <Icon name="copy" size="sm" />
             复制译文
           </button>
