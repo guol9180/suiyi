@@ -14,12 +14,8 @@ Windows 桌面 AI 翻译工具：划词翻译（Alt+D）+ 截图识别（Alt+S�
 
 ## 环境注意
 
-- 终端命令一律用 PowerShell 7：`D:\software\powershell7\7\pwsh.exe`（7.6.7 x86，
-  已在机器级 PATH——2026-10-15 核实，新开终端可直接 `pwsh`；已开启的旧会话仍是
-  旧环境快照，需重启才生效，脚本里保留全路径调用最稳）。与 Windows PowerShell 5.1
-  并排共存互不影响：`powershell.exe` 仍在 System32，两版模块路径各自独立。
-  5.1 作为子进程接 `-Command` 时会吞掉内嵌双引号——脚本用 here-string 存变量再传，
-  或走 `-EncodedCommand` / `-File`。
+- 本机终端是 Windows PowerShell 5.1（System32 自带）。5.1 作为子进程接 `-Command`
+  时会吞掉内嵌双引号——脚本用 here-string 存变量再传，或走 `-EncodedCommand` / `-File`。
 - GitHub CLI 在 `D:\dev\environment\gh-cli\bin\gh.exe`（已登录 guol9180，未入 PATH）；仓库与发布操作优先用它。
 - pnpm 一律用 `pnpm.cmd` 调用；`pnpm.ps1` 会被本机执行策略拦截；registry 走 npmmirror。
 - 代理沙箱内只用文件工具改源码；写 `node_modules`、`target`、`.git` 的命令（pnpm / cargo / git）在无沙箱限制的终端执行。
