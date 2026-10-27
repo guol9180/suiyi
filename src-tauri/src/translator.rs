@@ -192,30 +192,48 @@ pub fn build_prompt(template: Option<&str>, from: &str, to: &str, text: &str) ->
         .replace("{{text}}", text)
 }
 
-fn emit_delta(app: Option<&AppHandle>, service_id: &str, delta: &str) {
+fn emit_delta(app: Option<&AppHandle>, window: Option<&str>, service_id: &str, delta: &str) {
     if let Some(app) = app {
-        let _ = app.emit(
-            "translate-delta",
-            DeltaPayload {
-                service_id: service_id.to_string(),
-                delta: delta.to_string(),
-            },
-        );
+        let payload = DeltaPayload {
+            service_id: service_id.to_string(),
+            delta: delta.to_string(),
+        };
+        // 点对点投递：增量只发给发起翻译的窗口。全局广播会让同一服务在多个
+        // 窗口并发翻译时串台——主窗的卡片会追加截图/弹窗那一路的增量。
+        match window {
+            Some(w) => {
+                let _ = app.emit_to(w.to_string(), "translate-delta", payload);
+            }
+            None => {
+                let _ = app.emit("translate-delta", payload);
+            }
+        }
     }
 }
 
-fn emit_done(app: Option<&AppHandle>, service_id: &str, text: &str, elapsed_ms: u64) {
+fn emit_done(
+    app: Option<&AppHandle>,
+    window: Option<&str>,
+    service_id: &str,
+    text: &str,
+    elapsed_ms: u64,
+) {
     if let Some(app) = app {
-        let _ = app.emit(
-            "translate-done",
-            DonePayload {
-                service_id: service_id.to_string(),
-                text: text.to_string(),
-                elapsed_ms,
-                // 结构化解析在命令层完成，事件只负责通知文本已完成
-                dictionary: None,
-            },
-        );
+        let payload = DonePayload {
+            service_id: service_id.to_string(),
+            text: text.to_string(),
+            elapsed_ms,
+            // 结构化解析在命令层完成，事件只负责通知文本已完成
+            dictionary: None,
+        };
+        match window {
+            Some(w) => {
+                let _ = app.emit_to(w.to_string(), "translate-done", payload);
+            }
+            None => {
+                let _ = app.emit("translate-done", payload);
+            }
+        }
     }
 }
 
@@ -303,14 +321,20 @@ pub(crate) fn segment_text(text: &str, target: usize) -> Vec<String> {
     chunks
 }
 
-/// 应用内入口（带事件推送）
-pub async fn translate(app: &AppHandle, p: TranslateParams<'_>) -> Result<(String, u64), String> {
-    translate_inner(Some(app), p).await
+/// 应用内入口（带事件推送）；window 是发起翻译的窗口标签——增量与完成事件
+/// 只投递给它（None = 全局广播，仅供测试与无窗口调用）。
+pub async fn translate(
+    app: &AppHandle,
+    window: Option<&str>,
+    p: TranslateParams<'_>,
+) -> Result<(String, u64), String> {
+    translate_inner(Some(app), window, p).await
 }
 
 /// 核心实现；app=None 时不推送事件（供单元测试与分段并发使用）
 pub(crate) async fn translate_inner(
     app: Option<&AppHandle>,
+    window: Option<&str>,
     p: TranslateParams<'_>,
 ) -> Result<(String, u64), String> {
     let start = Instant::now();
@@ -353,7 +377,7 @@ pub(crate) async fn translate_inner(
             return Err(empty_result_error());
         }
         let elapsed = start.elapsed().as_millis() as u64;
-        emit_done(app, p.service_id, &text, elapsed);
+        emit_done(app, window, p.service_id, &text, elapsed);
         return Ok((text, elapsed));
     }
 
@@ -380,7 +404,7 @@ pub(crate) async fn translate_inner(
                         return Err(empty_result_error());
                     }
                     let elapsed = start.elapsed().as_millis() as u64;
-                    emit_done(app, p.service_id, &full, elapsed);
+                    emit_done(app, window, p.service_id, &full, elapsed);
                     return Ok((full, elapsed));
                 }
                 let Ok(v) = serde_json::from_str::<serde_json::Value>(data) else {
@@ -397,7 +421,7 @@ pub(crate) async fn translate_inner(
                     continue;
                 }
                 full.push_str(delta);
-                emit_delta(app, p.service_id, delta);
+                emit_delta(app, window, p.service_id, delta);
             }
         }
     }
@@ -407,7 +431,7 @@ pub(crate) async fn translate_inner(
     if full.trim().is_empty() {
         return Err(empty_result_error());
     }
-    emit_done(app, p.service_id, &full, elapsed);
+    emit_done(app, window, p.service_id, &full, elapsed);
     Ok((full, elapsed))
 }
 
@@ -504,7 +528,7 @@ mod tests {
             timeout: Duration::from_secs(5),
             thinking: None,
         };
-        let err = translate_inner(None, p).await.unwrap_err();
+        let err = translate_inner(None, None, p).await.unwrap_err();
         assert!(err.contains("没有返回内容"), "实际: {err}");
         server.join().unwrap();
     }
@@ -540,7 +564,7 @@ mod tests {
             timeout: Duration::from_secs(5),
             thinking: None,
         };
-        let err = translate_inner(None, p).await.unwrap_err();
+        let err = translate_inner(None, None, p).await.unwrap_err();
         assert!(err.contains("余额不足"), "实际: {err}");
         server.join().unwrap();
     }
@@ -574,7 +598,7 @@ mod tests {
             timeout: Duration::from_secs(5),
             thinking: None,
         };
-        let err = translate_inner(None, p).await.unwrap_err();
+        let err = translate_inner(None, None, p).await.unwrap_err();
         assert!(err.contains("没有返回内容"), "实际: {err}");
         server.join().unwrap();
     }
@@ -700,7 +724,7 @@ mod tests {
             timeout: Duration::from_secs(5),
             thinking: None,
         };
-        let (text, _ms) = translate_inner(None, p).await.unwrap();
+        let (text, _ms) = translate_inner(None, None, p).await.unwrap();
         assert_eq!(text, "你好，世界");
         server.join().unwrap();
     }
@@ -734,7 +758,7 @@ mod tests {
             timeout: Duration::from_secs(5),
             thinking: None,
         };
-        let (text, _ms) = translate_inner(None, p).await.unwrap();
+        let (text, _ms) = translate_inner(None, None, p).await.unwrap();
         assert_eq!(text, "hello world");
         server.join().unwrap();
     }
@@ -771,7 +795,7 @@ mod tests {
             timeout: Duration::from_secs(5),
             thinking: None,
         };
-        let (text, _ms) = translate_inner(None, p).await.unwrap();
+        let (text, _ms) = translate_inner(None, None, p).await.unwrap();
         assert_eq!(text, "hi");
         let seen = server.join().unwrap();
         assert!(
@@ -837,6 +861,7 @@ mod tests {
         let rt = tokio::runtime::Runtime::new().unwrap();
         let (text, ms) = rt
             .block_on(translate_inner(
+                None,
                 None,
                 TranslateParams {
                     service_id: &svc.id,

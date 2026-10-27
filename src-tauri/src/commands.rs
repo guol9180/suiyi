@@ -259,6 +259,8 @@ pub fn save_settings(app: tauri::AppHandle, settings: GlobalSettings) -> Result<
 #[tauri::command]
 pub async fn translate_text(
     app: tauri::AppHandle,
+    // 注入的调用方窗口：增量/完成事件只投递给它，多窗口并发翻译不再串台
+    window: tauri::WebviewWindow,
     service_id: String,
     text: String,
     from: String,
@@ -366,7 +368,7 @@ pub async fn translate_text(
         timeout: Duration::from_secs(file.timeout_secs.max(3)),
         thinking,
     };
-    let (translated, elapsed_ms) = match translator::translate(&app, params).await {
+    let (translated, elapsed_ms) = match translator::translate(&app, Some(window.label()), params).await {
         Ok(v) => v,
         Err(e) => {
             record_history(&dir, started_at, kind.as_deref(), &text, "", &service_name, 0, Some(&e));
@@ -652,6 +654,7 @@ async fn translate_segmented(
     let futs = prompts.iter().map(|prompt| {
         translator::translate_inner(
             None,
+            None,
             translator::TranslateParams {
                 service_id: &svc.id,
                 base_url: &svc.base_url,
@@ -814,6 +817,8 @@ pub async fn test_connection(
     let started = std::time::Instant::now();
     let result = translator::translate(
         &app,
+        // 测试连接没有需要投递事件的窗口：全局广播无妨
+        None,
         translator::TranslateParams {
             service_id: &service_id,
             base_url: &svc.base_url,
