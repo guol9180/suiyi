@@ -181,6 +181,8 @@ services.json 与凭据读取缓存、长文本按句分段并发。
 ## 4. 环境现状
 
 - 终端为 Windows PowerShell 5.1（System32 自带）。
+- 发版 CI（release.yml）拆为测试/构建并行 job + 发布 job（双门禁）；Rust 工具链锁定
+  版本号（workflow env `RUST_TOOLCHAIN`），升级 Rust 时顺手改这里，否则缓存键失配退回全量重编。
 - Node v22.23.2、pnpm 12.5.1（`D:\dev\environment\nodejs`）；pnpm 用 `pnpm.cmd` 调用（见 `AGENTS.md`）。
 - Rust 1.98.1，工具链在 `D:\dev\environment\rustup\toolchains\stable-x86_64-pc-windows-msvc`
   - `D:\dev\environment\cargo\bin\cargo.exe` 是 rustup 垫片，需先配好默认 toolchain，或直接调用工具链目录
