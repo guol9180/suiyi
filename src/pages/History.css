@@ -4,9 +4,9 @@
   max-width: 1100px;
   margin: 0 auto;
   padding: 16px;
-  height: 100%;
   box-sizing: border-box;
-  overflow-y: auto;
+  /* 滚动统一交给全宽的 .tab-body：滚动条贴窗口右缘；
+     列表自身的滚动（.hist-list）保持不变 */
 }
 /* .empty-hint 与 .panel.wide 已归位 base.css（与设置页共用） */
 

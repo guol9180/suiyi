@@ -56,15 +56,20 @@
   background: transparent;
   padding: 16px;
   min-width: 0;
-  /* 窗口拉宽时不再把表单拉成 1300px，超过这个宽度就居中留白 */
-  max-width: 980px;
-  margin: 0 auto;
   /*
    * 内容变高时右侧会出现滚动条，滚动条一挤，整块内容会横着跳一下。
    * 固定留出滚动条宽度，切换页面/点供应商都不会再位移。
    */
   scrollbar-gutter: stable;
   overflow: auto;
+  /* 滚动容器占满剩余宽度：最大化后滚动条仍贴窗口右缘，
+     内容的 980px 居中封顶由直接子元素各自承担 */
+}
+.main > * {
+  width: 100%;
+  max-width: 980px;
+  margin-left: auto;
+  margin-right: auto;
 }
 /*
  * 两栏放在内层容器里。

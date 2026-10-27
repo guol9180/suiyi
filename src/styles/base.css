@@ -412,3 +412,21 @@ textarea.inp { height: auto; min-height: 86px; padding: 9px 11px; line-height: 1
 .toast.info { background: var(--c-info-bg); border-color: var(--c-info-border); color: var(--c-info); }
 .toast.warn { background: var(--c-warn-bg); border-color: var(--c-warn-border); color: var(--c-warn); }
 .toast.err { background: var(--c-danger-bg); border-color: var(--c-danger-border); color: var(--c-danger-ink); }
+
+/* ---------- 滚动条：细而低对比，不与内容抢视线 ----------
+ * 轨道全透明，拇指用边框色加 3px 透明衬边收细（视觉宽约 4px），
+ * 悬停才加深一档。对全部窗口生效（主窗、弹窗、OCR 面板同一套）。 */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: var(--c-border);
+  border-radius: var(--radius-pill);
+  border: 3px solid transparent;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--c-border-strong);
+  border: 3px solid transparent;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-corner { background: transparent; }

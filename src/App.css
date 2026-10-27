@@ -168,9 +168,13 @@
   z-index: 1;
   flex: 1;
   min-height: 0;
+  /* 页面级滚动统一收在这里：滚动条永远贴窗口右缘，
+     不随「内容 980px 居中封顶」缩到中间去 */
   overflow: auto;
 }
-.tab-body > * { height: 100%; }
+.tab-body > * { min-height: 100%; }
 /* 页签保挂载：每个 pane 占满，内部页面自己滚动 */
 .tab-pane { height: 100%; }
-.tab-pane > * { height: 100%; }
+/* 设置页是内部自滚特例（侧边栏固定 + 内容列滚动），需要确定高度；
+   其余页面用 min-height 自然生长，滚动交给 .tab-body */
+.tab-pane > .set-body { height: 100%; }
