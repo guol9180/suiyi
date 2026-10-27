@@ -193,10 +193,11 @@ fn emit_done(app: Option<&AppHandle>, service_id: &str, text: &str, elapsed_ms: 
 
 /// 组装 /chat/completions 请求体。
 /// max_tokens 给个与输入相称的上限：正常译文与输入同量级（×2 已留足膨胀），
-/// 封顶是为了模型跑偏、复读打转时收敛长尾，不至于一条请求拖满整个超时；
-/// 短输入也给 256 的下限，正常短译文不会被截。
+/// 封顶是为了模型跑偏、复读打转时收敛长尾，不至于一条请求拖满整个超时。
+/// 下限 1024：思考型模型（GLM-5.3-flash 等）的思考 token 计入 max_tokens，
+/// 下限太小会被思考烧完预算、正文一个字不剩。
 fn request_body(p: &TranslateParams<'_>) -> serde_json::Value {
-    let max_tokens = (p.prompt.chars().count() * 2 + 128).max(256);
+    let max_tokens = (p.prompt.chars().count() * 2 + 128).max(1024);
     json!({
         "model": p.model,
         "stream": p.stream,
@@ -304,10 +305,16 @@ pub(crate) async fn translate_inner(
             .json()
             .await
             .map_err(|e| format!("解析响应失败: {e}"))?;
+        if let Some(msg) = data["error"]["message"].as_str() {
+            return Err(format!("服务返回错误: {msg}"));
+        }
         let text = data["choices"][0]["message"]["content"]
             .as_str()
             .ok_or("响应缺少 content 字段")?
             .to_string();
+        if text.trim().is_empty() {
+            return Err(empty_result_error());
+        }
         let elapsed = start.elapsed().as_millis() as u64;
         emit_done(app, p.service_id, &text, elapsed);
         return Ok((text, elapsed));
@@ -332,6 +339,9 @@ pub(crate) async fn translate_inner(
                 let Some(data) = line.strip_prefix("data:") else { continue };
                 let data = data.trim();
                 if data == "[DONE]" {
+                    if full.trim().is_empty() {
+                        return Err(empty_result_error());
+                    }
                     let elapsed = start.elapsed().as_millis() as u64;
                     emit_done(app, p.service_id, &full, elapsed);
                     return Ok((full, elapsed));
@@ -339,6 +349,10 @@ pub(crate) async fn translate_inner(
                 let Ok(v) = serde_json::from_str::<serde_json::Value>(data) else {
                     continue;
                 };
+                // 服务把错误夹在流里（余额不足、内容审查等）：转发，绝不静默吞掉
+                if let Some(msg) = v["error"]["message"].as_str() {
+                    return Err(format!("服务返回错误: {msg}"));
+                }
                 let Some(delta) = v["choices"][0]["delta"]["content"].as_str() else {
                     continue;
                 };
@@ -353,8 +367,16 @@ pub(crate) async fn translate_inner(
 
     // 流关闭但没有 [DONE]：把已积累内容视为完成
     let elapsed = start.elapsed().as_millis() as u64;
+    if full.trim().is_empty() {
+        return Err(empty_result_error());
+    }
     emit_done(app, p.service_id, &full, elapsed);
     Ok((full, elapsed))
+}
+
+/// 空结果的统一报错文案：给用户下一步动作，而不是一张空白卡片
+fn empty_result_error() -> String {
+    "模型没有返回内容（可能思考型模型把预算花在了思考上，或输出被截断），请重试；反复出现请换模型".to_string()
 }
 
 #[cfg(test)]
@@ -413,8 +435,114 @@ mod tests {
         }
     }
 
+    /// 流式响应一个正文都没有（思考型模型把预算烧在思考通道、或被截断）：
+    /// 必须报错说清楚，而不是静默返回空串让用户对着空白卡片猜。
+    #[tokio::test]
+    async fn empty_stream_surfaces_an_error() {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = std::thread::spawn(move || {
+            let (mut sock, _) = listener.accept().unwrap();
+            let mut req = vec![0u8; 8192];
+            let _ = sock.read(&mut req);
+            let sse = "data: {\"choices\":[{\"delta\":{\"reasoning_content\":\"思考中\"}}]}\n\n\
+                       data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"length\"}]}\n\n\
+                       data: [DONE]\n\n";
+            let resp = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nConnection: close\r\n\r\n{sse}"
+            );
+            let _ = sock.write_all(resp.as_bytes());
+            let _ = sock.flush();
+        });
+
+        let base = format!("http://{addr}");
+        let p = TranslateParams {
+            service_id: "mock",
+            base_url: &base,
+            api_key: "sk-test",
+            model: "mock-model",
+            prompt: "translate",
+            temperature: None,
+            stream: true,
+            timeout: Duration::from_secs(5),
+        };
+        let err = translate_inner(None, p).await.unwrap_err();
+        assert!(err.contains("没有返回内容"), "实际: {err}");
+        server.join().unwrap();
+    }
+
+    /// 服务在流里夹带 error 对象（余额不足、内容审查等）：转发为可读错误，
+    /// 不允许静默吞掉后返回空文本。
+    #[tokio::test]
+    async fn stream_error_object_surfaces() {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = std::thread::spawn(move || {
+            let (mut sock, _) = listener.accept().unwrap();
+            let mut req = vec![0u8; 8192];
+            let _ = sock.read(&mut req);
+            let sse = "data: {\"error\":{\"message\":\"余额不足\"}}\n\n\
+                       data: [DONE]\n\n";
+            let resp = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nConnection: close\r\n\r\n{sse}"
+            );
+            let _ = sock.write_all(resp.as_bytes());
+            let _ = sock.flush();
+        });
+
+        let base = format!("http://{addr}");
+        let p = TranslateParams {
+            service_id: "mock",
+            base_url: &base,
+            api_key: "sk-test",
+            model: "mock-model",
+            prompt: "translate",
+            temperature: None,
+            stream: true,
+            timeout: Duration::from_secs(5),
+        };
+        let err = translate_inner(None, p).await.unwrap_err();
+        assert!(err.contains("余额不足"), "实际: {err}");
+        server.join().unwrap();
+    }
+
+    /// 非流式空正文同样要报错
+    #[tokio::test]
+    async fn empty_non_stream_surfaces_an_error() {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = std::thread::spawn(move || {
+            let (mut sock, _) = listener.accept().unwrap();
+            let mut req = vec![0u8; 8192];
+            let _ = sock.read(&mut req);
+            let body = "{\"choices\":[{\"message\":{\"content\":\"\"}}]}";
+            let resp = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n{body}"
+            );
+            let _ = sock.write_all(resp.as_bytes());
+            let _ = sock.flush();
+        });
+
+        let base = format!("http://{addr}");
+        let p = TranslateParams {
+            service_id: "mock",
+            base_url: &base,
+            api_key: "",
+            model: "mock-model",
+            prompt: "translate",
+            temperature: None,
+            stream: false,
+            timeout: Duration::from_secs(5),
+        };
+        let err = translate_inner(None, p).await.unwrap_err();
+        assert!(err.contains("没有返回内容"), "实际: {err}");
+        server.join().unwrap();
+    }
+
     /// 请求体带与输入相称的 max_tokens 上限：正常译文与输入同量级，
     /// 封顶是为了模型跑偏复读时收敛长尾，不让一条请求拖满超时。
+    /// 下限 1024：给思考型模型的思考通道留出预算（思考 token 计入 max_tokens），
+    /// 否则短文本翻译会被思考烧完预算、正文为空。
     #[test]
     fn request_body_caps_max_tokens_relative_to_input() {
         let p = TranslateParams {
@@ -428,7 +556,7 @@ mod tests {
             timeout: Duration::from_secs(1),
         };
         let body = request_body(&p);
-        assert_eq!(body["max_tokens"], 256, "短输入也给足下限，不截断正常短译文");
+        assert_eq!(body["max_tokens"], 1024, "短输入也给足下限，覆盖思考通道预算");
         let long = "a".repeat(1000);
         let p2 = TranslateParams { prompt: &long, ..p };
         let body2 = request_body(&p2);
