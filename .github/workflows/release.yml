@@ -2,24 +2,37 @@ name: Release
 
 # 打 tag（v*）时在 GitHub 的 Windows 机器上构建安装包并发布；
 # 也可以在 Actions 页面手动触发，产物会挂到该次运行的 Artifacts 上。
+#
+# 结构：测试与构建**并行**跑（各自独立缓存），发布等两者都成功才执行——
+# 串行时代总耗时 = 测试 + 构建，并行后 = max(测试, 构建) + 发布步。
 on:
   push:
     tags:
       - "v*"
   workflow_dispatch:
 
+# 同一分支/标签还有没跑完的旧跑批时直接取消，不重复消耗构建机
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: write
   # 发版后要触发一次 Pages 部署，把新安装包同步到下载页的 /dl 镜像目录
   actions: write
 
+env:
+  # 锁定工具链版本：rust-cache 的缓存键含 rustc 版本，漂浮的 stable 会让
+  # 隔段时间的发布缓存全失配、退回全量重编（v0.10.4 实测总耗时 17.5 分钟）。
+  # 升级 Rust 时顺手改这里：改完首轮全量编一次，之后恢复增量。
+  RUST_TOOLCHAIN: "1.98.1"
+
 jobs:
-  windows:
+  # ---------- 后端测试（与构建并行） ----------
+  test:
+    name: 后端测试
     runs-on: windows-latest
-    # 签名凭据提到 job 级 env：GitHub 不允许在 step 的 if 里直接读 secrets，
-    # 只能先放进 env，再用 env.XXX 判断（这也是之前工作流“0 个 job 直接失败”的原因）。
-    env:
-      SIGNPATH_TOKEN: ${{ secrets.SIGNPATH_API_TOKEN }}
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
 
@@ -35,20 +48,14 @@ jobs:
           cache: pnpm
 
       - name: 安装 Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
 
       - name: 缓存 Rust 构建
-        uses: swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
-
-      # Tauri 打包器（NSIS 与 WiX）每次运行会现场下载到 %LOCALAPPDATA%\tauri，
-      # 缓存后省掉每次发版的下载时间
-      - name: 缓存打包器工具
-        uses: actions/cache@v4
-        with:
-          path: ~/AppData/Local/tauri
-          key: tauri-bundler-${{ runner.os }}
 
       # OCR 模型与 ONNX Runtime 约 34MB，按哈希缓存，避免每次 CI 重新下载
       - name: 缓存 OCR 模型
@@ -64,8 +71,7 @@ jobs:
       - name: 拉取 OCR 模型
         run: pnpm ocr:assets
 
-      # 测试与构建共用 release profile：省掉整个 debug 依赖编译（每次发版约省 3~4 分钟），
-      # 测试编译出的 release 依赖直接被下一步 tauri build 复用。
+      # 测试与构建共用 release profile（省掉整个 debug 依赖编译）。
       # panic=abort 下测试框架工作正常（本地实测 79 用例通过）。
       - name: 运行后端测试
         working-directory: src-tauri
@@ -80,6 +86,57 @@ jobs:
               ForEach-Object { Write-Host "::error::$($_.Line.Trim())" }
             exit 1
           }
+
+  # ---------- 构建安装包（与测试并行） ----------
+  build:
+    name: 构建安装包
+    runs-on: windows-latest
+    timeout-minutes: 40
+    outputs:
+      artifact-id: ${{ steps.upload.outputs.artifact-id }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 安装 pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 12
+
+      - name: 安装 Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: 安装 Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+
+      - name: 缓存 Rust 构建
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      # Tauri 打包器（NSIS 与 WiX）每次运行会现场下载到 %LOCALAPPDATA%\tauri，
+      # 缓存后省掉每次发版的下载时间
+      - name: 缓存打包器工具
+        uses: actions/cache@v4
+        with:
+          path: ~/AppData/Local/tauri
+          key: tauri-bundler-${{ runner.os }}
+
+      - name: 缓存 OCR 模型
+        uses: actions/cache@v4
+        with:
+          path: src-tauri/ocr
+          key: ocr-assets-v1-${{ runner.os }}-${{ hashFiles('scripts/fetch-ocr-assets.mjs') }}
+
+      - name: 安装前端依赖
+        run: pnpm install --frozen-lockfile
+
+      - name: 拉取 OCR 模型
+        run: pnpm ocr:assets
 
       - name: 构建安装包
         run: pnpm tauri build
@@ -106,6 +163,22 @@ jobs:
           name: suiyi-windows-x64
           path: dist-release/*
 
+  # ---------- 发布（等测试与构建都成功） ----------
+  release:
+    name: 发布
+    needs: [test, build]
+    runs-on: ubuntu-latest
+    env:
+      # 签名凭据提到 job 级 env：GitHub 不允许在 step 的 if 里直接读 secrets，
+      # 只能先放进 env，再用 env.XXX 判断（这也是之前工作流“0 个 job 直接失败”的原因）。
+      SIGNPATH_TOKEN: ${{ secrets.SIGNPATH_API_TOKEN }}
+    steps:
+      - name: 下载构建产物
+        uses: actions/download-artifact@v4
+        with:
+          name: suiyi-windows-x64
+          path: dist-release
+
       # 代码签名（SignPath Foundation，申请与配置见 docs/signing.md）。
       # SIGNPATH_READY 还是 false、或仓库里没配 SIGNPATH_API_TOKEN 时整段跳过，
       # 未签名的包照常发布；审核通过后把 SIGNPATH_READY 改成 true 并填上四个 slug 即可。
@@ -119,26 +192,22 @@ jobs:
           project-slug: "<-- 填这里：project slug"
           signing-policy-slug: "<-- 填这里：signing policy slug"
           artifact-configuration-slug: "<-- 填这里：artifact configuration slug"
-          github-artifact-id: ${{ steps.upload.outputs.artifact-id }}
+          github-artifact-id: ${{ needs.build.outputs.artifact-id }}
           wait-for-completion: true
           output-artifact-directory: signed
 
       - name: 说明签名状态
         if: ${{ vars.SIGNPATH_READY != 'true' || env.SIGNPATH_TOKEN == '' }}
-        shell: pwsh
-        run: Write-Host "::notice::本次未签名（SignPath 尚未接入，见 docs/signing.md）"
+        run: echo "::notice::本次未签名（SignPath 尚未接入，见 docs/signing.md）"
 
       # 签名产物优先：拿到签名版就覆盖掉待发布的未签名文件
       - name: 用已签名产物替换
         if: ${{ steps.signpath.outcome == 'success' }}
-        shell: pwsh
         run: |
-          if (Test-Path signed) {
-            Get-ChildItem signed -Recurse -File | ForEach-Object {
-              Copy-Item $_.FullName dist-release/ -Force
-            }
-          }
-          Get-ChildItem dist-release | Select-Object Name, Length
+          if [ -d signed ]; then
+            cp -rv signed/* dist-release/
+          fi
+          ls -la dist-release
 
       - name: 发布到 GitHub Release
         if: startsWith(github.ref, 'refs/tags/v')
@@ -163,9 +232,8 @@ jobs:
       # 应用内的「下载并安装」优先走这份国内镜像。
       - name: 刷新下载页镜像
         if: startsWith(github.ref, 'refs/tags/v')
-        shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh api --method POST "/repos/${{ github.repository }}/actions/workflows/pages.yml/dispatches" -f ref=main
-          Write-Host "已触发 Pages 部署"
+          echo "已触发 Pages 部署"
