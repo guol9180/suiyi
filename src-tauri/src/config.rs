@@ -60,6 +60,10 @@ pub struct ServiceConfig {
     /// 由插件提供的服务填插件 id；普通服务为 None，且这类服务不落盘
     #[serde(skip_serializing_if = "Option::is_none")]
     pub plugin_id: Option<String>,
+    /// 思考模式：off=发关闭参数（翻译推荐，首字快且省钱）/ default=不发参数跟随模型
+    /// 默认 / on=发开启参数。参数风格按提供商主机名映射，识别不出的提供商不发
+    /// （严格网关会拒绝未知字段）。
+    pub thinking: String,
 }
 
 impl Default for ServiceConfig {
@@ -79,6 +83,7 @@ impl Default for ServiceConfig {
             requires_key: true,
             order: 0,
             plugin_id: None,
+            thinking: "off".to_string(),
         }
     }
 }
@@ -194,6 +199,7 @@ pub fn default_services() -> Vec<ServiceConfig> {
         requires_key: true,
         order: 0,
         plugin_id: None,
+        thinking: "off".into(),
     }]
 }
 

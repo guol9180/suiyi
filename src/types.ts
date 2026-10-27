@@ -21,6 +21,9 @@ export interface ServiceConfig {
   order: number;
   /** 由插件提供的服务才有；这类服务不落盘，也不能在服务列表里编辑 */
   pluginId?: string | null;
+  /** 思考模式：off=发关闭参数（翻译推荐）/ default=不发参数跟随模型默认 / on=发开启参数。
+   *  参数风格按提供商在 后端映射，识别不出的提供商不发（严格网关会拒绝未知字段）。 */
+  thinking?: string;
 }
 
 export interface ServicesFile {
@@ -186,6 +189,7 @@ export const EMPTY_SERVICE: ServiceConfig = {
   resultType: "text",
   requiresKey: true,
   order: 0,
+  thinking: "off",
 };
 
 export const PROTOCOL_LABELS: Record<Protocol, string> = {

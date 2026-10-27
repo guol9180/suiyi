@@ -129,6 +129,7 @@ fn plugin_services(dir: &std::path::Path) -> Vec<ServiceConfig> {
             requires_key: false,
             order: 10_000 + i as u32,
             plugin_id: Some(p.id.clone()),
+            thinking: "default".to_string(),
         })
         .collect()
 }
@@ -326,6 +327,8 @@ pub async fn translate_text(
         svc.prompt_template.as_deref()
     };
     let stream_enabled = svc.stream && !dictionary_mode;
+    // 思考模式：按服务的提供商映射成请求体附加字段（识别不出提供商则不发）
+    let thinking = translator::thinking_body_fields(&svc.base_url, &svc.thinking);
     // 长文本 + 非流式：按段并发请求、按序拼回，整体耗时近似按段数缩短。
     // 流式服务不分段——增量上屏的顺序体验优先，各段增量交错会打乱文本。
     if !stream_enabled && text.chars().count() > translator::SEGMENT_MIN_CHARS {
@@ -342,6 +345,7 @@ pub async fn translate_text(
             &service_name,
             preserve_lines.unwrap_or(false),
             file.timeout_secs.max(3),
+            thinking,
         )
         .await;
     }
@@ -360,6 +364,7 @@ pub async fn translate_text(
         temperature: svc.temperature,
         stream: svc.stream && !dictionary_mode,
         timeout: Duration::from_secs(file.timeout_secs.max(3)),
+        thinking,
     };
     let (translated, elapsed_ms) = match translator::translate(&app, params).await {
         Ok(v) => v,
@@ -629,6 +634,7 @@ async fn translate_segmented(
     service_name: &str,
     preserve_lines: bool,
     timeout_secs: u64,
+    thinking: Option<serde_json::Value>,
 ) -> Result<DonePayload, String> {
     let chunks = translator::segment_text(text, translator::SEGMENT_TARGET_CHARS);
     let started = std::time::Instant::now();
@@ -655,6 +661,7 @@ async fn translate_segmented(
                 temperature: svc.temperature,
                 stream: false,
                 timeout: Duration::from_secs(timeout_secs),
+                thinking: thinking.clone(),
             },
         )
     });
@@ -817,6 +824,8 @@ pub async fn test_connection(
             // 测试必须一次拿全，不能流式
             stream: false,
             timeout: Duration::from_secs(file.timeout_secs.clamp(3, 120).min(20)),
+            // 与真实翻译同参数：思考开关也得在测试里验到
+            thinking: translator::thinking_body_fields(&svc.base_url, &svc.thinking),
         },
     )
     .await;

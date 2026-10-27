@@ -152,6 +152,34 @@ pub struct TranslateParams<'a> {
     pub temperature: Option<f32>,
     pub stream: bool,
     pub timeout: Duration,
+    /// 思考模式的请求体附加字段（按提供商映射好的完整对象）；None 不发任何参数
+    pub thinking: Option<serde_json::Value>,
+}
+
+/// 按提供商把思考设置映射为请求体的附加字段。
+/// 「思考开关」是各家私有扩展，不是 OpenAI 标准字段——严格网关收到未知参数会 400，
+/// 所以识别不出的提供商一律不发（DeepSeek、Kimi 这类用模型名区分思考，参数无关）。
+pub(crate) fn thinking_body_fields(base_url: &str, setting: &str) -> Option<serde_json::Value> {
+    let host = base_url
+        .trim_start_matches("https://")
+        .trim_start_matches("http://")
+        .split('/')
+        .next()
+        .unwrap_or("")
+        .to_lowercase();
+    let on = match setting {
+        "on" => true,
+        "off" => false,
+        _ => return None, // default：跟随模型默认，不发参数
+    };
+    // 智谱与火山方舟（豆包 1.5+）用 thinking.type；百炼与硅基流动（Qwen3）用 enable_thinking
+    if host.ends_with("bigmodel.cn") || host.ends_with("volces.com") {
+        Some(json!({ "thinking": { "type": if on { "enabled" } else { "disabled" } } }))
+    } else if host.ends_with("maas.aliyuncs.com") || host.contains("siliconflow") {
+        Some(json!({ "enable_thinking": on }))
+    } else {
+        None
+    }
 }
 
 /// 用模板渲染 Prompt（变量：{{from}} {{to}} {{text}}）
@@ -198,13 +226,22 @@ fn emit_done(app: Option<&AppHandle>, service_id: &str, text: &str, elapsed_ms: 
 /// 下限太小会被思考烧完预算、正文一个字不剩。
 fn request_body(p: &TranslateParams<'_>) -> serde_json::Value {
     let max_tokens = (p.prompt.chars().count() * 2 + 128).max(1024);
-    json!({
+    let mut body = json!({
         "model": p.model,
         "stream": p.stream,
         "temperature": p.temperature.unwrap_or(0.3),
         "max_tokens": max_tokens,
         "messages": [{ "role": "user", "content": p.prompt }]
-    })
+    });
+    // 思考模式等提供商私有扩展：按映射结果合并进请求体
+    if let Some(extra) = &p.thinking {
+        if let Some(map) = extra.as_object() {
+            for (k, v) in map {
+                body[k] = v.clone();
+            }
+        }
+    }
+    body
 }
 
 /// 分段阈值的下限：文本超过这么多字符（非流式）才值得并发分段
@@ -465,6 +502,7 @@ mod tests {
             temperature: None,
             stream: true,
             timeout: Duration::from_secs(5),
+            thinking: None,
         };
         let err = translate_inner(None, p).await.unwrap_err();
         assert!(err.contains("没有返回内容"), "实际: {err}");
@@ -500,6 +538,7 @@ mod tests {
             temperature: None,
             stream: true,
             timeout: Duration::from_secs(5),
+            thinking: None,
         };
         let err = translate_inner(None, p).await.unwrap_err();
         assert!(err.contains("余额不足"), "实际: {err}");
@@ -533,10 +572,73 @@ mod tests {
             temperature: None,
             stream: false,
             timeout: Duration::from_secs(5),
+            thinking: None,
         };
         let err = translate_inner(None, p).await.unwrap_err();
         assert!(err.contains("没有返回内容"), "实际: {err}");
         server.join().unwrap();
+    }
+
+    /// 思考开关的提供商映射矩阵：智谱/方舟走 thinking.type，百炼/硅基流动走
+    /// enable_thinking；识别不出的提供商与 default 档一律不发参数（严格网关会 400）。
+    #[test]
+    fn thinking_fields_follow_provider_and_setting() {
+        // 智谱
+        assert_eq!(
+            thinking_body_fields("https://open.bigmodel.cn/api/paas/v4", "off"),
+            Some(json!({ "thinking": { "type": "disabled" } }))
+        );
+        assert_eq!(
+            thinking_body_fields("https://open.bigmodel.cn/api/paas/v4", "on"),
+            Some(json!({ "thinking": { "type": "enabled" } }))
+        );
+        // 百炼（地址含工作空间变量也不影响主机名判断）
+        assert_eq!(
+            thinking_body_fields(
+                "https://x.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
+                "off"
+            ),
+            Some(json!({ "enable_thinking": false }))
+        );
+        // 方舟
+        assert_eq!(
+            thinking_body_fields("https://ark.cn-beijing.volces.com/api/v3", "off"),
+            Some(json!({ "thinking": { "type": "disabled" } }))
+        );
+        // 硅基流动
+        assert_eq!(
+            thinking_body_fields("https://api.siliconflow.cn/v1", "on"),
+            Some(json!({ "enable_thinking": true }))
+        );
+        // 识别不出的提供商：不发（OpenAI 官方等严格网关会拒绝未知字段）
+        assert_eq!(thinking_body_fields("https://api.deepseek.com", "off"), None);
+        // default 档：跟随模型默认，不发
+        assert_eq!(
+            thinking_body_fields("https://open.bigmodel.cn/api/paas/v4", "default"),
+            None
+        );
+    }
+
+    /// request_body 把思考附加字段合并进请求体；None 时不含该字段
+    #[test]
+    fn request_body_merges_thinking_fields() {
+        let p = TranslateParams {
+            service_id: "s",
+            base_url: "http://localhost:9",
+            api_key: "",
+            model: "m",
+            prompt: "hi",
+            temperature: None,
+            stream: true,
+            timeout: Duration::from_secs(1),
+            thinking: Some(json!({ "thinking": { "type": "disabled" } })),
+        };
+        let body = request_body(&p);
+        assert_eq!(body["thinking"]["type"], "disabled");
+        assert_eq!(body["stream"], true, "原有字段不受合并影响");
+
+        let p2 = TranslateParams { thinking: None, ..p };
+        assert!(request_body(&p2)["thinking"].is_null(), "None 时不发思考字段");
     }
 
     /// 请求体带与输入相称的 max_tokens 上限：正常译文与输入同量级，
@@ -554,6 +656,7 @@ mod tests {
             temperature: None,
             stream: false,
             timeout: Duration::from_secs(1),
+            thinking: None,
         };
         let body = request_body(&p);
         assert_eq!(body["max_tokens"], 1024, "短输入也给足下限，覆盖思考通道预算");
@@ -595,6 +698,7 @@ mod tests {
             temperature: Some(0.2),
             stream: true,
             timeout: Duration::from_secs(5),
+            thinking: None,
         };
         let (text, _ms) = translate_inner(None, p).await.unwrap();
         assert_eq!(text, "你好，世界");
@@ -628,6 +732,7 @@ mod tests {
             temperature: None,
             stream: false,
             timeout: Duration::from_secs(5),
+            thinking: None,
         };
         let (text, _ms) = translate_inner(None, p).await.unwrap();
         assert_eq!(text, "hello world");
@@ -664,6 +769,7 @@ mod tests {
             temperature: None,
             stream: false,
             timeout: Duration::from_secs(5),
+            thinking: None,
         };
         let (text, _ms) = translate_inner(None, p).await.unwrap();
         assert_eq!(text, "hi");
@@ -741,6 +847,7 @@ mod tests {
                     temperature: svc.temperature,
                     stream: svc.stream,
                     timeout: std::time::Duration::from_secs(file.timeout_secs.max(10)),
+                    thinking: thinking_body_fields(&base, &svc.thinking),
                 },
             ))
             .expect("真实服务翻译失败");

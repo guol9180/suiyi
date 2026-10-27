@@ -62,6 +62,9 @@ import {
 
 const SIDEBAR_MAIN = ["通用", "热键", "服务配置", "生词本", "语音合成", "插件"];
 
+/** 内置了思考参数映射的提供商：思考开关只对这些生效（严格网关会拒绝未知字段） */
+const THINKING_PROVIDERS = new Set(["zai", "dashscope", "volc", "siliconflow"]);
+
 type Page =
   | "general"
   | "hotkeys"
@@ -191,6 +194,19 @@ export default function SettingsPage({
   const remoteModels = draft?.id ? (modelCache[draft.id] ?? []) : [];
   const canFetchModels =
     !!draft?.id && !!draft.baseUrl.trim() && (hasKey || !draft.requiresKey);
+
+  /** 思考模式提示：按提供商是否内置了参数映射给对应说明 */
+  const thinkingHint = (() => {
+    if ((draft?.thinking ?? "off") === "default") {
+      return "不发送思考参数，跟随模型自身的默认行为。";
+    }
+    const known = preset ? THINKING_PROVIDERS.has(preset.id) : false;
+    if (known) {
+      const act = draft?.thinking === "on" ? "开启" : "关闭";
+      return `将在 ${preset?.name} 的请求里${act}思考——翻译场景关闭更好：首字更快、更省 token。`;
+    }
+    return "该提供商没有内置思考参数映射，不会发送额外字段；DeepSeek、Kimi 这类用模型名区分思考。";
+  })();
 
   /**
    * 拉模型列表。失败只记在面板里，不弹 toast——用户没点任何按钮，
@@ -1519,6 +1535,25 @@ export default function SettingsPage({
                 <textarea className="inp mono" rows={3} value={draft.promptTemplate ?? ""}
                   onChange={(e) => setDraft({ ...draft, promptTemplate: e.target.value })}
                   placeholder={DEFAULT_PROMPT} />
+              </div>
+
+              <div className="row2">
+                <div className="f" style={{ flex: "0 0 44%" }}>
+                  <label>思考模式</label>
+                  <select
+                    className="inp"
+                    value={draft.thinking ?? "off"}
+                    onChange={(e) => setDraft({ ...draft, thinking: e.target.value })}
+                  >
+                    <option value="off">关闭（推荐）</option>
+                    <option value="default">跟随模型默认</option>
+                    <option value="on">开启</option>
+                  </select>
+                </div>
+                <div className="f">
+                  <label>&nbsp;</label>
+                  <div className="fhint">{thinkingHint}</div>
+                </div>
               </div>
 
               <div className="row2">
