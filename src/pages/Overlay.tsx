@@ -1,6 +1,7 @@
-// 截图框选覆盖层：显示冻结帧，拖动框选，松开后交给后端裁剪+OCR
+// 截图框选覆盖层：屏幕本体不重投影（透明窗口），只有选择框浮在上面；
+// 冻结帧 PNG 经资产协议加载，但不可见——只作框选坐标的换算标尺
 import { useEffect, useRef, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import "./Overlay.css";
 
 interface Rect {
@@ -11,7 +12,7 @@ interface Rect {
 }
 
 export default function OverlayPage() {
-  const [dataUrl, setDataUrl] = useState<string | null>(null);
+  const [freezeUrl, setFreezeUrl] = useState<string | null>(null);
   const [rect, setRect] = useState<Rect | null>(null);
   const [failed, setFailed] = useState(false);
   const dragStart = useRef<{ sx: number; sy: number } | null>(null);
@@ -23,8 +24,8 @@ export default function OverlayPage() {
     let tries = 0;
     const tick = () => {
       tries += 1;
-      void invoke<{ dataUrl: string }>("get_screenshot")
-        .then((p) => setDataUrl(p.dataUrl))
+      void invoke<{ path: string }>("get_screenshot")
+        .then((p) => setFreezeUrl(convertFileSrc(p.path)))
         .catch(() => {
           if (tries < 6) window.setTimeout(tick, 500);
           else setFailed(true);
@@ -104,22 +105,12 @@ export default function OverlayPage() {
       onMouseMove={onMove}
       onMouseUp={onUp}
     >
-      {dataUrl && (
-        <img ref={imgRef} className="ov-img" src={dataUrl} draggable={false} alt="" />
+      {/* 冻结帧不可见：只给 onUp 提供渲染框与 naturalWidth 做 DPI/混合缩放换算 */}
+      {freezeUrl && (
+        <img ref={imgRef} className="ov-img" src={freezeUrl} draggable={false} alt="" />
       )}
-      <div className="ov-dim" />
       {rect && (
-        <div className="ov-sel" style={{ left: rect.x, top: rect.y, width: rect.w, height: rect.h }}>
-          {dataUrl && (
-            <img
-              className="ov-sel-img"
-              src={dataUrl}
-              style={{ marginLeft: -rect.x, marginTop: -rect.y }}
-              draggable={false}
-              alt=""
-            />
-          )}
-        </div>
+        <div className="ov-sel" style={{ left: rect.x, top: rect.y, width: rect.w, height: rect.h }} />
       )}
       {rect && rect.w > 4 && (
         <span className="ov-size" style={{ left: rect.x, top: rect.y + rect.h + 8 }}>

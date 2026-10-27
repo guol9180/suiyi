@@ -23,14 +23,16 @@ pub struct ShotSession {
     pub w: i32,
     pub h: i32,
     pub rgba: Vec<u8>,
-    /// 冻结帧 JPEG 的 data URL（前端展示用）
-    pub data_url: String,
+    /// 冻结帧 PNG 的落盘路径（前端经资产协议加载）。这张图在覆盖层里不可见，
+    /// 只作框选坐标的换算标尺——屏幕本体不重投影，视觉与 Manggo 同款
+    pub display_path: String,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ScreenshotPayload {
-    pub data_url: String,
+    /// 冻结帧 PNG 的绝对路径（前端 convertFileSrc 后加载）
+    pub path: String,
     pub vs_x: i32,
     pub vs_y: i32,
     pub vs_w: i32,
@@ -264,7 +266,17 @@ fn build_session(app: &AppHandle) -> Result<ShotSession, String> {
     }
 
     let rgba = capture_rect(vx, vy, vw, vh)?;
-    let data_url = rgba_to_jpeg_dataurl(&rgba, vw, vh)?;
+    // 冻结帧 PNG 无损落盘：前端经资产协议从文件加载，不走 base64 IPC。
+    // 屏幕本体不再重投影（帧图在覆盖层里不可见），文字边缘没有 JPEG 压缩糊感，
+    // 视觉与「透明蒙版 + 一个框」对齐；OCR 输入也顺带升成无损源。
+    let png = rgba_to_png_bytes(&rgba, vw, vh)?;
+    let cache = app
+        .path()
+        .app_cache_dir()
+        .map_err(|e| format!("定位缓存目录失败: {e}"))?;
+    std::fs::create_dir_all(&cache).map_err(|e| format!("创建缓存目录失败: {e}"))?;
+    let display_path = cache.join("freeze.png");
+    std::fs::write(&display_path, &png).map_err(|e| format!("写冻结帧失败: {e}"))?;
     // 先按主屏缩放系数顶着，真正的值在覆盖层窗口建好之后写入（见 show_overlay）
     let sf = app
         .primary_monitor()
@@ -273,7 +285,7 @@ fn build_session(app: &AppHandle) -> Result<ShotSession, String> {
         .map(|m| m.scale_factor())
         .unwrap_or(1.0);
     crate::selection::log_line(&format!(
-        "screenshot: 抓取虚拟桌面 ({vx},{vy}) {vw}x{vh}（{} 块屏）",
+        "screenshot: 抓取虚拟桌面 ({vx},{vy}) {vw}x{vh}（{} 块屏），冻结帧 PNG 已落盘",
         rects.len()
     ));
     Ok(ShotSession {
@@ -282,7 +294,7 @@ fn build_session(app: &AppHandle) -> Result<ShotSession, String> {
         w: vw,
         h: vh,
         rgba,
-        data_url,
+        display_path: display_path.to_string_lossy().to_string(),
     })
 }
 
@@ -329,6 +341,7 @@ fn show_overlay(app: &AppHandle) -> Result<(), String> {
         None => WebviewWindowBuilder::new(app, "overlay", WebviewUrl::App("overlay.html".into()))
             .title("随译 · 截图框选")
             .decorations(false)
+            .transparent(true)
             .always_on_top(true)
             .skip_taskbar(true)
             .resizable(false)
@@ -411,7 +424,7 @@ pub fn get_screenshot(state: tauri::State<'_, Mutex<Option<ShotSession>>>) -> Re
     let g = state.lock().map_err(|e| e.to_string())?;
     let s = g.as_ref().ok_or("没有进行中的截图会话")?;
     Ok(ScreenshotPayload {
-        data_url: s.data_url.clone(),
+        path: s.display_path.clone(),
         vs_x: s.vs.0,
         vs_y: s.vs.1,
         vs_w: s.vs.2,
@@ -677,7 +690,7 @@ pub async fn finish_region(
             w: sw,
             h: sh,
             rgba: crop.clone(),
-            data_url: String::new(),
+            display_path: String::new(),
         };
         (
             session,
@@ -801,7 +814,7 @@ pub async fn finish_region(
 
     // 裁剪会话留给「重新识别」，结果留给结果面板
     if let Ok(mut g) = state.lock() {
-        *g = Some(ShotSession { data_url: String::new(), ..session });
+        *g = Some(ShotSession { display_path: String::new(), ..session });
     }
     if let Ok(mut g) = ocr_state.0.lock() {
         *g = Some(result.clone());
@@ -1045,25 +1058,6 @@ pub fn capture_rect(_vx: i32, _vy: i32, _vw: i32, _vh: i32) -> Result<Vec<u8>, S
 }
 
 // ==================== 图像编码 ====================
-
-pub fn rgba_to_jpeg_dataurl(rgba: &[u8], w: i32, h: i32) -> Result<String, String> {
-    let b64 = rgba_to_jpeg_base64(rgba, w, h)?;
-    Ok(format!("data:image/jpeg;base64,{b64}"))
-}
-
-pub fn rgba_to_jpeg_base64(rgba: &[u8], w: i32, h: i32) -> Result<String, String> {
-    let img = image::RgbaImage::from_raw(w as u32, h as u32, rgba.to_vec())
-        .ok_or("图像数据尺寸不匹配")?;
-    // JPEG 不支持 Alpha 通道，先转 RGB8
-    let rgb = image::DynamicImage::ImageRgba8(img).to_rgb8();
-    let mut cursor = std::io::Cursor::new(Vec::new());
-    let encoder = image::codecs::jpeg::JpegEncoder::new_with_quality(&mut cursor, 88);
-    image::DynamicImage::ImageRgb8(rgb)
-        .write_with_encoder(encoder)
-        .map_err(|e| format!("JPEG 编码失败: {e}"))?;
-    use base64::Engine as _;
-    Ok(base64::engine::general_purpose::STANDARD.encode(cursor.into_inner()))
-}
 
 pub fn rgba_to_png_bytes(rgba: &[u8], w: i32, h: i32) -> Result<Vec<u8>, String> {
     let img = image::RgbaImage::from_raw(w as u32, h as u32, rgba.to_vec())
