@@ -1,5 +1,5 @@
-// 截图框选覆盖层：屏幕本体不重投影（透明窗口），只有选择框浮在上面；
-// 冻结帧 PNG 经资产协议加载，但不可见——只作框选坐标的换算标尺
+// 截图框选覆盖层：铺满全屏的无损 PNG 定格帧（无压暗、无压缩糊感），
+// 拖动框选，松开后交给后端裁剪+OCR；帧图同时是框选坐标的换算标尺
 import { useEffect, useRef, useState } from "react";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import "./Overlay.css";

@@ -1,5 +1,5 @@
-/* 截图框选覆盖层样式：屏幕本体不重投影（透明窗口 + 透明背景），
-   冻结帧 PNG 不可见地铺满全屏，只作框选坐标的换算标尺 */
+/* 截图框选覆盖层样式：蒙版显示无损 PNG 定格帧（无压暗、无压缩糊感），
+   静态桌面下与实时屏幕视觉一致；帧图同时是框选坐标的换算标尺 */
 
 html, body, #root { height: 100%; }
 
@@ -7,22 +7,22 @@ html, body, #root { height: 100%; }
   height: 100vh;
   position: relative;
   overflow: hidden;
-  background: transparent;
+  /* 定格帧铺满窗口，底色只在图片加载前的一瞬可见，用黑色避免白闪 */
+  background: #000;
   cursor: crosshair;
   user-select: none;
   /* 覆盖层不引 base.css，字体栈在这里补一次 */
   font-family: var(--font-ui);
 }
 
-/* 冻结帧标尺：必须参与布局（onUp 靠它的渲染框与 naturalWidth 换算物理坐标），
-   但对用户不可见——透明窗口之下就是实时屏幕 */
+/* 冻结帧：PNG 无损、1:1 物理像素铺满——既给用户「屏幕没变化」的定格画面，
+   也给 onUp 提供渲染框与 naturalWidth 做 DPI/混合缩放换算 */
 .ov-img {
   position: absolute;
   left: 0;
   top: 0;
   width: 100vw;
   height: 100vh;
-  opacity: 0;
   pointer-events: none;
 }
 

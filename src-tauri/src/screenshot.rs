@@ -341,7 +341,6 @@ fn show_overlay(app: &AppHandle) -> Result<(), String> {
         None => WebviewWindowBuilder::new(app, "overlay", WebviewUrl::App("overlay.html".into()))
             .title("随译 · 截图框选")
             .decorations(false)
-            .transparent(true)
             .always_on_top(true)
             .skip_taskbar(true)
             .resizable(false)
