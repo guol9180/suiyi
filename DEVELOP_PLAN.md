@@ -197,6 +197,12 @@ services.json 与凭据读取缓存、长文本按句分段并发。
   与 GitHub 直连同走 Fastly，实测两条路都只有 ~20-30KB/s（限速按连接算）。
   update.rs 改多连接分段下载（六段并发，实测合计 160KB/s+，23MB 约 2 分钟），
   服务不支持 Range 或文件小于 2MB 自动降级单连接，进度/取消/重试语义不变。
+- 更新镜像源换 npmmirror（v0.10.8 规划，v0.10.9 生效）：多连接只能对抗单连接限速，
+  对抗不了线路总带宽——12 连接持续传输也只有 ~61KB/s（8 秒短测的 159KB/s 是新连接
+  突发额度假象）。安装包随发版发布成 npm 包 `suiyi-setup-x64`，npmmirror 自动同步到
+  阿里云 CDN，成为应用内更新的主力源；Pages exe 与 GitHub release exe 降级兜底。
+  应用侧下载 tgz 后用系统自带 tar（Win10 1803+）解包，tar 不可用自动落到直链候选。
+  Cloudflare R2 方案放弃：开通需要绑外币卡。
 - 发版提速（v0.10.6 实测根因）：rust-cache 键含 Cargo.lock 哈希且无回退链，发版
   bump 版本必失配 → 每次全量重编 11m24s（NSIS+MSI 打包仅 40s，慢的不是打包器）。
   已改 actions/cache 直接管 `src-tauri/target`：键随 run_id 滚动、restore-keys

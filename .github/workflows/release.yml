@@ -173,6 +173,9 @@ jobs:
       # 签名凭据提到 job 级 env：GitHub 不允许在 step 的 if 里直接读 secrets，
       # 只能先放进 env，再用 env.XXX 判断（这也是之前工作流“0 个 job 直接失败”的原因）。
       SIGNPATH_TOKEN: ${{ secrets.SIGNPATH_API_TOKEN }}
+      # npm 发布凭据（npmmirror 主源，见「发布 npm 包」步骤）与包名常量
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+      NPM_PACKAGE: suiyi-setup-x64
     steps:
       - name: 下载构建产物
         uses: actions/download-artifact@v4
@@ -239,6 +242,38 @@ jobs:
           overwrite_files: true
           generate_release_notes: true
           body_path: release-body.md
+
+      # 把安装包发布成 npm 包（package/SuiYi-Setup-x64.exe），npmmirror 会自动
+      # 同步到阿里云 CDN——那是应用内更新的主力源：Pages 与 GitHub 同走 Fastly，
+      # 持续传输实测只有 ~60KB/s（12 连接也是它，线路总带宽封顶）。
+      # NPM_TOKEN 未配置时整步跳过；同版本重发（重打同一 tag）时视为已成功
+      - name: 发布 npm 包（npmmirror 主源）
+        if: ${{ startsWith(github.ref, 'refs/tags/v') && env.NPM_TOKEN != '' }}
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          mkdir -p pkg/package
+          cp dist-release/SuiYi-Setup-x64.exe pkg/package/
+          printf '{
+            "name": "%s",
+            "version": "%s",
+            "description": "SuiYi Windows installer (NSIS)",
+            "license": "MIT",
+            "files": ["SuiYi-Setup-x64.exe"]
+          }
+          ' "$NPM_PACKAGE" "$version" > pkg/package/package.json
+          # npm 不允许同版本覆盖：已发布过（重打同一 tag）就视为成功跳过
+          if npm view "$NPM_PACKAGE@$version" version >/dev/null 2>&1; then
+            echo "::notice::npm 包 $version 已存在，跳过发布"
+            exit 0
+          fi
+          echo "//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}" > pkg/.npmrc
+          cd pkg/package
+          npm publish --access public
+          # 主动通知 npmmirror 立刻同步（默认轮询有几分钟延迟）；失败不影响发版
+          curl -s -X PUT "https://registry-direct.npmmirror.com/-/package/$NPM_PACKAGE/syncs" || true
 
       # 新版本发布后立刻重跑一次 Pages：下载页会把最新安装包同步到 /dl/，
       # 应用内的「下载并安装」优先走这份国内镜像。

@@ -23,6 +23,12 @@ const ASSET_NAME: &str = "SuiYi-Setup-x64.exe";
 const MIN_INSTALLER_BYTES: u64 = 500 * 1024;
 /// 镜像站上的下载目录（Pages 每次部署会把最新安装包同步到这里）
 const MIRROR_BASE: &str = "https://suiyi.imhgl.com/dl/";
+/// npm 包名：安装包随发版发布到 npm，npmmirror（阿里云 CDN）自动同步。
+/// GitHub Pages 与 npmjs 同源（Fastly）被限速到 ~60KB/s 的线路封顶后，
+/// 这是免费方案里国内最快的一条。包内只有一个文件 package/SuiYi-Setup-x64.exe
+const NPM_PACKAGE: &str = "suiyi-setup-x64";
+/// npmmirror 的 registry 根地址（国内 CDN，官方 registry 的同步镜像）
+const NPM_MIRROR_REGISTRY: &str = "https://registry.npmmirror.com";
 /// 下载时多久没收到数据算卡死
 const STALL_TIMEOUT: Duration = Duration::from_secs(60);
 /// 每个地址最多试几次
@@ -222,20 +228,22 @@ pub async fn check_update() -> Result<UpdateInfo, String> {
     })
 }
 
-/// 候选下载地址：先走国内镜像（Pages 同步的那份），失败再回 GitHub 原始资产地址。
-///
-/// GitHub 的 release 资产实际落在 objects.githubusercontent.com 上，国内经常连不上；
-/// 镜像挂在项目自己的域名下，速度快得多。两个都失败才报错，并把各自的原因带回去。
-fn download_candidates(asset_url: &str) -> Vec<String> {
-    let mut urls: Vec<String> = Vec::new();
-    if let Some(name) = asset_url.rsplit('/').next() {
-        if name.ends_with(".exe") {
-            urls.push(format!("{MIRROR_BASE}{name}"));
-        }
-    }
-    urls.push(asset_url.to_string());
-    urls.dedup();
-    urls
+/// 一个可尝试的下载源。exe 直链下载完就是安装包；npm 源要下载 tgz 后解出安装包
+#[derive(Debug, Clone)]
+enum DownloadSource {
+    Exe(String),
+    /// registry 根地址（不含包名）：取 /<pkg>/latest 的 JSON，再下载 dist.tarball 解包
+    NpmPackage { registry: String },
+}
+
+/// 候选源顺序：npm 镜像（阿里云 CDN，主力）→ Pages exe → GitHub release exe。
+/// 后两者是 npm 源不可用时的兜底（同一文件的另两份拷贝）
+fn download_candidates(asset_url: &str) -> Vec<DownloadSource> {
+    vec![
+        DownloadSource::NpmPackage { registry: NPM_MIRROR_REGISTRY.to_string() },
+        DownloadSource::Exe(format!("{MIRROR_BASE}{ASSET_NAME}")),
+        DownloadSource::Exe(asset_url.to_string()),
+    ]
 }
 
 /// 一条下载进度。`state` 为 `retrying` 时表示正在换地址或重试，
@@ -284,6 +292,7 @@ fn verify_installer(path: &Path, got: u64, total: u64, min_bytes: u64) -> Result
 }
 
 /// 从单个地址拉一次，写进 `part`。进度经 `on_progress` 上报（已节流）。
+/// `expect_pe` 标记载荷是不是 PE 安装包：npm 的 tgz 载荷只验完整性，跳过 MZ 检查。
 #[allow(clippy::too_many_arguments)]
 async fn download_once(
     client: &reqwest::Client,
@@ -293,6 +302,7 @@ async fn download_once(
     attempt: u32,
     host: &str,
     state: &UpdateState,
+    expect_pe: bool,
     on_progress: &mut (impl FnMut(DownloadProgress) + Send),
 ) -> Result<(), String> {
     use futures_util::StreamExt;
@@ -359,7 +369,13 @@ async fn download_once(
         candidate: host.to_string(),
         state: "downloading",
     });
-    verify_installer(part, got, total, min_bytes)
+    if expect_pe {
+        verify_installer(part, got, total, min_bytes)
+    } else if total > 0 && got != total {
+        Err(format!("传输不完整（{got}/{total} 字节）"))
+    } else {
+        Ok(())
+    }
 }
 
 /// 把 total 切成至多 max_conns 个首尾相接的闭区间。纯函数抽出便于单测：
@@ -447,6 +463,7 @@ async fn download_parallel(
     attempt: u32,
     host: &str,
     state: &UpdateState,
+    expect_pe: bool,
     on_progress: &mut (impl FnMut(DownloadProgress) + Send),
 ) -> Result<(), String> {
     use futures_util::StreamExt;
@@ -560,16 +577,119 @@ async fn download_parallel(
     if got_total != total {
         return Err(format!("传输不完整（{got_total}/{total} 字节）"));
     }
+    if !expect_pe {
+        return Ok(());
+    }
     verify_installer(part, got_total, total, min_bytes)
 }
 
-/// 依次尝试候选地址，返回下载好的安装包路径。
+/// 从 npm registry 拉安装包：/<pkg>/latest 的 JSON 给出 tarball 地址，
+/// tarball 用与 exe 相同的分段并发下载，解包走系统自带的 tar（Win10 1803+
+/// 自带 bsdtar），解出 package/SuiYi-Setup-x64.exe 挪到 part 位，
+/// 交给统一的完整性校验与改名。任何一步失败都由上层降级到 exe 直链候选。
+#[allow(clippy::too_many_arguments)]
+async fn fetch_from_npm(
+    client: &reqwest::Client,
+    registry: &str,
+    part: &Path,
+    dir: &Path,
+    min_bytes: u64,
+    attempt: u32,
+    host: &str,
+    state: &UpdateState,
+    on_progress: &mut (impl FnMut(DownloadProgress) + Send),
+) -> Result<(), String> {
+    use serde_json::Value;
+
+    let meta_url = format!("{registry}/{NPM_PACKAGE}/latest");
+    let resp = client
+        .get(&meta_url)
+        .send()
+        .await
+        .map_err(|e| format!("连接失败（{e}）"))?;
+    if !resp.status().is_success() {
+        return Err(format!("包信息请求失败（{}）", resp.status().as_u16()));
+    }
+    let meta: Value = resp
+        .json()
+        .await
+        .map_err(|e| format!("包信息解析失败：{e}"))?;
+    let tarball = meta
+        .pointer("/dist/tarball")
+        .and_then(|v| v.as_str())
+        .ok_or("包信息里没有 tarball 地址")?
+        .to_string();
+
+    let tgz = dir.join(format!("{NPM_PACKAGE}.tgz"));
+    let tgz_part = dir.join(format!("{NPM_PACKAGE}.tgz{PART_SUFFIX}"));
+    let _ = std::fs::remove_file(&tgz_part);
+    let _ = std::fs::remove_file(&tgz);
+
+    // tarball 是 gzip 压缩包不是 PE：跳过 MZ 校验，只验完整性
+    let dl = match download_parallel(
+        client,
+        &tarball,
+        &tgz_part,
+        0,
+        attempt,
+        host,
+        state,
+        false,
+        on_progress,
+    )
+    .await
+    {
+        Ok(()) => Ok(()),
+        Err(e) => {
+            crate::selection::log_line(&format!(
+                "update: tarball 分段未走通（{e}），降级单连接 ← {host}"
+            ));
+            let _ = std::fs::remove_file(&tgz_part);
+            download_once(
+                client,
+                &tarball,
+                &tgz_part,
+                0,
+                attempt,
+                host,
+                state,
+                false,
+                on_progress,
+            )
+            .await
+        }
+    };
+    dl?;
+    std::fs::rename(&tgz_part, &tgz).map_err(|e| format!("保存压缩包失败：{e}"))?;
+
+    let out = std::process::Command::new("tar")
+        .args(["-xzf"])
+        .arg(&tgz)
+        .arg("-C")
+        .arg(dir)
+        .output()
+        .map_err(|e| format!("系统缺少 tar 工具（Win10 1803+ 自带）：{e}"))?;
+    if !out.status.success() {
+        return Err(format!(
+            "解包失败：{}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        ));
+    }
+
+    let packed = dir.join("package").join(ASSET_NAME);
+    std::fs::rename(&packed, part).map_err(|e| format!("提取安装包失败：{e}"))?;
+    let _ = std::fs::remove_file(&tgz);
+    let size = std::fs::metadata(part).map(|m| m.len()).unwrap_or(0);
+    verify_installer(part, size, 0, min_bytes)
+}
+
+/// 依次尝试候选源，返回下载好的安装包路径。
 ///
 /// 每次重试前先发一条 `retrying`：进度条会停在当前高水位而不是被打回 0，
 /// 用户看到的是「连接断了，正在重试第 2 次」，而不是进度条自己来回横跳。
 async fn fetch_installer(
     client: &reqwest::Client,
-    candidates: &[String],
+    candidates: &[DownloadSource],
     dir: &Path,
     min_bytes: u64,
     state: &UpdateState,
@@ -582,11 +702,14 @@ async fn fetch_installer(
     let mut attempt_no: u32 = 0;
 
     for candidate in candidates {
-        let host = host_of(candidate);
+        let host = match candidate {
+            DownloadSource::Exe(url) => host_of(url),
+            DownloadSource::NpmPackage { registry } => host_of(registry),
+        };
         for attempt in 1..=DOWNLOAD_ATTEMPTS {
             attempt_no += 1;
             crate::selection::log_line(&format!(
-                "update: 下载尝试 {attempt}/{DOWNLOAD_ATTEMPTS} ← {candidate}"
+                "update: 下载尝试 {attempt}/{DOWNLOAD_ATTEMPTS} ← {candidate:?}"
             ));
             if attempt_no > 1 {
                 on_progress(DownloadProgress {
@@ -599,29 +722,13 @@ async fn fetch_installer(
             }
             // 先走多连接分段：慢线路上这是数量级的差距。探测到不支持 Range
             // 或文件太小时并行函数自己返回 Err，这里无缝降级回单连接
-            let result = match download_parallel(
-                client,
-                candidate,
-                &part,
-                min_bytes,
-                attempt_no,
-                &host,
-                state,
-                &mut on_progress,
-            )
-            .await
-            {
-                Ok(()) => Ok(()),
-                Err(e) if e == CANCELLED => Err(e),
-                Err(pe) => {
-                    crate::selection::log_line(&format!(
-                        "update: 分段下载未走通（{pe}），降级单连接 ← {host}"
-                    ));
-                    let _ = std::fs::remove_file(&part);
-                    download_once(
+            let result = match candidate {
+                DownloadSource::NpmPackage { registry } => {
+                    fetch_from_npm(
                         client,
-                        candidate,
+                        registry,
                         &part,
+                        dir,
                         min_bytes,
                         attempt_no,
                         &host,
@@ -629,6 +736,42 @@ async fn fetch_installer(
                         &mut on_progress,
                     )
                     .await
+                }
+                DownloadSource::Exe(url) => {
+                    match download_parallel(
+                        client,
+                        url,
+                        &part,
+                        min_bytes,
+                        attempt_no,
+                        &host,
+                        state,
+                        true,
+                        &mut on_progress,
+                    )
+                    .await
+                    {
+                        Ok(()) => Ok(()),
+                        Err(e) if e == CANCELLED => Err(e),
+                        Err(pe) => {
+                            crate::selection::log_line(&format!(
+                                "update: 分段下载未走通（{pe}），降级单连接 ← {host}"
+                            ));
+                            let _ = std::fs::remove_file(&part);
+                            download_once(
+                                client,
+                                url,
+                                &part,
+                                min_bytes,
+                                attempt_no,
+                                &host,
+                                state,
+                                true,
+                                &mut on_progress,
+                            )
+                            .await
+                        }
+                    }
                 }
             };
             match result {
@@ -832,6 +975,103 @@ mod tests {
         dir
     }
 
+    /// 与 serve_once 同一协议（200 全量、206 分段），但发送调用方给的真实字节：
+    /// npm 链路测试用真 tgz，解包环节才有意义
+    fn serve_bytes(content: Vec<u8>, chunk: usize) -> String {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+        let content = Arc::new(content);
+        std::thread::spawn(move || {
+            while let Ok((sock, _)) = listener.accept() {
+                let content = content.clone();
+                std::thread::spawn(move || {
+                    let mut sock = sock;
+                    let mut req = vec![0u8; 8192];
+                    let _ = sock.read(&mut req);
+                    let text = String::from_utf8_lossy(&req);
+                    let range = text
+                        .lines()
+                        .find(|l| l.to_ascii_lowercase().starts_with("range:"))
+                        .and_then(|l| {
+                            let spec = l.split_once(':')?.1.trim().strip_prefix("bytes=")?;
+                            let (lo, hi) = spec.trim().split_once('-')?;
+                            Some((
+                                lo.trim().parse::<usize>().ok()?,
+                                hi.trim().parse::<usize>().ok()?,
+                            ))
+                        });
+                    let send = content.len();
+                    let (head, from, count) = match range {
+                        Some((lo, hi)) => {
+                            let hi = hi.min(send.saturating_sub(1));
+                            if lo >= send || hi < lo {
+                                return;
+                            }
+                            let len = hi - lo + 1;
+                            (
+                                format!(
+                                    "HTTP/1.1 206 Partial Content\r\n\
+                                     Content-Type: application/octet-stream\r\n\
+                                     Content-Range: bytes {lo}-{hi}/{send}\r\n\
+                                     Content-Length: {len}\r\nConnection: close\r\n\r\n"
+                                ),
+                                lo,
+                                len,
+                            )
+                        }
+                        None => (
+                            format!(
+                                "HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\n\
+                                 Content-Length: {send}\r\nConnection: close\r\n\r\n"
+                            ),
+                            0,
+                            send,
+                        ),
+                    };
+                    if sock.write_all(head.as_bytes()).is_err() {
+                        return;
+                    }
+                    let mut sent = 0usize;
+                    while sent < count {
+                        let n = chunk.min(count - sent);
+                        if sock
+                            .write_all(&content[from + sent..from + sent + n])
+                            .is_err()
+                        {
+                            return;
+                        }
+                        sent += n;
+                    }
+                });
+            }
+        });
+        format!("http://{addr}/fixture")
+    }
+
+    /// 最小 registry JSON 服务：任何路径都回同一段 JSON（npm 链路的 /<pkg>/latest）
+    fn serve_json(body: String) -> String {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+        let body = Arc::new(body);
+        std::thread::spawn(move || {
+            while let Ok((mut sock, _)) = listener.accept() {
+                let body = body.clone();
+                // 必须先读掉请求再回包再关：未读数据会让 close 发 RST 把响应冲掉
+                let mut req = vec![0u8; 8192];
+                let _ = sock.read(&mut req);
+                let head = format!(
+                    "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\
+                     Content-Length: {}\r\nConnection: close\r\n\r\n",
+                    body.len()
+                );
+                let _ = sock.write_all(head.as_bytes());
+                let _ = sock.write_all(body.as_bytes());
+                let _ = sock.flush();
+            }
+        });
+        format!("http://{addr}")
+    }
+
     #[test]
     fn verify_installer_rejects_truncated_file() {
         let dir = temp_dir("verify");
@@ -861,9 +1101,16 @@ mod tests {
         let state = UpdateState::default();
         let mut seen: Vec<(u64, u64, u32, String)> = Vec::new();
         let client = download_client().unwrap();
-        let path = fetch_installer(&client, &[url], &dir, 64, &state, |p| {
-            seen.push((p.downloaded, p.total, p.attempt, p.state.to_string()));
-        })
+        let path = fetch_installer(
+            &client,
+            &[super::DownloadSource::Exe(url)],
+            &dir,
+            64,
+            &state,
+            |p| {
+                seen.push((p.downloaded, p.total, p.attempt, p.state.to_string()));
+            },
+        )
         .await
         .unwrap();
 
@@ -894,10 +1141,17 @@ mod tests {
         let mut states: Vec<String> = Vec::new();
         let mut attempts: Vec<u32> = Vec::new();
         let client = download_client().unwrap();
-        let path = fetch_installer(&client, &[broken, ok], &dir, 1024, &state, |p| {
-            states.push(p.state.to_string());
-            attempts.push(p.attempt);
-        })
+        let path = fetch_installer(
+            &client,
+            &[super::DownloadSource::Exe(broken), super::DownloadSource::Exe(ok)],
+            &dir,
+            1024,
+            &state,
+            |p| {
+                states.push(p.state.to_string());
+                attempts.push(p.attempt);
+            },
+        )
         .await
         .unwrap();
 
@@ -929,12 +1183,19 @@ mod tests {
         state.begin();
         let cancelling = state.clone();
         let client = download_client().unwrap();
-        let err = fetch_installer(&client, &[url], &dir, 1024, &state, move |p| {
-            // 收到第一块就当成用户点了取消
-            if p.downloaded > 0 {
-                cancelling.request_cancel();
-            }
-        })
+        let err = fetch_installer(
+            &client,
+            &[super::DownloadSource::Exe(url)],
+            &dir,
+            1024,
+            &state,
+            move |p| {
+                // 收到第一块就当成用户点了取消
+                if p.downloaded > 0 {
+                    cancelling.request_cancel();
+                }
+            },
+        )
         .await
         .unwrap_err();
 
@@ -977,19 +1238,33 @@ mod tests {
         assert!(!version_gt("0.8.0-rc1", "0.8.0"));
     }
 
-    /// 下载地址：先试国内镜像（同一个文件名），再回落到 GitHub 原始地址
+    /// 下载源顺序：npm 镜像（阿里云 CDN）主力，Pages exe 与 GitHub exe 兜底
     #[test]
-    fn download_candidates_prefers_the_mirror() {
-        let urls = super::download_candidates(
+    fn download_candidates_prefers_the_npm_mirror() {
+        let sources = super::download_candidates(
             "https://github.com/guol9180/suiyi/releases/download/v0.9.0/SuiYi-Setup-x64.exe",
         );
-        assert_eq!(urls.len(), 2, "镜像 + 原始地址：{urls:?}");
-        assert_eq!(urls[0], "https://suiyi.imhgl.com/dl/SuiYi-Setup-x64.exe");
-        assert!(urls[1].starts_with("https://github.com/"));
-
-        // 不是安装包后缀的地址不瞎拼镜像
-        let only_github = super::download_candidates("https://example.com/whatever");
-        assert_eq!(only_github, vec!["https://example.com/whatever".to_string()]);
+        assert_eq!(sources.len(), 3, "npm 镜像 + Pages exe + GitHub exe：{sources:?}");
+        assert!(
+            matches!(
+                &sources[0],
+                super::DownloadSource::NpmPackage { registry }
+                    if registry == super::NPM_MIRROR_REGISTRY
+            ),
+            "第一顺位是 npmmirror：{sources:?}"
+        );
+        assert!(
+            matches!(
+                &sources[1],
+                super::DownloadSource::Exe(u)
+                    if *u == format!("{}{}", super::MIRROR_BASE, super::ASSET_NAME)
+            ),
+            "第二顺位是 Pages 镜像：{sources:?}"
+        );
+        assert!(
+            matches!(&sources[2], super::DownloadSource::Exe(u) if u.starts_with("https://github.com/")),
+            "第三顺位是 GitHub 原始地址：{sources:?}"
+        );
     }
 
     /// 分段计划：段数被连接数与最小段长共同压住，区间首尾相接且不重不漏
@@ -1042,9 +1317,16 @@ mod tests {
         let state = UpdateState::default();
         let mut seen: Vec<(u64, u64)> = Vec::new();
         let client = download_client().unwrap();
-        let path = fetch_installer(&client, &[url], &dir, 1024, &state, |p| {
-            seen.push((p.downloaded, p.total));
-        })
+        let path = fetch_installer(
+            &client,
+            &[super::DownloadSource::Exe(url)],
+            &dir,
+            1024,
+            &state,
+            |p| {
+                seen.push((p.downloaded, p.total));
+            },
+        )
         .await
         .unwrap();
 
@@ -1065,6 +1347,80 @@ mod tests {
             "分段汇聚的进度也只能往前：{downloaded:?}"
         );
         assert_eq!(*downloaded.last().unwrap(), size as u64, "收尾必发 100%");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// npm 链路完整走一遍：registry JSON 给出 tarball 地址，下载 tgz 后
+    /// 用系统 tar 解出安装包，进度条走 tarball 的量，落盘字节与 fixture 一致
+    #[tokio::test]
+    async fn npm_source_downloads_tarball_and_extracts_installer() {
+        let dir = temp_dir("npm");
+        // 现场打一个真 tgz：package/SuiYi-Setup-x64.exe（MZ 头）+ package.json
+        let size = 64 * 1024;
+        let pkgroot = dir.join("pkgroot");
+        let pkgpkg = pkgroot.join("package");
+        std::fs::create_dir_all(&pkgpkg).unwrap();
+        let mut exe = vec![0u8; size];
+        exe[0] = b'M';
+        exe[1] = b'Z';
+        std::fs::write(pkgpkg.join(ASSET_NAME), &exe).unwrap();
+        std::fs::write(
+            pkgpkg.join("package.json"),
+            format!("{{\"name\":\"{NPM_PACKAGE}\",\"version\":\"0.0.0-test\"}}"),
+        )
+        .unwrap();
+        let tgz = dir.join("fixture.tgz");
+        let out = std::process::Command::new("tar")
+            .args(["-czf"])
+            .arg(&tgz)
+            .arg("-C")
+            .arg(&pkgroot)
+            .arg("package")
+            .output()
+            .unwrap();
+        assert!(
+            out.status.success(),
+            "测试机要有 tar（Win10 1803+ 自带）：{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        let tgz_len = std::fs::metadata(&tgz).unwrap().len() as usize;
+
+        let tarball_url = serve_bytes(std::fs::read(&tgz).unwrap(), 8 * 1024);
+        let body = format!(
+            "{{\"name\":\"{NPM_PACKAGE}\",\"version\":\"0.0.0-test\",\
+             \"dist\":{{\"tarball\":\"{tarball_url}\"}}}}"
+        );
+        let registry = serve_json(body);
+
+        let state = UpdateState::default();
+        let mut seen: Vec<(u64, u64)> = Vec::new();
+        let client = download_client().unwrap();
+        let path = fetch_installer(
+            &client,
+            &[super::DownloadSource::NpmPackage { registry }],
+            &dir,
+            1024,
+            &state,
+            |p| {
+                seen.push((p.downloaded, p.total));
+            },
+        )
+        .await
+        .unwrap();
+
+        assert!(path.exists(), "成功后应该有正式安装包：{path:?}");
+        assert_eq!(
+            std::fs::read(&path).unwrap().len(),
+            size,
+            "解出的安装包字节必须与 fixture 一致"
+        );
+        assert_eq!(
+            seen.first().unwrap().1,
+            tgz_len as u64,
+            "进度条的总量是 tarball 的声明大小：{seen:?}"
+        );
+        assert_eq!(seen.last().unwrap().0, tgz_len as u64, "收尾 100%");
+        assert!(!dir.join(format!("{NPM_PACKAGE}.tgz")).exists());
         let _ = std::fs::remove_dir_all(&dir);
     }
 }
