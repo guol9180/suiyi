@@ -11,7 +11,7 @@
 //! 覆盖层窗口只有一个小数缩放系数，帧图铺满窗口即可，裁剪时乘这个系数换算成物理像素。
 
 use std::sync::Mutex;
-use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
+use tauri::{AppHandle, Emitter, Listener, Manager, WebviewUrl, WebviewWindowBuilder};
 
 /// 进行中的截图会话（同一时刻最多一个）
 pub struct ShotSession {
@@ -266,17 +266,12 @@ fn build_session(app: &AppHandle) -> Result<ShotSession, String> {
     }
 
     let rgba = capture_rect(vx, vy, vw, vh)?;
-    // 冻结帧 PNG 无损落盘：前端经资产协议从文件加载，不走 base64 IPC。
-    // 屏幕本体不再重投影（帧图在覆盖层里不可见），文字边缘没有 JPEG 压缩糊感，
-    // 视觉与「透明蒙版 + 一个框」对齐；OCR 输入也顺带升成无损源。
-    let png = rgba_to_png_bytes(&rgba, vw, vh)?;
-    let cache = app
-        .path()
-        .app_cache_dir()
-        .map_err(|e| format!("定位缓存目录失败: {e}"))?;
-    std::fs::create_dir_all(&cache).map_err(|e| format!("创建缓存目录失败: {e}"))?;
-    let display_path = cache.join("freeze.png");
-    std::fs::write(&display_path, &png).map_err(|e| format!("写冻结帧失败: {e}"))?;
+    // 冻结帧落盘：显示用 BMP（无损且编码≈内存拷贝，出帧比 PNG 快几百毫秒——
+    // 蒙版要的就是「按下即出」）；识别用内存里的 rgba 本体，不经过这份文件。
+    // 前端经资产协议从文件加载，不走 base64 IPC。
+    let png_or_bmp = cache_dir_frame(app)?;
+    std::fs::write(&png_or_bmp, encode_bmp(&rgba, vw, vh)?)
+        .map_err(|e| format!("冻结帧写入失败: {e}"))?;
     // 先按主屏缩放系数顶着，真正的值在覆盖层窗口建好之后写入（见 show_overlay）
     let sf = app
         .primary_monitor()
@@ -285,7 +280,7 @@ fn build_session(app: &AppHandle) -> Result<ShotSession, String> {
         .map(|m| m.scale_factor())
         .unwrap_or(1.0);
     crate::selection::log_line(&format!(
-        "screenshot: 抓取虚拟桌面 ({vx},{vy}) {vw}x{vh}（{} 块屏），冻结帧 PNG 已落盘",
+        "screenshot: 抓取虚拟桌面 ({vx},{vy}) {vw}x{vh}（{} 块屏），冻结帧已落盘",
         rects.len()
     ));
     Ok(ShotSession {
@@ -294,8 +289,30 @@ fn build_session(app: &AppHandle) -> Result<ShotSession, String> {
         w: vw,
         h: vh,
         rgba,
-        display_path: display_path.to_string_lossy().to_string(),
+        display_path: png_or_bmp.to_string_lossy().to_string(),
     })
+}
+
+/// 冻结帧的落盘路径（应用缓存目录下固定文件名，每次会话覆盖）
+fn cache_dir_frame(app: &AppHandle) -> Result<std::path::PathBuf, String> {
+    let cache = app
+        .path()
+        .app_cache_dir()
+        .map_err(|e| format!("定位缓存目录失败: {e}"))?;
+    std::fs::create_dir_all(&cache).map_err(|e| format!("创建缓存目录失败: {e}"))?;
+    Ok(cache.join("freeze.bmp"))
+}
+
+/// RGBA 编码为 BMP 字节：无损且编码零耗时（相比 PNG 的几百毫秒）
+fn encode_bmp(rgba: &[u8], w: i32, h: i32) -> Result<Vec<u8>, String> {
+    let img = image::RgbaImage::from_raw(w as u32, h as u32, rgba.to_vec())
+        .ok_or("图像数据尺寸不匹配")?;
+    let rgb = image::DynamicImage::ImageRgba8(img).to_rgb8();
+    let mut cursor = std::io::Cursor::new(Vec::new());
+    image::DynamicImage::ImageRgb8(rgb)
+        .write_to(&mut cursor, image::ImageFormat::Bmp)
+        .map_err(|e| format!("BMP 编码失败: {e}"))?;
+    Ok(cursor.into_inner())
 }
 
 /// 诊断辅助：把冻结帧写到 `%APPDATA%/com.suiyi.dev/last-shot.jpg`。
@@ -321,23 +338,11 @@ fn dump_frame(app: &AppHandle) {
 }
 
 /// 创建/复用覆盖层窗口，正好盖住鼠标所在的那块显示器
-fn show_overlay(app: &AppHandle) -> Result<(), String> {
-    let (vsx, vsy, vsw, vsh) = {
-        let state = app.state::<Mutex<Option<ShotSession>>>();
-        let g = state.lock().map_err(|e| e.to_string())?;
-        let s = g.as_ref().ok_or("会话不存在")?;
-        (s.vs.0, s.vs.1, s.vs.2, s.vs.3)
-    };
-
-    // 窗口是复用的，但页面只在挂载时取一次冻结帧 —— 不重新加载的话，第二次截图
-    // 显示的还是上一张图。reload 让页面重新挂载：新帧、干净的选框与失败态。
-    let win = match app.get_webview_window("overlay") {
-        Some(win) => {
-            if let Err(e) = win.reload() {
-                crate::selection::log_line(&format!("screenshot: 覆盖层重新加载失败（{e}），仍继续"));
-            }
-            win
-        }
+/// 确保覆盖层窗口存在（不加载内容、不显示）：应用启动时预创建，
+/// 免去首次 Alt+S 的 WebView2 冷启动
+pub(crate) fn ensure_overlay(app: &AppHandle) -> Result<tauri::WebviewWindow, String> {
+    match app.get_webview_window("overlay") {
+        Some(win) => Ok(win),
         None => WebviewWindowBuilder::new(app, "overlay", WebviewUrl::App("overlay.html".into()))
             .title("随译 · 截图框选")
             .decorations(false)
@@ -347,31 +352,70 @@ fn show_overlay(app: &AppHandle) -> Result<(), String> {
             .maximizable(false)
             .visible(false)
             .build()
-            .map_err(|e| format!("创建覆盖层失败: {e}"))?,
+            .map_err(|e| format!("创建覆盖层失败: {e}")),
+    }
+}
+
+fn show_overlay(app: &AppHandle) -> Result<(), String> {
+    let (vsx, vsy, vsw, vsh, freeze_path) = {
+        let state = app.state::<Mutex<Option<ShotSession>>>();
+        let g = state.lock().map_err(|e| e.to_string())?;
+        let s = g.as_ref().ok_or("会话不存在")?;
+        (s.vs.0, s.vs.1, s.vs.2, s.vs.3, s.display_path.clone())
     };
+    let win = ensure_overlay(app)?;
+
+    // 等待页面把冻结帧加载完成的信号：窗口只在画面就绪后亮出来，消除闪现
+    let (tx, rx) = std::sync::mpsc::channel::<()>();
+    let handler = app.listen("overlay-ready", move |_| {
+        let _ = tx.send(());
+    });
+
+    // 页面重挂载：清掉上一轮的选框状态，并触发它重新拉取冻结帧
+    if let Err(e) = win.reload() {
+        crate::selection::log_line(&format!("screenshot: 覆盖层重新加载失败（{e}），仍继续"));
+    }
+    // 事件优先：常驻挂载的页面靠它开始新一轮；页面刚重挂载就算错过事件也不要紧，
+    // 挂载时会主动 get_screenshot 兜底拉取
+    let _ = app.emit_to(
+        "overlay",
+        "screenshot-started",
+        serde_json::json!({ "path": freeze_path }),
+    );
 
     // 用物理像素定位与定尺寸：窗口正好贴合显示器矩形，不经过逻辑坐标换算，
     // 多屏与混合 DPI 下都不会偏。
-    win.set_position(tauri::PhysicalPosition::new(vsx, vsy))
-        .map_err(|e| format!("覆盖层定位失败: {e}"))?;
-    // 目标：客户区精确等于显示器尺寸。set_size 给的是窗口外框尺寸，带边框或阴影时
-    // 客户区会差几像素；这里量一次差多少再补回去，最多迭代三轮。
-    let mut req_w = vsw.max(1);
-    let mut req_h = vsh.max(1);
-    for _ in 0..3 {
-        win.set_size(tauri::PhysicalSize::new(req_w as u32, req_h as u32))
-            .map_err(|e| format!("覆盖层设定尺寸失败: {e}"))?;
-        let inner = win
-            .inner_size()
-            .map_err(|e| format!("读取覆盖层尺寸失败: {e}"))?;
-        let dw = inner.width as i32 - vsw;
-        let dh = inner.height as i32 - vsh;
-        if dw == 0 && dh == 0 {
-            break;
+    let pos = (|| -> Result<(), String> {
+        win.set_position(tauri::PhysicalPosition::new(vsx, vsy))
+            .map_err(|e| format!("覆盖层定位失败: {e}"))?;
+        // 目标：客户区精确等于显示器尺寸。set_size 给的是窗口外框尺寸，带边框或阴影时
+        // 客户区会差几像素；这里量一次差多少再补回去，最多迭代三轮。
+        let mut req_w = vsw.max(1);
+        let mut req_h = vsh.max(1);
+        for _ in 0..3 {
+            win.set_size(tauri::PhysicalSize::new(req_w as u32, req_h as u32))
+                .map_err(|e| format!("覆盖层设定尺寸失败: {e}"))?;
+            let inner = win
+                .inner_size()
+                .map_err(|e| format!("读取覆盖层尺寸失败: {e}"))?;
+            let dw = inner.width as i32 - vsw;
+            let dh = inner.height as i32 - vsh;
+            if dw == 0 && dh == 0 {
+                break;
+            }
+            req_w = (req_w - dw).max(1);
+            req_h = (req_h - dh).max(1);
         }
-        req_w = (req_w - dw).max(1);
-        req_h = (req_h - dh).max(1);
+        Ok(())
+    })();
+    if let Err(e) = pos {
+        app.unlisten(handler);
+        return Err(e);
     }
+
+    // 画面就绪再亮出来（最多等 3 秒，超时兜底直出，不让用户对着空气按键）
+    let _ = rx.recv_timeout(std::time::Duration::from_secs(3));
+    app.unlisten(handler);
     win.show().map_err(|e| format!("覆盖层显示失败: {e}"))?;
     win.set_focus().map_err(|e| format!("覆盖层聚焦失败: {e}"))?;
 
@@ -443,6 +487,146 @@ pub fn cancel_screenshot(
         *g = None; // 取消即释放冻结帧，避免整屏位图常驻内存
     }
     Ok(())
+}
+
+/// 窗口自动检测的命中结果：屏幕物理坐标矩形 + 窗口标题
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WindowHit {
+    pub x: i32,
+    pub y: i32,
+    pub w: i32,
+    pub h: i32,
+    pub title: String,
+}
+
+#[cfg(windows)]
+mod hit_probe {
+    use super::WindowHit;
+    // BOOL 在 windows 0.61 起归入 core；HWND/LPARAM/RECT 仍在 Foundation
+    use windows::core::BOOL;
+    use windows::Win32::Foundation::{HWND, LPARAM, RECT};
+    use windows::Win32::Graphics::Dwm::{
+        DwmGetWindowAttribute, DWMWA_CLOAKED, DWMWA_EXTENDED_FRAME_BOUNDS,
+    };
+    use windows::Win32::UI::WindowsAndMessaging::{
+        EnumWindows, GetAncestor, GetWindowTextW, GetWindowLongW, IsWindowVisible, IsIconic,
+        GA_ROOT, GA_ROOTOWNER, GWL_EXSTYLE, WS_EX_TOOLWINDOW,
+    };
+
+    pub(super) struct HitCtx {
+        pub overlay: isize,
+        pub x: i32,
+        pub y: i32,
+        pub found: Option<HWND>,
+    }
+
+    /// 命中判定（按 Z 序从顶到底枚举顶层窗口，第一个包含光标且非排除项的胜出）
+    unsafe extern "system" fn enum_hit_proc(hwnd: HWND, lparam: LPARAM) -> BOOL {
+        let ctx = &mut *(lparam.0 as *mut HitCtx);
+        // 自己的覆盖层永远铺满全屏：跳过，否则什么都选不了
+        if ctx.overlay != 0 && hwnd.0 as isize == ctx.overlay {
+            return BOOL(1);
+        }
+        if !IsWindowVisible(hwnd).as_bool() || IsIconic(hwnd).as_bool() {
+            return BOOL(1);
+        }
+        // UWP 挂起窗口在 DWM 里是 cloaked：看不见的窗不算
+        let mut cloaked = 0u32;
+        let _ = DwmGetWindowAttribute(
+            hwnd,
+            DWMWA_CLOAKED,
+            &mut cloaked as *mut u32 as *mut core::ffi::c_void,
+            std::mem::size_of::<u32>() as u32,
+        );
+        if cloaked != 0 {
+            return BOOL(1);
+        }
+        // 悬浮工具条（输入法悬浮窗等）不作为选窗目标
+        let ex = GetWindowLongW(hwnd, GWL_EXSTYLE) as u32;
+        if ex & WS_EX_TOOLWINDOW.0 != 0 {
+            return BOOL(1);
+        }
+        // 边界用 DWM 扩展框架：不含不可见的阴影边，与用户看到的窗口边缘一致
+        let mut r = RECT::default();
+        if DwmGetWindowAttribute(
+            hwnd,
+            DWMWA_EXTENDED_FRAME_BOUNDS,
+            &mut r as *mut RECT as *mut core::ffi::c_void,
+            std::mem::size_of::<RECT>() as u32,
+        )
+        .is_err()
+        {
+            return BOOL(1);
+        }
+        if r.left <= ctx.x && ctx.x < r.right && r.top <= ctx.y && ctx.y < r.bottom {
+            // 命中的常是叶子控件：上溯到根属主/顶层窗口，边界才是用户认知的「窗口」
+            let mut root = hwnd;
+            loop {
+                let owner = GetAncestor(root, GA_ROOTOWNER);
+                if owner.is_invalid() || owner == root {
+                    break;
+                }
+                root = owner;
+            }
+            let ga = GetAncestor(root, GA_ROOT);
+            if !ga.is_invalid() && ga != root {
+                root = ga;
+            }
+            ctx.found = Some(root);
+            return BOOL(0);
+        }
+        BOOL(1)
+    }
+
+    /// 光标处的窗口命中（对齐 PixPin/Manggo 的窗口自动识别）
+    pub(super) fn probe(x: i32, y: i32, overlay_hwnd: Option<HWND>) -> Option<WindowHit> {
+        let overlay_isize = overlay_hwnd.map(|h| h.0 as isize).unwrap_or(0);
+        let mut ctx = HitCtx { overlay: overlay_isize, x, y, found: None };
+        unsafe {
+            let _ = EnumWindows(Some(enum_hit_proc), LPARAM(&mut ctx as *mut HitCtx as isize));
+        }
+        let hwnd = ctx.found?;
+
+        unsafe {
+            let mut r = RECT::default();
+            DwmGetWindowAttribute(
+                hwnd,
+                DWMWA_EXTENDED_FRAME_BOUNDS,
+                &mut r as *mut RECT as *mut core::ffi::c_void,
+                std::mem::size_of::<RECT>() as u32,
+            )
+            .ok()?;
+            let mut buf = [0u16; 256];
+            let n = GetWindowTextW(hwnd, &mut buf).max(0) as usize;
+            let title = String::from_utf16_lossy(&buf[..n.min(buf.len())]);
+            Some(WindowHit {
+                x: r.left,
+                y: r.top,
+                w: (r.right - r.left).max(1),
+                h: (r.bottom - r.top).max(1),
+                title,
+            })
+        }
+    }
+}
+
+/// 光标处的窗口命中：悬停高亮窗口边界，单击直接选中整窗
+#[cfg(windows)]
+#[tauri::command]
+pub fn window_at_point(app: AppHandle, x: i32, y: i32) -> Result<Option<WindowHit>, String> {
+    use windows::Win32::Foundation::HWND;
+    // tauri 依赖里的 windows 0.62 与直连的 0.61 是两份类型：句柄裸指针重新包一层
+    let overlay_hwnd = app.get_webview_window("overlay").and_then(|w| {
+        w.hwnd().ok().map(|h| HWND(h.0))
+    });
+    Ok(hit_probe::probe(x, y, overlay_hwnd))
+}
+
+#[cfg(not(windows))]
+#[tauri::command]
+pub fn window_at_point(_app: AppHandle, _x: i32, _y: i32) -> Result<Option<WindowHit>, String> {
+    Ok(None)
 }
 
 // ==================== 选区几何与 OCR 预处理 ====================

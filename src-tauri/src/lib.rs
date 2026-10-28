@@ -135,6 +135,12 @@ pub fn run() {
                 .visible(false)
                 .build()?;
 
+            // 预创建截图覆盖层（隐藏）：Alt+S 时只需重载页面、对位、亮窗，
+            // 免去 WebView2 冷启动——这是「按下即出、无闪现」的前提
+            if let Err(e) = screenshot::ensure_overlay(&handle) {
+                eprintln!("screenshot: 覆盖层预创建失败 {e}（首次 Alt+S 时会重试）");
+            }
+
             // 逐个注册热键：失败的只影响它自己，界面会显示「已被其他程序占用」
             let config = commands::config_dir(&handle)
                 .and_then(|dir| config::load_services(&dir))
@@ -219,6 +225,7 @@ pub fn run() {
             speech::stop_speaking,
             speech::list_speech_voices,
             screenshot::get_screenshot,
+            screenshot::window_at_point,
             screenshot::finish_region,
             screenshot::cancel_screenshot,
             screenshot::start_screenshot,
