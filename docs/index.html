@@ -136,6 +136,8 @@ body::before{
 }
 a{color:var(--link);text-decoration:none}
 a:hover{color:var(--link-hover);text-decoration:underline;text-underline-offset:3px}
+/* 顶栏常驻后锚点跳转要让出栏高，否则标题会被盖在栏下 */
+section[id]{scroll-margin-top:76px}
 :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 ::selection{background:var(--accent-soft)}
 img{display:block;max-width:100%;height:auto}
@@ -143,7 +145,9 @@ img{display:block;max-width:100%;height:auto}
 .wrap{max-width:1080px;margin:0 auto;padding:0 32px}
 
 /* ============ 顶栏 ============ */
+/* 固定在顶部：半透明底色配 backdrop blur，下滑时内容从栏下透出成毛玻璃 */
 .bar{
+  position:sticky;top:0;z-index:20;
   background:var(--glass-strong);border-bottom:1px solid var(--glass-edge);
   backdrop-filter:var(--glass-blur);-webkit-backdrop-filter:var(--glass-blur);
 }
