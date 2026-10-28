@@ -193,6 +193,10 @@ services.json 与凭据读取缓存、长文本按句分段并发。
   （NSIS），不再有 MSI 与免安装 zip；源码包由 GitHub Release 自动生成。下载页镜像
   （pages.yml）与应用内更新（update.rs）已同步收敛到 exe。发版说明 = annotated tag
   message，写更新与修复内容，不写包介绍。
+- 应用内更新提速（v0.10.8 起）：镜像域名解析到 GitHub Pages 的 185.199.x.153，
+  与 GitHub 直连同走 Fastly，实测两条路都只有 ~20-30KB/s（限速按连接算）。
+  update.rs 改多连接分段下载（六段并发，实测合计 160KB/s+，23MB 约 2 分钟），
+  服务不支持 Range 或文件小于 2MB 自动降级单连接，进度/取消/重试语义不变。
 - 发版提速（v0.10.6 实测根因）：rust-cache 键含 Cargo.lock 哈希且无回退链，发版
   bump 版本必失配 → 每次全量重编 11m24s（NSIS+MSI 打包仅 40s，慢的不是打包器）。
   已改 actions/cache 直接管 `src-tauri/target`：键随 run_id 滚动、restore-keys

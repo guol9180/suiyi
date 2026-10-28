@@ -34,6 +34,15 @@ const PROGRESS_INTERVAL: Duration = Duration::from_millis(100);
 pub const CANCELLED: &str = "已取消下载";
 /// 半成品文件后缀：先写 .part，校验通过才改名成正式安装包
 const PART_SUFFIX: &str = ".part";
+/// 分段下载的并发连接数。镜像与 GitHub 走同一条 Fastly 线路，实测单连接被压到
+/// ~28KB/s（23MB 要 15 分钟），4 连接并发实测合计 159KB/s——限速按连接算，多开有效
+const PARALLEL_CONNECTIONS: usize = 6;
+/// 文件小于这个值不分段：块太小往返耗时占比高，单连接顺序下更省
+const PARALLEL_MIN_BYTES: u64 = 2 * 1024 * 1024;
+/// 单段至少这么大方值得独立成段（段数会被它压下来）
+const MIN_CHUNK_BYTES: u64 = 512 * 1024;
+/// 每个分段自身的重试次数（Range 不变，重写该段区间，不影响其他段）
+const CHUNK_ATTEMPTS: u32 = 3;
 
 /// 更新下载的进程级状态。
 ///
@@ -353,6 +362,208 @@ async fn download_once(
     verify_installer(part, got, total, min_bytes)
 }
 
+/// 把 total 切成至多 max_conns 个首尾相接的闭区间。纯函数抽出便于单测：
+/// 段数被最小段长压住（大文件也不至于切出上百段），余数均摊到前面的段。
+fn chunk_plan(total: u64, max_conns: usize) -> Vec<(u64, u64)> {
+    if total == 0 {
+        return Vec::new();
+    }
+    let min_side = ((total + MIN_CHUNK_BYTES - 1) / MIN_CHUNK_BYTES) as usize;
+    let n = max_conns.min(min_side).max(1);
+    let base = total / n as u64;
+    let rem = total % n as u64;
+    let mut out = Vec::with_capacity(n);
+    let mut lo = 0u64;
+    for i in 0..n {
+        let len = base + if (i as u64) < rem { 1 } else { 0 };
+        out.push((lo, lo + len - 1));
+        lo += len;
+    }
+    out
+}
+
+/// 拉一段 Range 到 part 文件的对应偏移。`received` 累计本次已收字节，
+/// 重试时调用方据此把共享计数减回去，进度条才不会虚高。
+async fn download_chunk(
+    client: &reqwest::Client,
+    url: &str,
+    lo: u64,
+    hi: u64,
+    part: &Path,
+    got: &std::sync::atomic::AtomicU64,
+    state: &UpdateState,
+    received: &mut u64,
+) -> Result<(), String> {
+    use futures_util::StreamExt;
+    use std::io::{Seek, SeekFrom, Write};
+
+    let resp = client
+        .get(url)
+        .header(reqwest::header::RANGE, format!("bytes={lo}-{hi}"))
+        .send()
+        .await
+        .map_err(|e| format!("连接失败（{e}）"))?;
+    if resp.status().as_u16() != 206 {
+        return Err(format!("分段请求被拒（{}）", resp.status().as_u16()));
+    }
+    let expect = hi - lo + 1;
+    let mut file = std::fs::OpenOptions::new()
+        .write(true)
+        .open(part)
+        .map_err(|e| format!("打开临时文件失败：{e}"))?;
+    file.seek(SeekFrom::Start(lo))
+        .map_err(|e| format!("定位写入位置失败：{e}"))?;
+    let mut stream = resp.bytes_stream();
+    loop {
+        let chunk = match tokio::time::timeout(STALL_TIMEOUT, stream.next()).await {
+            Ok(Some(chunk)) => chunk.map_err(|e| format!("传输中断（{e}）"))?,
+            Ok(None) => break,
+            Err(_) => return Err(format!("超过 {} 秒没有数据", STALL_TIMEOUT.as_secs())),
+        };
+        if state.is_cancelled() {
+            return Err(CANCELLED.to_string());
+        }
+        file.write_all(&chunk).map_err(|e| format!("写盘失败：{e}"))?;
+        *received += chunk.len() as u64;
+        got.fetch_add(chunk.len() as u64, Ordering::SeqCst);
+    }
+    if *received != expect {
+        return Err(format!("分段不完整（{received}/{expect}）"));
+    }
+    Ok(())
+}
+
+/// 多连接分段下载：镜像与 GitHub 同源限速按连接算，单连接只有几十 KB/s，
+/// 多开连接是唯一不改托管就能拿到的提速。探测到服务不支持 Range 或文件太小
+/// 时返回 Err，调用方无缝回退单连接（download_once）。
+///
+/// 进度条看到的依然是同一条曲线：各段的已收字节汇进同一个计数器，这里统一节流上报。
+#[allow(clippy::too_many_arguments)]
+async fn download_parallel(
+    client: &reqwest::Client,
+    url: &str,
+    part: &Path,
+    min_bytes: u64,
+    attempt: u32,
+    host: &str,
+    state: &UpdateState,
+    on_progress: &mut (impl FnMut(DownloadProgress) + Send),
+) -> Result<(), String> {
+    use futures_util::StreamExt;
+
+    // 探测：Range 支持与文件总长。206 才是真分段，200 说明服务忽略 Range 全量返回
+    let probe = client
+        .get(url)
+        .header(reqwest::header::RANGE, "bytes=0-0")
+        .send()
+        .await
+        .map_err(|e| format!("连接失败（{e}）"))?;
+    if probe.status().as_u16() != 206 {
+        return Err(format!(
+            "服务不支持分段下载（{}）",
+            probe.status().as_u16()
+        ));
+    }
+    let total: u64 = probe
+        .headers()
+        .get(reqwest::header::CONTENT_RANGE)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|s| s.rsplit('/').next())
+        .and_then(|t| t.parse().ok())
+        .ok_or("服务未返回分段总长")?;
+    if total < PARALLEL_MIN_BYTES {
+        return Err(format!("文件只有 {total} 字节，不值得分段"));
+    }
+    drop(probe);
+
+    let plan = chunk_plan(total, PARALLEL_CONNECTIONS);
+    // 预分配到位，各段只写自己的区间，互不越界
+    {
+        let mut file =
+            std::fs::File::create(part).map_err(|e| format!("创建文件失败：{e}"))?;
+        file.set_len(total).map_err(|e| format!("预留文件空间失败：{e}"))?;
+    }
+
+    let got = Arc::new(std::sync::atomic::AtomicU64::new(0));
+    let mut handles = Vec::with_capacity(plan.len());
+    for (lo, hi) in plan.iter().copied() {
+        let client = client.clone();
+        let url = url.to_string();
+        let part = part.to_path_buf();
+        let got = got.clone();
+        let state = state.clone();
+        handles.push(tokio::spawn(async move {
+            let mut received: u64 = 0;
+            for round in 1..=CHUNK_ATTEMPTS {
+                if state.is_cancelled() {
+                    return Err(CANCELLED.to_string());
+                }
+                match download_chunk(&client, &url, lo, hi, &part, &got, &state, &mut received)
+                    .await
+                {
+                    Ok(()) => return Ok(()),
+                    Err(e) => {
+                        // 该段没到不回退进度：把已计入共享计数的字节撤回再重试
+                        got.fetch_sub(received, Ordering::SeqCst);
+                        received = 0;
+                        if e == CANCELLED {
+                            return Err(e);
+                        }
+                        if round < CHUNK_ATTEMPTS {
+                            tokio::time::sleep(Duration::from_secs(1)).await;
+                        } else {
+                            return Err(e);
+                        }
+                    }
+                }
+            }
+            unreachable!("分段重试循环必然在内部返回")
+        }));
+    }
+
+    on_progress(DownloadProgress {
+        downloaded: 0,
+        total,
+        attempt,
+        candidate: host.to_string(),
+        state: "downloading",
+    });
+
+    let mut set = handles.into_iter().collect::<futures_util::stream::FuturesUnordered<_>>();
+    loop {
+        // 事件驱动 + 100ms 兜底：段完成立刻反映到进度条，纯下载期也有心跳
+        let event = tokio::time::timeout(PROGRESS_INTERVAL, set.next()).await;
+        if state.is_cancelled() {
+            return Err(CANCELLED.to_string());
+        }
+        match event {
+            Ok(Some(joined)) => {
+                match joined.map_err(|e| format!("下载任务异常：{e}")) {
+                    Ok(Ok(())) => {}
+                    Ok(Err(e)) => return Err(e),
+                    Err(e) => return Err(e),
+                }
+            }
+            Ok(None) => break, // 全部段完成
+            Err(_) => {}       // 100ms 到点：只刷进度
+        }
+        let now = got.load(Ordering::SeqCst);
+        on_progress(DownloadProgress {
+            downloaded: now,
+            total,
+            attempt,
+            candidate: host.to_string(),
+            state: "downloading",
+        });
+    }
+
+    let got_total = got.load(Ordering::SeqCst);
+    if got_total != total {
+        return Err(format!("传输不完整（{got_total}/{total} 字节）"));
+    }
+    verify_installer(part, got_total, total, min_bytes)
+}
+
 /// 依次尝试候选地址，返回下载好的安装包路径。
 ///
 /// 每次重试前先发一条 `retrying`：进度条会停在当前高水位而不是被打回 0，
@@ -387,7 +598,9 @@ async fn fetch_installer(
                     state: "retrying",
                 });
             }
-            let result = download_once(
+            // 先走多连接分段：慢线路上这是数量级的差距。探测到不支持 Range
+            // 或文件太小时并行函数自己返回 Err，这里无缝降级回单连接
+            let result = match download_parallel(
                 client,
                 candidate,
                 &part,
@@ -397,7 +610,28 @@ async fn fetch_installer(
                 state,
                 &mut on_progress,
             )
-            .await;
+            .await
+            {
+                Ok(()) => Ok(()),
+                Err(e) if e == CANCELLED => Err(e),
+                Err(pe) => {
+                    crate::selection::log_line(&format!(
+                        "update: 分段下载未走通（{pe}），降级单连接 ← {host}"
+                    ));
+                    let _ = std::fs::remove_file(&part);
+                    download_once(
+                        client,
+                        candidate,
+                        &part,
+                        min_bytes,
+                        attempt_no,
+                        &host,
+                        state,
+                        &mut on_progress,
+                    )
+                    .await
+                }
+            };
             match result {
                 Ok(()) => {
                     std::fs::rename(&part, &path).map_err(|e| {
@@ -504,41 +738,89 @@ pub fn install_update(app: AppHandle, path: String) -> Result<(), String> {
 mod tests {
     use super::*;
     use std::io::{Read, Write};
-    use std::net::TcpListener;
+    use std::net::{TcpListener, TcpStream};
 
     /// 只带 Content-Length 的最小 HTTP 响应，body 由调用方决定。
     /// 和 translator.rs 的假服务端一样用 std 的 TcpListener，不引测试依赖。
     ///
     /// `declared` 与 `send` 故意可以不一样：声明 32KB 却只发 8KB 就是在模拟中途断线。
+    ///
+    /// 支持多连接与 Range：并行下载的探测、六段并发、串行重试会先后打好几个
+    /// 连接进来，每个连接各开一个线程按需响应；带 Range 头回 206 与 Content-Range，
+    /// 不带就回 200 全量——与真实 CDN 的行为一致。
     fn serve_once(declared: usize, send: usize, chunk: usize, delay: Duration) -> String {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let addr = listener.local_addr().unwrap();
         std::thread::spawn(move || {
-            let (mut sock, _) = listener.accept().unwrap();
-            let mut req = vec![0u8; 8192];
-            let _ = sock.read(&mut req);
-            let head = format!(
-                "HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\n\
-                 Content-Length: {declared}\r\nConnection: close\r\n\r\n"
-            );
-            let _ = sock.write_all(head.as_bytes());
-            // 前两个字节是 MZ 头，后面用 0 填满，体积够过校验
-            let mut sent = 0usize;
-            while sent < send {
-                let n = chunk.min(send - sent);
-                let mut buf = vec![0u8; n];
-                if sent == 0 && n >= 2 {
-                    buf[0] = b'M';
-                    buf[1] = b'Z';
-                }
-                if sock.write_all(&buf).is_err() {
-                    return;
-                }
-                let _ = sock.flush();
-                sent += n;
-                if !delay.is_zero() {
-                    std::thread::sleep(delay);
-                }
+            // 测试进程短命，accept 循环随进程一起消亡，不需要停机协议
+            while let Ok((sock, _)) = listener.accept() {
+                std::thread::spawn(move || {
+                    let mut sock = sock;
+                    let mut req = vec![0u8; 8192];
+                    let _ = sock.read(&mut req);
+                    let text = String::from_utf8_lossy(&req);
+                    let range = text
+                        .lines()
+                        .find(|l| l.to_ascii_lowercase().starts_with("range:"))
+                        .and_then(|l| {
+                            let spec = l.split_once(':')?.1.trim().strip_prefix("bytes=")?;
+                            let (lo, hi) = spec.trim().split_once('-')?;
+                            Some((
+                                lo.trim().parse::<usize>().ok()?,
+                                hi.trim().parse::<usize>().ok()?,
+                            ))
+                        });
+                    // 一段连续字节：从 from 开始发 count 个，[0,1] 恒为 MZ 头
+                    let emit = |sock: &mut TcpStream, from: usize, count: usize| -> bool {
+                        let mut sent = 0usize;
+                        while sent < count {
+                            let n = chunk.min(count - sent);
+                            let mut buf = vec![0u8; n];
+                            if from + sent == 0 && n >= 2 {
+                                buf[0] = b'M';
+                                buf[1] = b'Z';
+                            }
+                            if sock.write_all(&buf).is_err() {
+                                return false;
+                            }
+                            let _ = sock.flush();
+                            sent += n;
+                            if !delay.is_zero() {
+                                std::thread::sleep(delay);
+                            }
+                        }
+                        true
+                    };
+                    match range {
+                        Some((lo, hi)) => {
+                            let hi = hi.min(send.saturating_sub(1));
+                            if lo >= send || hi < lo {
+                                return;
+                            }
+                            let len = hi - lo + 1;
+                            let head = format!(
+                                "HTTP/1.1 206 Partial Content\r\n\
+                                 Content-Type: application/octet-stream\r\n\
+                                 Content-Range: bytes {lo}-{hi}/{declared}\r\n\
+                                 Content-Length: {len}\r\nConnection: close\r\n\r\n"
+                            );
+                            if sock.write_all(head.as_bytes()).is_err() {
+                                return;
+                            }
+                            let _ = sock.flush();
+                            emit(&mut sock, lo, len);
+                        }
+                        None => {
+                            let head = format!(
+                                "HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\n\
+                                 Content-Length: {declared}\r\nConnection: close\r\n\r\n"
+                            );
+                            let _ = sock.write_all(head.as_bytes());
+                            let _ = sock.flush();
+                            emit(&mut sock, 0, send);
+                        }
+                    }
+                });
             }
         });
         format!("http://{addr}/SuiYi-Setup-x64.exe")
@@ -709,5 +991,81 @@ mod tests {
         // 不是安装包后缀的地址不瞎拼镜像
         let only_github = super::download_candidates("https://example.com/whatever");
         assert_eq!(only_github, vec!["https://example.com/whatever".to_string()]);
+    }
+
+    /// 分段计划：段数被连接数与最小段长共同压住，区间首尾相接且不重不漏
+    #[test]
+    fn chunk_plan_covers_exactly_and_respects_limits() {
+        let plan = super::chunk_plan(23 * 1024 * 1024, super::PARALLEL_CONNECTIONS);
+        assert_eq!(plan.len(), super::PARALLEL_CONNECTIONS, "大文件切满连接数");
+        assert_eq!(plan.first().unwrap().0, 0, "从 0 开始");
+        assert_eq!(plan.last().unwrap().1, 23 * 1024 * 1024 - 1, "到 total-1 结束");
+        for w in plan.windows(2) {
+            assert_eq!(w[0].1 + 1, w[1].0, "相邻段首尾相接：{plan:?}");
+        }
+        for (lo, hi) in &plan {
+            assert!(hi - lo + 1 >= super::MIN_CHUNK_BYTES, "段长不低于最小段：{plan:?}");
+        }
+
+        // 小文件只切一段（等于退回单连接，调用方还有探测兜底）
+        let small = super::chunk_plan(super::MIN_CHUNK_BYTES, super::PARALLEL_CONNECTIONS);
+        assert_eq!(small, vec![(0, super::MIN_CHUNK_BYTES - 1)]);
+
+        // total 小于最小段：同样一段覆盖
+        let tiny = super::chunk_plan(1024, super::PARALLEL_CONNECTIONS);
+        assert_eq!(tiny, vec![(0, 1023)]);
+
+        // 10KB 连一个最小段都凑不齐：只切一段，退化为顺序下载
+        let micro = super::chunk_plan(10_000, super::PARALLEL_CONNECTIONS);
+        assert_eq!(micro, vec![(0, 9_999)]);
+
+        // 不能整除时余数摊给前面的段，区间仍然不重不漏
+        // （1MB 出头才能切出三段：MIN_CHUNK_BYTES*2+1024 的最小段数是 3）
+        let odd = super::chunk_plan(super::MIN_CHUNK_BYTES * 2 + 1024, 3);
+        assert_eq!(odd.len(), 3);
+        assert_eq!(odd.first().unwrap().0, 0);
+        assert_eq!(odd.last().unwrap().1, super::MIN_CHUNK_BYTES * 2 + 1023);
+        let covered: u64 = odd.iter().map(|(lo, hi)| hi - lo + 1).sum();
+        assert_eq!(covered, super::MIN_CHUNK_BYTES * 2 + 1024, "总覆盖量必须等于文件大小");
+
+        // 连接数比最小段数还多时被段长压住：2MB 减一字节的最小段数是 2
+        let capped = super::chunk_plan(super::MIN_CHUNK_BYTES * 2 - 1, super::PARALLEL_CONNECTIONS);
+        assert_eq!(capped.len(), 2, "2MB 减一字节只够两个最小段：{capped:?}");
+    }
+
+    /// 分段并发的完整链路：3MB 大文件探测到 206 后走六段并发，
+    /// 进度首条带总量、单调推进、收尾 100%，落盘字节与声明一致
+    #[tokio::test]
+    async fn parallel_download_succeeds_with_monotonic_progress() {
+        let dir = temp_dir("parallel");
+        let size = 3 * 1024 * 1024;
+        let url = serve_once(size, size, 256 * 1024, Duration::ZERO);
+        let state = UpdateState::default();
+        let mut seen: Vec<(u64, u64)> = Vec::new();
+        let client = download_client().unwrap();
+        let path = fetch_installer(&client, &[url], &dir, 1024, &state, |p| {
+            seen.push((p.downloaded, p.total));
+        })
+        .await
+        .unwrap();
+
+        assert!(path.exists(), "成功后应该有正式安装包：{path:?}");
+        assert_eq!(
+            std::fs::read(&path).unwrap().len(),
+            size,
+            "落盘字节必须与声明一致"
+        );
+        assert_eq!(
+            seen.first().unwrap().1,
+            size as u64,
+            "第一条就要带上总量：{seen:?}"
+        );
+        let downloaded: Vec<u64> = seen.iter().map(|s| s.0).collect();
+        assert!(
+            downloaded.windows(2).all(|w| w[0] <= w[1]),
+            "分段汇聚的进度也只能往前：{downloaded:?}"
+        );
+        assert_eq!(*downloaded.last().unwrap(), size as u64, "收尾必发 100%");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
