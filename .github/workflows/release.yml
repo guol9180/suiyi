@@ -174,6 +174,17 @@ jobs:
       # 只能先放进 env，再用 env.XXX 判断（这也是之前工作流“0 个 job 直接失败”的原因）。
       SIGNPATH_TOKEN: ${{ secrets.SIGNPATH_API_TOKEN }}
     steps:
+      # 检出必须最先做：它会把工作区清空，放在下载产物之后会把 dist-release
+      # 一起删掉（v0.10.7 首发资产为空的根因）。fetch-depth 全量 + fetch-tags
+      # 拉完整 tag 对象——浅检出里 tag 引用退化为 lightweight，%(contents)
+      # 取到的是 commit message（v0.10.7 正文错误的根因）
+      - name: 检出发版 tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
       - name: 下载构建产物
         uses: actions/download-artifact@v4
         with:
@@ -183,10 +194,6 @@ jobs:
       # 发版说明 = annotated tag 的 message：打 tag 时写清「更新了什么、修复了什么」，
       # 这里原样取出来当 Release 正文（不再写死「安装包是什么」的介绍）。
       # 轻量 tag 没有 message，回退一句引导 + generate_release_notes 的自动变更列表
-      - name: 检出发版 tag
-        if: startsWith(github.ref, 'refs/tags/v')
-        uses: actions/checkout@v4
-
       - name: 读取发版说明（tag message）
         if: startsWith(github.ref, 'refs/tags/v')
         shell: bash
