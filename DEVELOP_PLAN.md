@@ -193,8 +193,10 @@ services.json 与凭据读取缓存、长文本按句分段并发。
   bump 版本必失配 → 每次全量重编 11m24s（NSIS+MSI 打包仅 40s，慢的不是打包器）。
   已改 actions/cache 直接管 `src-tauri/target`：键随 run_id 滚动、restore-keys
   前缀回退，增量复用交给 cargo 指纹裁决；测试 job 改 debug profile（无 LTO、
-  链接秒级）并去掉 pnpm/node 安装（拉模型脚本零依赖直跑）。预期发版墙钟从
-  ~14.5 分钟降到 ~6 分钟；改后首轮仍全量编（无旧缓存可回退），第二轮起生效，待实测。
+  链接秒级）并去掉 pnpm/node 安装（拉模型脚本零依赖直跑）。
+  实测（2026-10-28，main 上两轮 workflow_dispatch 对照）：发版墙钟 14:36 → 6:25
+  ——构建 job 14:21 → 6:17（缓存命中后依赖全复用，只剩本体+LTO 链接+打包），
+  测试 job 12:28 → 2:13。改后首轮仍全量编（无旧缓存可回退），第二轮起生效。
 - Node v22.23.2、pnpm 12.5.1（`D:\dev\environment\nodejs`）；pnpm 用 `pnpm.cmd` 调用（见 `AGENTS.md`）。
 - Rust 1.98.1，工具链在 `D:\dev\environment\rustup\toolchains\stable-x86_64-pc-windows-msvc`
   - `D:\dev\environment\cargo\bin\cargo.exe` 是 rustup 垫片，需先配好默认 toolchain，或直接调用工具链目录
