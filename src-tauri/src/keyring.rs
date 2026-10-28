@@ -47,7 +47,9 @@ fn put_key(cache: &mut KeyCache, service_id: &str, value: Option<String>) {
     cache.map.insert(service_id.to_string(), value);
 }
 
-/// 失效缓存值（下次读取重新加载）
+/// 失效缓存值（下次读取重新加载）。仅测试用：生产路径的删除走 put_key(None)，
+/// 把「确认不存在」也缓存住，省得每次翻译都去打一遍凭据管理器
+#[cfg(test)]
 fn invalidate_key(cache: &mut KeyCache, service_id: &str) {
     cache.map.remove(service_id);
 }
