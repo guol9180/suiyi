@@ -5,6 +5,12 @@ name: Release
 #
 # 结构：测试与构建**并行**跑（各自独立缓存），发布等两者都成功才执行——
 # 串行时代总耗时 = 测试 + 构建，并行后 = max(测试, 构建) + 发布步。
+#
+# 缓存（2026-10 重设计）：直接用 actions/cache 管 src-tauri/target，键里**不含
+# Cargo.lock 哈希**，restore-keys 前缀回退到最近一次的产物，由 cargo 指纹裁决
+# 增量复用。此前用 rust-cache：它的键含 Cargo.lock 哈希且没有回退链，而发版必
+# bump 版本号 → lockfile 必变 → 键必失配 → 每次发版全量重编（v0.10.6 实测
+# cargo 自报 11m24s，而 NSIS+MSI 打包仅 40s——慢的从来不是打包器）。
 on:
   push:
     tags:
@@ -22,8 +28,8 @@ permissions:
   actions: write
 
 env:
-  # 锁定工具链版本：rust-cache 的缓存键含 rustc 版本，漂浮的 stable 会让
-  # 隔段时间的发布缓存全失配、退回全量重编（v0.10.4 实测总耗时 17.5 分钟）。
+  # 锁定工具链版本：Rust 构建缓存的键含 rustc 版本，漂浮的 stable 会让隔段时间
+  # 的发布缓存全失配、退回全量重编（v0.10.4 实测总耗时 17.5 分钟）。
   # 升级 Rust 时顺手改这里：改完首轮全量编一次，之后恢复增量。
   RUST_TOOLCHAIN: "1.98.1"
 
@@ -36,26 +42,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: 安装 pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 12
-
-      - name: 安装 Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: pnpm
-
       - name: 安装 Rust
         uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.RUST_TOOLCHAIN }}
 
+      # 键随 run_id 滚动（每次保存新条目），restore-keys 回退到最近一条；
+      # cargo 自己按指纹复用未变的依赖产物。与构建 job 的缓存互相独立
       - name: 缓存 Rust 构建
-        uses: Swatinem/rust-cache@v2
+        uses: actions/cache@v4
         with:
-          workspaces: src-tauri
+          path: src-tauri/target
+          key: cargo-test-${{ runner.os }}-${{ env.RUST_TOOLCHAIN }}-${{ github.run_id }}
+          restore-keys: |
+            cargo-test-${{ runner.os }}-${{ env.RUST_TOOLCHAIN }}-
 
       # OCR 模型与 ONNX Runtime 约 34MB，按哈希缓存，避免每次 CI 重新下载
       - name: 缓存 OCR 模型
@@ -64,20 +64,21 @@ jobs:
           path: src-tauri/ocr
           key: ocr-assets-v1-${{ runner.os }}-${{ hashFiles('scripts/fetch-ocr-assets.mjs') }}
 
-      - name: 安装前端依赖
-        run: pnpm install --frozen-lockfile
-
-      # 后端测试要编译到 tauri 配置里的资源，所以模型得先到位（脚本自带 SHA256 校验）
+      # 纯 Node 脚本、零 npm 依赖：runner 自带 node，直接跑，
+      # 省掉 pnpm/node 安装与前端依赖安装（拉模型只为编译进测试资源）
       - name: 拉取 OCR 模型
-        run: pnpm ocr:assets
+        run: node scripts/fetch-ocr-assets.mjs
 
-      # 测试与构建共用 release profile（省掉整个 debug 依赖编译）。
-      # panic=abort 下测试框架工作正常（本地实测 79 用例通过）。
+      # debug profile：无 LTO、无优化编译——测试二进制链接秒级。此前用
+      # --release 与构建共用 profile，代价是每次发版把依赖按 release 优化
+      # 编译一遍再扛一遍 LTO 链接（v0.10.6 实测该步 10m41s，而测试本身
+      # 本地只要 2.3s）；缓存修好后 debug 依赖编一次永久复用，无需再省。
+      # panic=unwind 也是测试框架的默认假设，与本地 cargo test 完全一致。
       - name: 运行后端测试
         working-directory: src-tauri
         shell: pwsh
         run: |
-          cargo test --release 2>&1 | Tee-Object -FilePath ../test-output.txt
+          cargo test 2>&1 | Tee-Object -FilePath ../test-output.txt
           if ($LASTEXITCODE -ne 0) {
             # 把失败摘要发成注解：没有日志读取权限时也能在 check 上看到原因
             Get-Content ../test-output.txt |
@@ -113,10 +114,15 @@ jobs:
         with:
           toolchain: ${{ env.RUST_TOOLCHAIN }}
 
+      # 键随 run_id 滚动，restore-keys 回退到最近一次：发版 bump 版本号只重编
+      # suiyi 本体（含 thin-LTO 链接），几十个依赖产物经 cargo 指纹全量复用
       - name: 缓存 Rust 构建
-        uses: Swatinem/rust-cache@v2
+        uses: actions/cache@v4
         with:
-          workspaces: src-tauri
+          path: src-tauri/target
+          key: cargo-release-${{ runner.os }}-${{ env.RUST_TOOLCHAIN }}-${{ github.run_id }}
+          restore-keys: |
+            cargo-release-${{ runner.os }}-${{ env.RUST_TOOLCHAIN }}-
 
       # Tauri 打包器（NSIS 与 WiX）每次运行会现场下载到 %LOCALAPPDATA%\tauri，
       # 缓存后省掉每次发版的下载时间
