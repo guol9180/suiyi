@@ -5,11 +5,12 @@
  * 不设拖拽区、不加 hover 态 —— 整个窗口鼠标穿透，任何可交互的样子都是骗人。
  */
 
+/* 卡片直接铺满窗口：窗口的 DWM 圆角与卡片圆角都是 10px，对齐后
+   才不会在卡片四周露出一圈灰蒙蒙的磨砂底（那圈就是「丑边框」的来源）。
+   系统边框线由 Rust 侧 dwm::clear_border 去掉 */
+
 .nt-root {
   height: 100%;
-  display: flex;
-  align-items: center;
-  padding: 3px 6px;
   opacity: 1;
   transform: translateY(0);
   transition: opacity 0.26s ease, transform 0.26s ease;
@@ -24,15 +25,14 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  flex: 1;
-  min-width: 0;
-  padding: 10px 12px;
+  width: 100%;
+  height: 100%;
+  padding: 10px 14px;
   border: 1px solid var(--glass-edge);
   border-radius: var(--radius-md);
   background: var(--glass-card-strong);
   backdrop-filter: var(--glass-blur);
   -webkit-backdrop-filter: var(--glass-blur);
-  box-shadow: var(--shadow-float);
   color: var(--c-text);
   font-family: var(--font-ui);
   font-size: var(--fs-sec);

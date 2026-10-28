@@ -104,6 +104,8 @@ fn show_inner(app: &AppHandle, text: &str, kind: &str) -> Result<(), String> {
                 })
                 .build()
                 .map_err(|e| format!("创建提示窗口失败: {e}"))?;
+            // Win11 会给 Acrylic 窗口描一圈系统边框，小条上特别扎眼，去掉
+            crate::dwm::clear_border(&win);
             // 不抢焦点 + 鼠标穿透：提示只报信，不该改变用户正在输入的那个窗口的焦点，
             // 也不该挡住它下面的点击
             let _ = win.set_focusable(false);

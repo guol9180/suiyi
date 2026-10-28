@@ -1,6 +1,7 @@
 pub mod anki;
 pub mod commands;
 pub mod config;
+pub mod dwm;
 pub mod history;
 pub mod hotkeys;
 pub mod keyring;
