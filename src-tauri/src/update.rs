@@ -479,8 +479,7 @@ async fn download_parallel(
     let plan = chunk_plan(total, PARALLEL_CONNECTIONS);
     // 预分配到位，各段只写自己的区间，互不越界
     {
-        let mut file =
-            std::fs::File::create(part).map_err(|e| format!("创建文件失败：{e}"))?;
+        let file = std::fs::File::create(part).map_err(|e| format!("创建文件失败：{e}"))?;
         file.set_len(total).map_err(|e| format!("预留文件空间失败：{e}"))?;
     }
 
