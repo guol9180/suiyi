@@ -220,7 +220,7 @@ pub async fn check_update() -> Result<UpdateInfo, String> {
 fn download_candidates(asset_url: &str) -> Vec<String> {
     let mut urls: Vec<String> = Vec::new();
     if let Some(name) = asset_url.rsplit('/').next() {
-        if name.ends_with(".exe") || name.ends_with(".msi") || name.ends_with(".zip") {
+        if name.ends_with(".exe") {
             urls.push(format!("{MIRROR_BASE}{name}"));
         }
     }

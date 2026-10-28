@@ -189,6 +189,10 @@ services.json 与凭据读取缓存、长文本按句分段并发。
 - 终端为 Windows PowerShell 5.1（System32 自带）。
 - 发版 CI（release.yml）拆为测试/构建并行 job + 发布 job（双门禁）；Rust 工具链锁定
   版本号（workflow env `RUST_TOOLCHAIN`），升级 Rust 时顺手改这里，否则缓存键失配退回全量重编。
+- 发版产物收敛（v0.10.7 起）：每平台一个安装包——Windows 只发 `SuiYi-Setup-x64.exe`
+  （NSIS），不再有 MSI 与免安装 zip；源码包由 GitHub Release 自动生成。下载页镜像
+  （pages.yml）与应用内更新（update.rs）已同步收敛到 exe。发版说明 = annotated tag
+  message，写更新与修复内容，不写包介绍。
 - 发版提速（v0.10.6 实测根因）：rust-cache 键含 Cargo.lock 哈希且无回退链，发版
   bump 版本必失配 → 每次全量重编 11m24s（NSIS+MSI 打包仅 40s，慢的不是打包器）。
   已改 actions/cache 直接管 `src-tauri/target`：键随 run_id 滚动、restore-keys

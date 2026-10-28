@@ -15,7 +15,7 @@ Windows 桌面 AI 翻译工具：划词翻译与截图识别两个全局热键�
 ## 上手
 
 **安装**：从 [Releases](https://github.com/guol9180/suiyi/releases) 取
-NSIS / MSI 安装包或免安装 zip（下载页 <https://suiyi.imhgl.com/>）。
+NSIS 安装包 `SuiYi-Setup-x64.exe`（下载页 <https://suiyi.imhgl.com/>）。
 安装包未签名，首次运行在 SmartScreen 提示里点「更多信息」→「仍要运行」。
 Windows 10 需装 WebView2 运行时，Windows 11 自带。
 
