@@ -20,6 +20,10 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
+    env:
+      # R2 镜像凭据：没配时下面的 R2 步骤自动跳过，Pages 镜像照旧兜底
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -33,7 +37,7 @@ jobs:
       - run: pnpm build
       # 把最新一版的安装包同步到下载页目录：GitHub 的 release 资产落在
       # objects.githubusercontent.com 上，国内经常连不上；镜像到自己的域名下更稳。
-      # 应用内的「下载并安装」会优先试这份镜像。
+      # 应用内的「下载并安装」会优先试 R2 镜像，再试这份 Pages 镜像。
       - name: 镜像最新安装包
         shell: pwsh
         continue-on-error: true
@@ -50,6 +54,15 @@ jobs:
             }
           }
           Get-ChildItem $dir | Select-Object Name, Length
+      # R2 走 Cloudflare 边缘网络，是国内可达性的主力源：Pages（Fastly 185.199 段）
+      # 持续传输实测只有 ~60KB/s（12 连接也是它，线路总带宽封顶），R2 预期快一个量级。
+      # bucket 名 suiyi-dl；secrets 未配置（R2_READY 未开或 token 为空）时整步跳过
+      - name: 镜像到 Cloudflare R2
+        if: ${{ vars.R2_READY == 'true' && env.CLOUDFLARE_API_TOKEN != '' }}
+        continue-on-error: true
+        uses: cloudflare/wrangler-action@v3
+        with:
+          command: r2 object put "suiyi-dl/SuiYi-Setup-x64.exe" --file "docs/dl/SuiYi-Setup-x64.exe" --remote --content-type "application/octet-stream"
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
