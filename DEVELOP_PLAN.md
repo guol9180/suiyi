@@ -1,50 +1,11 @@
 # 随译 SuiYi · 开发计划
 
 > Windows 桌面 AI 翻译工具：划词翻译、截图识别，多 AI 服务并发对比。
-> 本文件管开发计划与验收标准；项目概览与技术栈见 `README.md`，开发规范见 `AGENTS.md`。
+> 本文件管开发计划、任务卡与验收标准；项目概览与技术栈见 `README.md`，开发规范见 `AGENTS.md`。
 > 界面：工作台 / 历史 / 划词弹窗 / 截图识别见 `design/ui-redesign.html`（v1.0，已实现）；
 > 设置等其余页面基线 `design/ui-mockup.html`。
 
-## 1. 目录结构
-
-```
-suiyi/
-├─ README.md                 项目概览、构建与使用文档
-├─ AGENTS.md                 开发规范（动手前先读）
-├─ design/
-│  ├─ ui-mockup.html         UI 基线稿（与实现对齐）
-│  └─ ui-redesign.html       v1.0 重设计提案（未实现）
-├─ scripts/
-│  └─ fetch-ocr-assets.mjs   OCR 模型与 ONNX Runtime 拉取
-├─ src/
-│  ├─ api.ts                 所有后端调用的唯一出口
-│  ├─ pages/                 Translate、Settings、Popup、OcrResult、Overlay、Notice、About
-│  ├─ components/            Icon、IconSprite、DictionaryCard、SpeechBar、ModelSelect
-│  └─ styles/                tokens.css（设计变量）、base.css（基础组件）
-├─ src-tauri/
-│  ├─ src/main.rs            程序入口
-│  ├─ src/lib.rs             插件装配、窗口与热键初始化
-│  ├─ src/commands.rs        Tauri 命令层，前后端唯一通道
-│  ├─ src/config.rs          services.json 读写与服务 Schema
-│  ├─ src/keyring.rs         API Key 存取
-│  ├─ src/translator.rs      OpenAI 兼容适配器与 SSE 流式
-│  ├─ src/selection.rs       Alt+D 取词与光标处弹窗
-│  ├─ src/screenshot.rs      Alt+S 冻结帧、覆盖层框选、OCR 流程与结果窗
-│  ├─ src/ocr.rs             PaddleOCR 引擎加载与推理
-│  ├─ src/speech.rs          本地语音合成与播放
-│  ├─ src/history.rs         历史记录（SQLite）
-│  ├─ src/wordbook.rs        生词本（本地 + AnkiConnect 同步）
-│  ├─ src/anki.rs            AnkiConnect 协议
-│  ├─ src/plugin.rs          插件清单与发现
-│  ├─ src/plugin_js.rs       插件 QuickJS 沙箱
-│  ├─ src/hotkeys.rs         全局热键注册与冲突重试
-│  ├─ src/update.rs          检查更新、下载、拉起安装向导
-│  ├─ src/tray.rs            系统托盘
-│  └─ src/notice.rs          轻提示窗口
-└─ DEVELOP_PLAN.md           本文件
-```
-
-## 2. 里程碑
+## 1. 里程碑
 
 ### M0 内核闭环 —— 已完成
 
@@ -177,14 +138,14 @@ services.json 与凭据读取缓存、长文本按句分段并发。
 验收：`cargo test` 全绿（缓存命中判定、外部改动失效、分段拼回等于原文、
 每块不超限等测试）；流式服务行为不变；词典模式永不分段。
 
-## 3. 计划约定
+## 2. 计划约定
 
 通用开发规范（提交粒度、密钥、CSS、验证要求等）见 `AGENTS.md`，此处不重复。计划特有：
 
 1. 依赖只加当前阶段需要的，不预装。
 2. 每个里程碑结束跑一次完整验收，再开下一个。
 
-## 4. 环境现状
+## 3. 环境现状
 
 - 终端为 Windows PowerShell 5.1（System32 自带）。
 - 发版 CI（release.yml）拆为测试/构建并行 job + 发布 job（双门禁）；Rust 工具链锁定
@@ -218,7 +179,43 @@ services.json 与凭据读取缓存、长文本按句分段并发。
 - OCR 语言包：系统仅安装 `zh-Hans-CN`
 - `pnpm build` / `cargo test` / `pnpm ocr:assets` 已验证通过；OCR 模型已就位（`src-tauri/ocr/`）
 
-## 5. 待确认
+## 4. 任务清单
+
+任务卡是唯一开工凭证（计划执行分离，见 `AGENTS.md` 通用规范第 3 条）。进行中的任务在这里建卡；
+已完成的历史里程碑保留在第 1 节存档，不再重复建卡。
+
+### T1: 跨平台支持（macOS / Linux）（P1）
+
+- 目标：随译在 macOS 与 Linux 可构建、可安装，划词翻译与截图识别两条主链路可用
+- 动机：当前仅 Windows 可用（见 `README.md`「边界与限制」），平台覆盖是 M6 既定方向
+- 验收标准：
+  - macOS：辅助功能与录屏权限引导完整；取词、截图识别、离线 OCR 可用；产出安装包
+  - Linux：X11 优先全链路可用；Wayland 走外部调用方案可用；产出对应安装包
+  - 两平台 `cargo test` 全绿；发版 CI 按新平台补安装包产物（沿用「每平台一个安装包」约定）
+- 边界：不改 Windows 侧既有行为；不做移动端；Wayland 原生协议不自行实现
+- 状态：planned
+- 进度（只追加新行，不修改旧行）：
+  - 2026-11-11 计划 M6 里程碑转入任务卡管理，验收标准生效
+
+## 5. 状态枚举
+
+| 状态 | 含义 |
+|---|---|
+| planned | 已建卡确认，未动手 |
+| in-progress | 执行中 |
+| done | 验收标准全部满足且有验证证据 |
+| blocked | 受阻；最新进度行注明原因与可否绕行 |
+| canceled | 放弃；最新进度行注明原因 |
+
+## 6. 卡面约定
+
+- WHEN/THEN 场景写法（接口 / 交互类任务可选）：WHEN 写操作或输入，THEN 写可观察的预期结果。
+  例：WHEN 查询 32 天范围 THEN 返回 400 并提示超出。
+- done 卡不删：完成的任务保留在任务清单中——进度即项目史。
+- 进度行格式「YYYY-MM-DD 阶段 结果一句话」，阶段取 计划 / 执行 / 验证 / 交付 之一；
+  「done 但有剩余工作」时在最新进度行如实说明。
+
+## 7. 待确认
 
 1. Windows 回落 OCR 仍优先请求 `en-US` 语言包（本机只有中文包），是否改为按内容自适应——
    本地 PaddleOCR 主路径中英混排后此问题只影响回落场景，保留观察。

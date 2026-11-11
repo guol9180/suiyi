@@ -9,7 +9,7 @@ Windows 桌面 AI 翻译工具：划词翻译与截图识别两个全局热键�
 - 翻译请求发给**你自己配置的服务**（任何 OpenAI 兼容端点），多个服务并发出稿、逐字流式、同屏对比；
 - 敏感信息自持——API Key 只进系统凭据管理器，OCR 在本机离线完成，截图不上传。
 
-> 文档分工：本文件帮新人建立整体认识；开发计划与验收标准看
+> 文档分工：本文件帮新人建立整体认识；开发计划、任务卡与验收标准看
 > [DEVELOP_PLAN.md](./DEVELOP_PLAN.md)；动手改代码前先读 [AGENTS.md](./AGENTS.md)。
 
 ## 上手
@@ -83,7 +83,7 @@ suiyi/
 ├─ src-tauri/             后端：Rust（Tauri 命令层与业务内核）
 ├─ design/                界面设计稿：ui-redesign.html（v1.0，已实现）与 ui-mockup.html（基线）
 ├─ docs/                  下载页（GitHub Pages 从这里发布）
-├─ scripts/               构建辅助脚本（OCR 模型拉取）
+├─ scripts/               构建辅助脚本（fetch-ocr-assets.mjs：OCR 模型与 ONNX Runtime 拉取）
 └─ .github/workflows/     发布与下载页的 CI
 ```
 
@@ -97,8 +97,40 @@ suiyi/
 | `src-tauri/src/selection.rs` | 划词取词与替换：剪贴板法、修饰键等待、回焦校验 |
 | `src/pages/Popup.tsx` · `src/pages/OcrResult.tsx` | 两个结果窗口的前端：并发结果卡与流式上屏 |
 
-其余核心：`ocr.rs`（引擎加载与回落）、`hotkeys.rs`（热键注册）、
-`plugin_js.rs`（插件沙箱）、`commands.rs`（前端 ↔ 后端命令层）。
+### 逐文件职责
+
+前端 `src/`：
+
+| 文件 / 目录 | 职责 |
+|---|---|
+| `api.ts` | 所有后端调用的唯一出口 |
+| `pages/` | Translate、Settings、Popup、OcrResult、Overlay、Notice、About |
+| `components/` | Icon、IconSprite、DictionaryCard、SpeechBar、ModelSelect |
+| `styles/` | tokens.css（设计变量）、base.css（基础组件） |
+
+后端 `src-tauri/src/`：
+
+| 文件 | 职责 |
+|---|---|
+| `main.rs` | 程序入口 |
+| `lib.rs` | 插件装配、窗口与热键初始化 |
+| `commands.rs` | Tauri 命令层，前后端唯一通道 |
+| `config.rs` | services.json 读写与服务 Schema |
+| `keyring.rs` | API Key 存取 |
+| `translator.rs` | OpenAI 兼容适配器与 SSE 流式 |
+| `selection.rs` | Alt+D 取词与光标处弹窗 |
+| `screenshot.rs` | Alt+S 冻结帧、覆盖层框选、OCR 流程与结果窗 |
+| `ocr.rs` | PaddleOCR 引擎加载与推理 |
+| `speech.rs` | 本地语音合成与播放 |
+| `history.rs` | 历史记录（SQLite） |
+| `wordbook.rs` | 生词本（本地 + AnkiConnect 同步） |
+| `anki.rs` | AnkiConnect 协议 |
+| `plugin.rs` | 插件清单与发现 |
+| `plugin_js.rs` | 插件 QuickJS 沙箱 |
+| `hotkeys.rs` | 全局热键注册与冲突重试 |
+| `update.rs` | 检查更新、下载、拉起安装向导 |
+| `tray.rs` | 系统托盘 |
+| `notice.rs` | 轻提示窗口 |
 
 技术栈：reqwest（全局连接池 + SSE）、PaddleOCR + ort、arboard + SendInput、
 rusqlite（bundled SQLite，WAL）、rquickjs（QuickJS）、Windows.Media.SpeechSynthesis。
@@ -130,7 +162,7 @@ rusqlite（bundled SQLite，WAL）、rquickjs（QuickJS）、Windows.Media.Speec
 ## 参与开发
 
 - 规范先行：[AGENTS.md](./AGENTS.md)（提交粒度、密钥、CSS、验证要求）。
-- 计划与逐文件职责：[DEVELOP_PLAN.md](./DEVELOP_PLAN.md)。
+- 开发计划与任务卡：[DEVELOP_PLAN.md](./DEVELOP_PLAN.md)。
 - 界面以两份设计稿为准：[ui-redesign.html](./design/ui-redesign.html)（v1.0，已实现）、
   [ui-mockup.html](./design/ui-mockup.html)（基线）。
 - CI：打 `v*` 标签自动跑测试、构建并发布 Release，下载页同步部署。
